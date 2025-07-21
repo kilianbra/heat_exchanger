@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from scipy.special import factorial
 
 
-def P(n, y):
+def poly_sum_crossflow_unmixed(n, y):
     y = np.asarray(y)
     result = np.empty_like(y, dtype=float)
 
@@ -31,9 +31,7 @@ def P(n, y):
     return result
 
 
-def epsilon_ntu(
-    NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1
-):
+def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1):
     """
     Calculate the effectiveness (epsilon) of a heat exchanger using the Number of Transfer Units (NTU) method.
 
@@ -47,9 +45,7 @@ def epsilon_ntu(
     Returns:
     epsilon (float): Effectiveness of the heat exchanger
     """
-    assert 0 <= C_ratio <= 1, (
-        f"C_ratio should be between 0 and 1 (inclusive), but is {C_ratio:.1f}"
-    )
+    assert 0 <= C_ratio <= 1, f"C_ratio should be between 0 and 1 (inclusive), but is {C_ratio:.1f}"
     assert isinstance(n_passes, int) and n_passes >= 1, (
         f"n_passes should be an integer greater than or equal to 1 but is {n_passes:.0f}"
     )
@@ -65,9 +61,7 @@ def epsilon_ntu(
     assert exchanger_type in valid_exchanger_types, (
         f"Invalid exchanger_type. Must be one of {valid_exchanger_types}"
     )
-    assert flow_type in valid_flow_types, (
-        f"Invalid flow_type. Must be one of {valid_flow_types}"
-    )
+    assert flow_type in valid_flow_types, f"Invalid flow_type. Must be one of {valid_flow_types}"
 
     tol = 1e-9
     tol_it = 1e-4
@@ -77,13 +71,9 @@ def epsilon_ntu(
     ):  # Close enough to zero, doesn't matter the type as C_min fluid doesn't change temperature
         epsilon = 1 - np.exp(-ntu_p)  # Kays & London (2-13a)
 
-    elif (
-        exchanger_type == "aligned_flow"
-    ):  # Two concentric tubes aligned with eachother
+    elif exchanger_type == "aligned_flow":  # Two concentric tubes aligned with eachother
         if flow_type == "coflow":
-            epsilon = (1 - np.exp(-ntu_p * (1 + C_ratio))) / (
-                1 + C_ratio
-            )  # Kays & London (2-14)
+            epsilon = (1 - np.exp(-ntu_p * (1 + C_ratio))) / (1 + C_ratio)  # Kays & London (2-14)
         elif flow_type == "counterflow":
             if C_ratio < 1 - tol:  # Far enough from 1
                 epsilon = (1 - np.exp(-ntu_p * (1 - C_ratio))) / (
@@ -102,11 +92,8 @@ def epsilon_ntu(
             elif n_passes == 1:
                 epsilon = epsilon_1p
             else:  # Kays & London (2-18)
-                epsilon = (
-                    ((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1
-                ) / (
-                    (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes)
-                    - C_ratio
+                epsilon = (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1) / (
+                    (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes) - C_ratio
                 )
 
     elif exchanger_type == "cross_flow":
@@ -116,12 +103,16 @@ def epsilon_ntu(
             # Shah p128 Table 3.3 formula for crossflow, both fluids unmixed
             epsilon = 1 - np.exp(-NTU)
             n = 1
-            term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * P(n, NTU)
+            term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * poly_sum_crossflow_unmixed(n, NTU)
             # Loop until the added term is smaller than the tolerance
             while np.any(np.abs(term) > tol_it):
                 epsilon += term
                 n += 1
-                term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * P(n, NTU)
+                term = (
+                    -np.exp(-(1 + C_ratio) * NTU)
+                    * (C_ratio**n)
+                    * poly_sum_crossflow_unmixed(n, NTU)
+                )
             return epsilon
 
         elif flow_type == "Cmax_mixed":
@@ -135,9 +126,7 @@ def epsilon_ntu(
             )  # Kays & London (2-15)
         elif flow_type == "both_mixed":
             epsilon = 1 / (
-                1 / (1 - np.exp(-ntu_p))
-                + C_ratio / (1 - np.exp(-C_ratio * ntu_p))
-                - 1 / ntu_p
+                1 / (1 - np.exp(-ntu_p)) + C_ratio / (1 - np.exp(-C_ratio * ntu_p)) - 1 / ntu_p
             )  # Kays & London (2-17)
 
         if (
@@ -151,17 +140,12 @@ def epsilon_ntu(
             elif n_passes == 1:
                 epsilon = epsilon_1p
             else:  # Kays & London (2-18)
-                epsilon = (
-                    ((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1
-                ) / (
-                    (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes)
-                    - C_ratio
+                epsilon = (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1) / (
+                    (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes) - C_ratio
                 )
 
     elif exchanger_type == "shell_and_tube":
-        ntu_p = (
-            NTU / n_passes
-        )  # Number of heat transfer units in case of shell-and-tube exchanger
+        ntu_p = NTU / n_passes  # Number of heat transfer units in case of shell-and-tube exchanger
         # 1 pass epsilon, from Kays & London (2-19) Assumes  mixing  between passes, but Kays & London says this doesn't affect much
         C_ratio_sqrt = np.sqrt(1 + C_ratio**2)
         epsilon_1p = np.where(
@@ -183,9 +167,7 @@ def epsilon_ntu(
         elif n_passes == 1:
             epsilon = epsilon_1p
         else:  # Kays & London (2-18)
-            epsilon = (
-                ((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1
-            ) / (
+            epsilon = (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes - 1) / (
                 (((1 - epsilon_1p * C_ratio) / (1 - epsilon_1p)) ** n_passes) - C_ratio
             )
 
@@ -201,9 +183,7 @@ if __name__ == "__main__":
         for C_ratio in C_ratios:
             eps = []
             # for NTU in NTUs:
-            eps = epsilon_ntu(
-                NTUs, C_ratio, exchanger_type=HX_tp, flow_type=flow_tp, n_passes=1
-            )
+            eps = epsilon_ntu(NTUs, C_ratio, exchanger_type=HX_tp, flow_type=flow_tp, n_passes=1)
             # eps = epsilon_ntu(NTUs,C_ratio,exchanger_type=HX_tp, flow_type='unmixed', n_passes=1)
             plt.plot(NTUs, eps, label=rf"$C_r$ = {C_ratio:.2f}")
         # Set font properties
