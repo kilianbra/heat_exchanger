@@ -22,3 +22,24 @@ docs = [
 
 [tool.uv]
 default-groups = ["dev","docs"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pycodestyle
+    "SIM", # flake8-simplify
+    "T",   # pycodestyle
+    "UP",  # pyupgrade
+]
+ignore = ["E501","N803","N806"]
+# Ignore N803 and N806 because I want to have variables with capital letters
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore `T201` (print statements) in all `analysis/*.py` files.
+"analysis/*.py" = ["T201"]
