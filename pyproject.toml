@@ -37,8 +37,8 @@ select = [
     "T",   # pycodestyle
     "UP",  # pyupgrade
 ]
-ignore = ["E501","N803","N806"]
-# Ignore N803 and N806 because I want to have variables with capital letters
+ignore = ["E501", "N803", "N806"]
+# Ignore N803 and N806 if want to have variables with capital letters
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore `T201` (print statements) in all `analysis/*.py` files.
