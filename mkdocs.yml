@@ -1,0 +1,21 @@
+site_name: Heat Exchanger Model
+theme:
+  name: material
+  nav: index.md
+
+plugins:
+  - search
+  - bibtex:
+      bib_file: "https://api.zotero.org/users/6401108/collections/DXT8EFTF/items?format=bibtex"
+
+
+markdown_extensions:
+  - footnotes
+  - pymdownx.caret
+  - pymdownx.tilde
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js

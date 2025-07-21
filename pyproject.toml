@@ -1,0 +1,13 @@
+[project]
+name = "heat-x-restart"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+docs = [
+    "mkdocs-bibtex>=4.4.0",
+    "mkdocs-material>=9.6.15",
+]
