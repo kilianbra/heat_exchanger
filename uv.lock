@@ -205,7 +205,7 @@ wheels = [
 ]
 
 [[package]]
-name = "heat-x-restart"
+name = "heat-exchanger"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

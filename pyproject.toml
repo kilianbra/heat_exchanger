@@ -1,7 +1,7 @@
 [project]
-name = "heat-x-restart"
+name = "heat_exchanger"
 version = "0.1.0"
-description = "Add your description here"
+description = "Heat exchanger model for first order evaluating and designing."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
