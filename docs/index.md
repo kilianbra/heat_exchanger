@@ -2,7 +2,7 @@
 
 A simple heat exchanger model.
 
-The goal of this package is to help heat exchanger users to obtain some physical pressure drop insights in applications where volume and weight are very sensitive like aviation. 
+The goal of this package is to help heat exchanger users to obtain some physical pressure drop insights in applications where volume and weight are very sensitive like aviation.
 
 Rather than setting an allowable pressure drop and then deriving the frontal area required, an available frontal area is inputted and then an effectiveness/pressure drop curve is outputed.
 
