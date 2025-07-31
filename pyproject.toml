@@ -33,3 +33,8 @@ ignore = ["E501", "N803", "N806"]
 [tool.ruff.lint.per-file-ignores]
 # Ignore `T201` (print statements) in all `analysis/*.py` files.
 "analysis/*.py" = ["T201"]
+
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"

@@ -1,13 +1,20 @@
-### NEW CORRELATIONS COPY PASTED
+"""
+correlations.py
+
+This module contains correlations for different heat exchanger geometries.
+In some cases an explicit formula is used, in other cases a graph has been digitised and interpolated.
+"""
+
+import warnings
 
 import numpy as np
 from scipy.interpolate import interp1d
-import warnings
 
 # Data from Kays & London 1984 CHX
 # Fig 6-4 (p122) - Friction factor for laminar concentric annular flow
 friction_concentric_laminar_data = [
-    (0, 16), (0.009708737864077666, 19.008130081300813),
+    (0, 16),
+    (0.009708737864077666, 19.008130081300813),
     (0.016181229773462785, 19.6260162601626),
     (0.030744336569579298, 20.422764227642276),
     (0.05339805825242719, 21.170731707317074),
@@ -26,7 +33,7 @@ friction_concentric_laminar_data = [
     (0.5760517799352751, 23.869918699186993),
     (0.6456310679611651, 23.934959349593495),
     (0.7233009708737865, 23.96747967479675),
-    (1., 24)
+    (1.0, 24),
 ]
 
 # Fig 6-5 (p123) - Nusselt number for laminar concentric annular flow
@@ -55,7 +62,7 @@ nusselt_concentric_laminar_data = [
     (0.7597042513863217, 5.686340640809444),
     (0.822550831792976, 5.593591905564924),
     (0.9131238447319778, 5.500843170320405),
-    (1.0, 5.445193929173694)
+    (1.0, 5.445193929173694),
 ]
 
 # Fig 6-7 - Turbulent Nusselt number for circular tube at Pr=0.7
@@ -67,7 +74,7 @@ nusselt_circular_turbulent_data = [
     (1e5, 171.98528456192847),
     (183768.3064825769, 280.4495968594034),
     (602735.6089958638, 753.0592582127344),
-    (1e6, 1135.5715881362369)
+    (1e6, 1135.5715881362369),
 ]
 
 # Data from Figure 6-7 p.129 (turbulent Nusselt for circular tube at different Re)
@@ -85,7 +92,7 @@ nusselt_concentric_rratio_0_2_Pr_0_7 = [
     (299698.06423446094, 492.52247554590485),
     (439022.7710507395, 679.9921117380443),
     (598690.0943083635, 873.8830002276075),
-    (1e6, 1327.5034291529391)
+    (1e6, 1327.5034291529391),
 ]
 
 # Data fom Figure 6-14 p.132 (turbulent Nusselt for annular flow at different r_ratio)
@@ -109,7 +116,7 @@ nusselt_concentric_Re_1e5_Pr_0_7 = [
     (0.7100694444444444, 158.9830508474576),
     (0.8177083333333334, 156.77966101694915),
     (0.9027777777777779, 155.4237288135593),
-    (1, 154.40677966101694)
+    (1, 154.40677966101694),
 ]
 
 # Data from Kays & London 1984 Fig 6-2 p 121, x is 1/alpha = a/b where b is the longer side of the rectangle i.e. x<=1
@@ -140,7 +147,7 @@ friction_rectangular_duct_laminar_data = [
     (0.8011494252873568, 14.398963730569948),
     (0.8540229885057473, 14.330569948186527),
     (0.9183908045977014, 14.262176165803108),
-    (1.0, 14.2)
+    (1.0, 14.2),
 ]
 # Kays and London fig 6-3 p 121
 nusselt_q_cst_rectangular_duct_laminar_data = [
@@ -169,23 +176,32 @@ nusselt_q_cst_rectangular_duct_laminar_data = [
     (0.8011494252873568, 14.398963730569948),
     (0.8540229885057473, 14.330569948186527),
     (0.9183908045977014, 14.262176165803108),
-    (1.0, 14.2)
+    (1.0, 14.2),
 ]
 
 # Create interpolation functions for laminar flow
-_interp_friction = interp1d(*zip(*friction_concentric_laminar_data), kind='linear')
-_interp_nusselt_laminar = interp1d(*zip(*nusselt_concentric_laminar_data), kind='linear')
+_interp_friction = interp1d(*zip(*friction_concentric_laminar_data), kind="linear")
+_interp_nusselt_laminar = interp1d(*zip(*nusselt_concentric_laminar_data), kind="linear")
 
 # Create interpolation functions for turbulent flow
-_interp_nusselt_circular_turbulent = interp1d(*zip(*nusselt_circular_turbulent_data), kind='linear')
-#in annular flow have two fixed graphs for Pr=0.7: one with r_ratio = 0.2 and Re varying
+_interp_nusselt_circular_turbulent = interp1d(*zip(*nusselt_circular_turbulent_data), kind="linear")
+# in annular flow have two fixed graphs for Pr=0.7: one with r_ratio = 0.2 and Re varying
 # the other with Re = 1e5 and r_ratio varying
-_interp_Nu_Re = interp1d(*zip(*nusselt_concentric_rratio_0_2_Pr_0_7), kind='linear', bounds_error=True)
-_interp_Nu_rratio = interp1d(*zip(*nusselt_concentric_Re_1e5_Pr_0_7), kind='linear', bounds_error=True)
+_interp_Nu_Re = interp1d(
+    *zip(*nusselt_concentric_rratio_0_2_Pr_0_7), kind="linear", bounds_error=True
+)
+_interp_Nu_rratio = interp1d(
+    *zip(*nusselt_concentric_Re_1e5_Pr_0_7), kind="linear", bounds_error=True
+)
 
 # Create interpolation functions for rectangular ducts
-_interp_friction_rectangular = interp1d(*zip(*friction_rectangular_duct_laminar_data), kind='linear')
-_interp_nusselt_q_cst_rectangular = interp1d(*zip(*nusselt_q_cst_rectangular_duct_laminar_data), kind='linear')
+_interp_friction_rectangular = interp1d(
+    *zip(*friction_rectangular_duct_laminar_data), kind="linear"
+)
+_interp_nusselt_q_cst_rectangular = interp1d(
+    *zip(*nusselt_q_cst_rectangular_duct_laminar_data), kind="linear"
+)
+
 
 def von_karman_nikuradse_smooth(Re):
     """
@@ -200,11 +216,12 @@ def von_karman_nikuradse_smooth(Re):
     """
     f = 0.01  # Initial guess
     for _ in range(1000):
-        f_new = 1 / (1.737 * np.log(Re * np.sqrt(f)) - 0.396)**2
+        f_new = 1 / (1.737 * np.log(Re * np.sqrt(f)) - 0.396) ** 2
         if abs(f_new - f) < 1e-6:
             return f_new
         f = f_new
     return None  # If no convergence after 1000 iterations
+
 
 def nusselt_gnielinski(f, Re, Pr):
     """
@@ -225,7 +242,8 @@ def nusselt_gnielinski(f, Re, Pr):
     - 0.5 ≤ Pr ≤ 2000
     Note: Not a good correlation in the transition regime
     """
-    return (f/2) * (Re - 1000) * Pr / (1 + 12.7 * np.sqrt(f/2) * (Pr**(2/3) - 1))
+    return (f / 2) * (Re - 1000) * Pr / (1 + 12.7 * np.sqrt(f / 2) * (Pr ** (2 / 3) - 1))
+
 
 def circular_pipe_friction_factor(Re, r_ratio=0, show_warnings=False):
     """
@@ -244,10 +262,12 @@ def circular_pipe_friction_factor(Re, r_ratio=0, show_warnings=False):
     if Re <= 2300:  # Laminar
         if not (0 <= r_ratio <= 1):
             raise ValueError(f"r_ratio {r_ratio:.2f} must be between 0 and 1")
-        return _interp_friction(r_ratio) / Re #Uses Kays & London 1984 Fig 6-4 (p122)
+        return _interp_friction(r_ratio) / Re  # Uses Kays & London 1984 Fig 6-4 (p122)
 
     elif Re > 1e4:  # Turbulent
-        return von_karman_nikuradse_smooth(Re) #Kays & London 1984 Fig 6-6 uses 0.46 Re^-0.2 instead for this, but I chose to use another formula
+        return von_karman_nikuradse_smooth(
+            Re
+        )  # Kays & London 1984 Fig 6-6 uses 0.46 Re^-0.2 instead for this, but I chose to use another formula
 
     else:  # Transitional, from fidling around on Desmos and using the smooth pipe flow Fig from K&L (Fig 10-1?)
         if show_warnings:
@@ -255,8 +275,9 @@ def circular_pipe_friction_factor(Re, r_ratio=0, show_warnings=False):
         # Interpolate between laminar and turbulent
         Re_fit, n_fit = 4500, 4
         f_lam = _interp_friction(r_ratio) / Re
-        f_turb = 0.079 * Re**(-0.25)
-        return (f_lam + (Re/Re_fit)**n_fit * f_turb) / (1 + (Re/Re_fit)**n_fit)
+        f_turb = 0.079 * Re ** (-0.25)
+        return (f_lam + (Re / Re_fit) ** n_fit * f_turb) / (1 + (Re / Re_fit) ** n_fit)
+
 
 def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
     """
@@ -284,7 +305,7 @@ def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
                 if show_warnings:
                     warnings.warn(f"Re={Re:.1e} outside correlation range")
                 if Re > 1e6:
-                    return 10**(-1.771548501143517) * Re**(0.8027382977987497)
+                    return 10 ** (-1.771548501143517) * Re ** (0.8027382977987497)
             return _interp_nusselt_circular_turbulent(Re)
         else:
             if not (0.105 <= r_ratio <= 1):
@@ -296,7 +317,7 @@ def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
             else:
                 if show_warnings:
                     warnings.warn(f"Reynolds of {Re:.1e} above 1e6, extrapolating")
-                Nu_at_fixed_rratio = 10**(-1.555820526825431) * Re ** (0.7762764854498554)
+                Nu_at_fixed_rratio = 10 ** (-1.555820526825431) * Re ** (0.7762764854498554)
 
             # Scale by r_ratio effect at Re=1e5
             Nu_at_fixed_Re = _interp_Nu_rratio(r_ratio)
@@ -307,15 +328,20 @@ def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
         if show_warnings:
             warnings.warn(f"Flow is transitional (Re={Re:.1e})")
         # Interpolate j/f between laminar and turbulent
-        j_f_lam = (4.36 if r_ratio == 0 else _interp_nusselt_laminar(r_ratio)) / (Pr**(1/3) * _interp_friction(r_ratio))
-        j_f_turb = circular_pipe_nusselt(1e4, r_ratio) / (Pr**(1/3) * 1e4 * circular_pipe_friction_factor(1e4, r_ratio))
+        j_f_lam = (4.36 if r_ratio == 0 else _interp_nusselt_laminar(r_ratio)) / (
+            Pr ** (1 / 3) * _interp_friction(r_ratio)
+        )
+        j_f_turb = circular_pipe_nusselt(1e4, r_ratio) / (
+            Pr ** (1 / 3) * 1e4 * circular_pipe_friction_factor(1e4, r_ratio)
+        )
 
         # Linear interpolation in log space
         a = (j_f_turb - j_f_lam) / (np.log10(1e4) - np.log10(2300))
         b = j_f_lam - a * np.log10(2300)
         j_f = a * np.log10(Re) + b
 
-        return j_f * circular_pipe_friction_factor(Re, r_ratio) * Re * Pr**(1/3)
+        return j_f * circular_pipe_friction_factor(Re, r_ratio) * Re * Pr ** (1 / 3)
+
 
 def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
     """
@@ -334,7 +360,7 @@ def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
 
     # Ensure a_over_b <= 1 by taking reciprocal if needed
     if a_over_b > 1:
-        a_over_b = 1/a_over_b
+        a_over_b = 1 / a_over_b
 
     if Re <= 0:
         return 0.0
@@ -352,7 +378,8 @@ def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
         Re_fit, n_fit = 4500, 4
         f_lam = _interp_friction_rectangular(a_over_b) / Re
         f_turb = von_karman_nikuradse_smooth(1e4)
-        return (f_lam + (Re/Re_fit)**n_fit * f_turb) / (1 + (Re/Re_fit)**n_fit)
+        return (f_lam + (Re / Re_fit) ** n_fit * f_turb) / (1 + (Re / Re_fit) ** n_fit)
+
 
 def rectangular_duct_nusselt(Re, a_over_b=1, Pr=0.7, show_warnings=False):
     """
@@ -374,7 +401,7 @@ def rectangular_duct_nusselt(Re, a_over_b=1, Pr=0.7, show_warnings=False):
 
     # Ensure a_over_b <= 1 by taking reciprocal if needed
     if a_over_b > 1:
-        a_over_b = 1/a_over_b
+        a_over_b = 1 / a_over_b
 
     if Re <= 2300:  # Laminar
         return _interp_nusselt_q_cst_rectangular(a_over_b)
@@ -387,22 +414,30 @@ def rectangular_duct_nusselt(Re, a_over_b=1, Pr=0.7, show_warnings=False):
         if show_warnings:
             warnings.warn(f"Flow is transitional (Re={Re:.1e})")
         # Interpolate between laminar and turbulent using j/f method
-        j_f_lam = _interp_nusselt_q_cst_rectangular(a_over_b) / (Pr**(1/3) * _interp_friction_rectangular(a_over_b))
+        j_f_lam = _interp_nusselt_q_cst_rectangular(a_over_b) / (
+            Pr ** (1 / 3) * _interp_friction_rectangular(a_over_b)
+        )
 
         # Get turbulent j/f at Re=1e4
         f_turb = rectangular_duct_friction_factor(1e4, a_over_b)
         Nu_turb = nusselt_gnielinski(f_turb, 1e4, Pr)
-        j_f_turb = Nu_turb / (Pr**(1/3) * 1e4 * f_turb)
+        j_f_turb = Nu_turb / (Pr ** (1 / 3) * 1e4 * f_turb)
 
         # Linear interpolation in log space
         a = (j_f_turb - j_f_lam) / (np.log10(1e4) - np.log10(2300))
         b = j_f_lam - a * np.log10(2300)
         j_f = a * np.log10(Re) + b
 
-        return j_f * rectangular_duct_friction_factor(Re, a_over_b) * Re * Pr**(1/3)
+        return j_f * rectangular_duct_friction_factor(Re, a_over_b) * Re * Pr ** (1 / 3)
 
-def offset_strip_fin_friction_factor(Re: float, s_over_h_prime: float, delta_over_l_s: float,
-                                   delta_over_s: float, show_warnings: bool = False) -> float:
+
+def offset_strip_fin_friction_factor(
+    Re: float,
+    s_over_h_prime: float,
+    delta_over_l_s: float,
+    delta_over_s: float,
+    show_warnings: bool = False,
+) -> float:
     """
     Calculate friction factor for offset strip fins using Manglik and Bergles correlation.
     From Shah (2003) p516 eqn (7.124), based on Manglik and Bergles (1995).
@@ -422,13 +457,31 @@ def offset_strip_fin_friction_factor(Re: float, s_over_h_prime: float, delta_ove
     if show_warnings and (Re < 120 or Re > 1e4):
         warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 120-1e4")
 
-    return (9.6243 * Re**-0.7422 * s_over_h_prime**-0.1856 *
-            delta_over_l_s**0.3053 * delta_over_s**-0.2659 *
-            (1 + 7.669e-8 * Re**4.429 * s_over_h_prime**0.920 *
-             delta_over_l_s**3.767 * delta_over_s**0.236)**0.1)
+    return (
+        9.6243
+        * Re**-0.7422
+        * s_over_h_prime**-0.1856
+        * delta_over_l_s**0.3053
+        * delta_over_s**-0.2659
+        * (
+            1
+            + 7.669e-8
+            * Re**4.429
+            * s_over_h_prime**0.920
+            * delta_over_l_s**3.767
+            * delta_over_s**0.236
+        )
+        ** 0.1
+    )
 
-def offset_strip_fin_j_factor(Re: float, s_over_h_prime: float, delta_over_l_s: float,
-                            delta_over_s: float, show_warnings: bool = False) -> float:
+
+def offset_strip_fin_j_factor(
+    Re: float,
+    s_over_h_prime: float,
+    delta_over_l_s: float,
+    delta_over_s: float,
+    show_warnings: bool = False,
+) -> float:
     """
     Calculate j-factor for offset strip fins using Manglik and Bergles correlation.
     From Shah (2003) p516 eqn (7.124), based on Manglik and Bergles (1995).
@@ -451,14 +504,25 @@ def offset_strip_fin_j_factor(Re: float, s_over_h_prime: float, delta_over_l_s: 
     if show_warnings and (Re < 120 or Re > 1e4):
         warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 120-1e4")
 
-    return (0.6522 * Re**-0.5403 * s_over_h_prime**-0.1541 *
-            delta_over_l_s**0.1499 * delta_over_s**-0.0678 *
-            (1 + 5.269e-5 * Re**1.340 * s_over_h_prime**0.504 *
-             delta_over_l_s**0.456 * delta_over_s**-1.055)**0.1)
+    return (
+        0.6522
+        * Re**-0.5403
+        * s_over_h_prime**-0.1541
+        * delta_over_l_s**0.1499
+        * delta_over_s**-0.0678
+        * (
+            1
+            + 5.269e-5
+            * Re**1.340
+            * s_over_h_prime**0.504
+            * delta_over_l_s**0.456
+            * delta_over_s**-1.055
+        )
+        ** 0.1
+    )
 
 
-def general_hex_j_factor(Re: float, l_s_over_d_h: float,
-                         show_warnings: bool = False) -> float:
+def general_hex_j_factor(Re: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
     """
     Calculate j-factor for general heat exchangers.
     From Milten (2024) eqn (15), based on HEx from Kays and London (1984) like LaHaye (1974).
@@ -467,13 +531,16 @@ def general_hex_j_factor(Re: float, l_s_over_d_h: float,
         warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
-        warnings.warn(f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8")
-
+        warnings.warn(
+            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8"
+        )
 
     return 0.360 * l_s_over_d_h**-0.401 * Re**-0.413 + 2.13e-5 * l_s_over_d_h
 
-def general_hex_friction_factor(Re: float, l_s_over_d_h: float,
-                                show_warnings: bool = False) -> float:
+
+def general_hex_friction_factor(
+    Re: float, l_s_over_d_h: float, show_warnings: bool = False
+) -> float:
     """
     Calculate friction factor for general heat exchangers.
     From Milten (2024) eqn (16), based on HEx from Kays and London (1984) like LaHaye (1974).
@@ -482,8 +549,8 @@ def general_hex_friction_factor(Re: float, l_s_over_d_h: float,
         warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
-        warnings.warn(f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8")
+        warnings.warn(
+            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8"
+        )
 
     return 0.492 * l_s_over_d_h**-0.501 * Re**-0.232
-
-

@@ -6,6 +6,12 @@ __all__ = [
 
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 from heat_exchanger.hex_basic import dp
+from heat_exchanger.correlations import (
+    circular_pipe_friction_factor,
+    circular_pipe_nusselt,
+    rectangular_duct_friction_factor,
+    rectangular_duct_nusselt,
+)
 # the first aviation is the folder name, the second is the file name
 # this represents the package name and the module
 
