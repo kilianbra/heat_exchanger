@@ -557,6 +557,25 @@ def offset_strip_fin_j_factor(
     )
 
 
+def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True, n_rows=11):
+    """Calculates the friction factor for a tube bank in cross flow.
+    Implementation based on Shah 2003, originally from Martin 2002.
+
+    Args:
+        reynolds: Reynolds number based on minimum free flow area and tube diameter.
+        spacing_long: Longitudinal spacing between tubes, divided by tube outer diameter.
+        spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
+        inline: Whether the tubes are in line (True) or staggered (False).
+        n_rows: Number of rows of tubes (if above 10 makes no difference).
+    Returns:
+        Fanning friction factor.
+
+    Valid for:
+    - 120 < reynolds < 1e4
+    - 1.2 < spacing_long/spacing_trans < 10
+    """
+
+
 def general_hex_j_factor(
     reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:
