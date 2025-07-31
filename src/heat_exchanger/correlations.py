@@ -12,7 +12,7 @@ from scipy.interpolate import interp1d
 
 # Data from Kays & London 1984 CHX
 # Fig 6-4 (p122) - Friction factor for laminar concentric annular flow
-friction_concentric_laminar_data = [
+FRICTION_CONCENTRIC_LAMINAR_DATA = [
     (0, 16),
     (0.009708737864077666, 19.008130081300813),
     (0.016181229773462785, 19.6260162601626),
@@ -38,7 +38,7 @@ friction_concentric_laminar_data = [
 
 # Fig 6-5 (p123) - Nusselt number for laminar concentric annular flow
 # Wall boundary condition is constant heat flux
-nusselt_concentric_laminar_data = [
+NUSSELT_CONCENTRIC_LAMINAR_DATA = [
     (0.05175600739371536, 16.018549747048905),
     (0.059149722735674676, 15.016863406408095),
     (0.06654343807763402, 14.03372681281619),
@@ -65,8 +65,8 @@ nusselt_concentric_laminar_data = [
     (1.0, 5.445193929173694),
 ]
 
-# Fig 6-7 - Turbulent Nusselt number for circular tube at Pr=0.7
-nusselt_circular_turbulent_data = [
+# Fig 6-7 - Turbulent Nusselt number for circular tube at prandtl=0.7
+NUSSELT_CIRCULAR_TURBULENT_DATA = [
     (1e4, 29.006013007275083),
     (15497.970912116021, 39.278367251002734),
     (33119.560620331176, 69.26201500663633),
@@ -77,9 +77,9 @@ nusselt_circular_turbulent_data = [
     (1e6, 1135.5715881362369),
 ]
 
-# Data from Figure 6-7 p.129 (turbulent Nusselt for circular tube at different Re)
-# Only digitised data of Pr=0.7
-nusselt_concentric_rratio_0_2_Pr_0_7 = [
+# Data from Figure 6-7 p.129 (turbulent Nusselt for circular tube at different reynolds)
+# Only digitised data of prandtl=0.7
+NUSSELT_CONCENTRIC_RRATIO_0_2_PRANDTL_0_7 = [
     (1e4, 38.21022723912875),
     (14824.650245818953, 49.105375551726866),
     (21458.838814068622, 64.63304070095656),
@@ -96,8 +96,8 @@ nusselt_concentric_rratio_0_2_Pr_0_7 = [
 ]
 
 # Data fom Figure 6-14 p.132 (turbulent Nusselt for annular flow at different r_ratio)
-# Only digitised Nu_ii, htc to inner if outer insulated. data of Pr=0.7 (also had Pr = 0.01, not relevant)
-nusselt_concentric_Re_1e5_Pr_0_7 = [
+# Only digitised nusselt_ii, htc to inner if outer insulated. data of prandtl=0.7 (also had prandtl = 0.01, not relevant)
+NUSSELT_CONCENTRIC_REYNOLDS_1E5_PRANDTL_0_7 = [
     (0.10416666666666666, 232.20338983050846),
     (0.11631944444444445, 225.4237288135593),
     (0.12673611111111108, 219.83050847457628),
@@ -121,7 +121,7 @@ nusselt_concentric_Re_1e5_Pr_0_7 = [
 
 # Data from Kays & London 1984 Fig 6-2 p 121, x is 1/alpha = a/b where b is the longer side of the rectangle i.e. x<=1
 # Exact values from Table 6-1 p.120 where it is specified for L/d_h > 100
-friction_rectangular_duct_laminar_data = [
+FRICTION_RECTANGULAR_DUCT_LAMINAR_DATA = [
     (0, 24),
     (0.012643678160919936, 23.723316062176163),
     (0.02413793103448314, 23.358549222797926),
@@ -150,7 +150,7 @@ friction_rectangular_duct_laminar_data = [
     (1.0, 14.2),
 ]
 # Kays and London fig 6-3 p 121
-nusselt_q_cst_rectangular_duct_laminar_data = [
+NUSSELT_Q_CST_RECTANGULAR_DUCT_LAMINAR_DATA = [
     (0, 24),
     (0.012643678160919936, 23.723316062176163),
     (0.02413793103448314, 23.358549222797926),
@@ -180,106 +180,120 @@ nusselt_q_cst_rectangular_duct_laminar_data = [
 ]
 
 # Create interpolation functions for laminar flow
-_interp_friction = interp1d(*zip(*friction_concentric_laminar_data), kind="linear")
-_interp_nusselt_laminar = interp1d(*zip(*nusselt_concentric_laminar_data), kind="linear")
+_interp_friction = interp1d(*zip(*FRICTION_CONCENTRIC_LAMINAR_DATA, strict=True), kind="linear")
+_interp_nusselt_laminar = interp1d(
+    *zip(*NUSSELT_CONCENTRIC_LAMINAR_DATA, strict=True), kind="linear"
+)
 
 # Create interpolation functions for turbulent flow
-_interp_nusselt_circular_turbulent = interp1d(*zip(*nusselt_circular_turbulent_data), kind="linear")
-# in annular flow have two fixed graphs for Pr=0.7: one with r_ratio = 0.2 and Re varying
-# the other with Re = 1e5 and r_ratio varying
-_interp_Nu_Re = interp1d(
-    *zip(*nusselt_concentric_rratio_0_2_Pr_0_7), kind="linear", bounds_error=True
+_interp_nusselt_circular_turbulent = interp1d(
+    *zip(*NUSSELT_CIRCULAR_TURBULENT_DATA, strict=True), kind="linear"
 )
-_interp_Nu_rratio = interp1d(
-    *zip(*nusselt_concentric_Re_1e5_Pr_0_7), kind="linear", bounds_error=True
+# in annular flow have two fixed graphs for prandtl=0.7: one with r_ratio = 0.2 and reynolds varying
+# the other with reynolds = 1e5 and r_ratio varying
+_interp_nusselt_reynolds = interp1d(
+    *zip(*NUSSELT_CONCENTRIC_RRATIO_0_2_PRANDTL_0_7, strict=True), kind="linear", bounds_error=True
+)
+_interp_nusselt_rratio = interp1d(
+    *zip(*NUSSELT_CONCENTRIC_REYNOLDS_1E5_PRANDTL_0_7, strict=True),
+    kind="linear",
+    bounds_error=True,
 )
 
 # Create interpolation functions for rectangular ducts
 _interp_friction_rectangular = interp1d(
-    *zip(*friction_rectangular_duct_laminar_data), kind="linear"
+    *zip(*FRICTION_RECTANGULAR_DUCT_LAMINAR_DATA, strict=True), kind="linear"
 )
 _interp_nusselt_q_cst_rectangular = interp1d(
-    *zip(*nusselt_q_cst_rectangular_duct_laminar_data), kind="linear"
+    *zip(*NUSSELT_Q_CST_RECTANGULAR_DUCT_LAMINAR_DATA, strict=True), kind="linear"
 )
 
 
-def von_karman_nikuradse_smooth(Re):
+def von_karman_nikuradse_smooth(reynolds):
     """
     Calculate Fanning friction factor for turbulent flow in smooth tubes using von Karman-Nikuradse correlation.
     Uses iterative solution of implicit equation.
+    TODO: add source!
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
 
     Returns:
         Fanning friction factor
     """
     f = 0.01  # Initial guess
     for _ in range(1000):
-        f_new = 1 / (1.737 * np.log(Re * np.sqrt(f)) - 0.396) ** 2
+        f_new = 1 / (1.737 * np.log(reynolds * np.sqrt(f)) - 0.396) ** 2
         if abs(f_new - f) < 1e-6:
             return f_new
         f = f_new
     return None  # If no convergence after 1000 iterations
 
 
-def nusselt_gnielinski(f, Re, Pr):
+def nusselt_gnielinski(f, reynolds, prandtl):
     """
     Calculate Nusselt number using Gnielinski correlation.
     From Shah (2003) Equation 7.76.
 
     Args:
         f: Fanning friction factor
-        Re: Reynolds number
-        Pr: Prandtl number
+        reynolds: Reynolds number
+        prandtl: Prandtl number
 
     Returns:
         Nusselt number
 
     Accuracy: ±10%
     Valid for:
-    - 2300 ≤ Re ≤ 5×10⁶
-    - 0.5 ≤ Pr ≤ 2000
+    - 2300 ≤ reynolds ≤ 5×10⁶
+    - 0.5 ≤ prandtl ≤ 2000
     Note: Not a good correlation in the transition regime
     """
-    return (f / 2) * (Re - 1000) * Pr / (1 + 12.7 * np.sqrt(f / 2) * (Pr ** (2 / 3) - 1))
+    return (
+        (f / 2)
+        * (reynolds - 1000)
+        * prandtl
+        / (1 + 12.7 * np.sqrt(f / 2) * (prandtl ** (2 / 3) - 1))
+    )
 
 
-def circular_pipe_friction_factor(Re, r_ratio=0, show_warnings=False):
+def circular_pipe_friction_factor(reynolds, r_ratio=0):
     """
     Calculate Fanning friction factor for circular (r_ratio=0) or annular tubes.
     Uses correlations from Kays & London 1984.
     Transitional interpolation is own work by KB
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         r_ratio: Radius ratio (inner/outer) for annular flow, 0 for circular tube
-        show_warnings: Whether to show warnings for transitional flow
     """
-    if Re <= 0:
+    if reynolds <= 0:
         return 0.0
 
-    if Re <= 2300:  # Laminar
+    if reynolds <= 2300:  # Laminar
         if not (0 <= r_ratio <= 1):
             raise ValueError(f"r_ratio {r_ratio:.2f} must be between 0 and 1")
-        return _interp_friction(r_ratio) / Re  # Uses Kays & London 1984 Fig 6-4 (p122)
+        return _interp_friction(r_ratio) / reynolds  # Uses Kays & London 1984 Fig 6-4 (p122)
 
-    elif Re > 1e4:  # Turbulent
+    elif reynolds > 1e4:  # Turbulent
         return von_karman_nikuradse_smooth(
-            Re
-        )  # Kays & London 1984 Fig 6-6 uses 0.46 Re^-0.2 instead for this, but I chose to use another formula
+            reynolds
+        )  # Kays & London 1984 Fig 6-6 uses 0.46 reynolds^-0.2 instead for this, but I chose to use another formula
 
-    else:  # Transitional, from fidling around on Desmos and using the smooth pipe flow Fig from K&L (Fig 10-1?)
-        if show_warnings:
-            warnings.warn(f"Flow is transitional (Re={Re:.1e})")
+    else:  # Transitional
         # Interpolate between laminar and turbulent
-        Re_fit, n_fit = 4500, 4
-        f_lam = _interp_friction(r_ratio) / Re
-        f_turb = 0.079 * Re ** (-0.25)
-        return (f_lam + (Re / Re_fit) ** n_fit * f_turb) / (1 + (Re / Re_fit) ** n_fit)
+        reynolds_fit, n_fit = (
+            4500,
+            4,
+        )  # values found from fidling around on Desmos and using the smooth pipe flow Fig from K&L (Fig 10-1?)
+        f_lam = _interp_friction(r_ratio) / reynolds
+        f_turb = 0.079 * reynolds ** (-0.25)
+        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (
+            1 + (reynolds / reynolds_fit) ** n_fit
+        )
 
 
-def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
+def circular_pipe_nusselt(reynolds, r_ratio=0, prandtl=0.7, show_warnings=False):
     """
     Calculate Nusselt number for circular (r_ratio=0) or annular tubes.
     Uses correlations from Kays & London 1984.
@@ -287,63 +301,73 @@ def circular_pipe_nusselt(Re, r_ratio=0, Pr=0.7, show_warnings=False):
     Transitional interpolation is own work by KB
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         r_ratio: Radius ratio (inner/outer) for annular flow, 0 for circular tube
-        Pr: Prandtl number (default 0.7)
+        prandtl: Prandtl number (default 0.7)
         show_warnings: Whether to show warnings for transitional flow
     """
-    if Re < 2300:  # Laminar
+    if reynolds < 2300:  # Laminar
         if r_ratio == 0:
             return 4.36  # Circular tube, constant heat flux
         if not (0.052 <= r_ratio <= 1):
             raise ValueError(f"r_ratio {r_ratio:.2f} must be between 0.052 and 1")
         return _interp_nusselt_laminar(r_ratio)
 
-    elif Re >= 1e4:  # Turbulent
+    elif reynolds >= 1e4:  # Turbulent
         if r_ratio == 0:
-            if not (1e4 <= Re <= 1e6):
+            if not (1e4 <= reynolds <= 1e6):
                 if show_warnings:
-                    warnings.warn(f"Re={Re:.1e} outside correlation range")
-                if Re > 1e6:
-                    return 10 ** (-1.771548501143517) * Re ** (0.8027382977987497)
-            return _interp_nusselt_circular_turbulent(Re)
+                    warnings.warn(
+                        f"reynolds={reynolds:.1e} outside correlation range", stacklevel=2
+                    )
+                if reynolds > 1e6:
+                    return 10 ** (-1.771548501143517) * reynolds ** (0.8027382977987497)
+            return _interp_nusselt_circular_turbulent(reynolds)
         else:
             if not (0.105 <= r_ratio <= 1):
                 raise ValueError(f"r_ratio of {r_ratio:.2f} must be between 0.105 and 1.")
 
-            # Get Nu at r_ratio=0.2 for given Re
-            if Re <= 1e6:
-                Nu_at_fixed_rratio = _interp_Nu_Re(Re)
+            # Get nusselt at r_ratio=0.2 for given reynolds
+            if reynolds <= 1e6:
+                nusselt_at_fixed_rratio = _interp_nusselt_reynolds(reynolds)
             else:
                 if show_warnings:
-                    warnings.warn(f"Reynolds of {Re:.1e} above 1e6, extrapolating")
-                Nu_at_fixed_rratio = 10 ** (-1.555820526825431) * Re ** (0.7762764854498554)
+                    warnings.warn(
+                        f"Reynolds of {reynolds:.1e} above 1e6, extrapolating", stacklevel=2
+                    )
+                nusselt_at_fixed_rratio = 10 ** (-1.555820526825431) * reynolds ** (
+                    0.7762764854498554
+                )
 
-            # Scale by r_ratio effect at Re=1e5
-            Nu_at_fixed_Re = _interp_Nu_rratio(r_ratio)
-            scaled_Nu = Nu_at_fixed_rratio * (Nu_at_fixed_Re / _interp_Nu_rratio(0.2))
-            return scaled_Nu
+            # Scale by r_ratio effect at reynolds=1e5
+            nusselt_at_fixed_reynolds = _interp_nusselt_rratio(r_ratio)
+            scaled_nusselt = nusselt_at_fixed_rratio * (
+                nusselt_at_fixed_reynolds / _interp_nusselt_rratio(0.2)
+            )
+            return scaled_nusselt
 
     else:  # Transitional
         if show_warnings:
-            warnings.warn(f"Flow is transitional (Re={Re:.1e})")
+            warnings.warn(f"Flow is transitional (reynolds={reynolds:.1e})", stacklevel=2)
         # Interpolate j/f between laminar and turbulent
         j_f_lam = (4.36 if r_ratio == 0 else _interp_nusselt_laminar(r_ratio)) / (
-            Pr ** (1 / 3) * _interp_friction(r_ratio)
+            prandtl ** (1 / 3) * _interp_friction(r_ratio)
         )
         j_f_turb = circular_pipe_nusselt(1e4, r_ratio) / (
-            Pr ** (1 / 3) * 1e4 * circular_pipe_friction_factor(1e4, r_ratio)
+            prandtl ** (1 / 3) * 1e4 * circular_pipe_friction_factor(1e4, r_ratio)
         )
 
         # Linear interpolation in log space
         a = (j_f_turb - j_f_lam) / (np.log10(1e4) - np.log10(2300))
         b = j_f_lam - a * np.log10(2300)
-        j_f = a * np.log10(Re) + b
+        j_f = a * np.log10(reynolds) + b
 
-        return j_f * circular_pipe_friction_factor(Re, r_ratio) * Re * Pr ** (1 / 3)
+        return (
+            j_f * circular_pipe_friction_factor(reynolds, r_ratio) * reynolds * prandtl ** (1 / 3)
+        )
 
 
-def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
+def rectangular_duct_friction_factor(reynolds, a_over_b=1, show_warnings=False):
     """
     Calculate friction factor for rectangular ducts.
     Uses correlations from Kays & London 1984 for laminar flow.
@@ -351,7 +375,7 @@ def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
     Transitional interpolation follows same approach as circular pipe.
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         a_over_b: Aspect ratio of rectangular duct (shorter/longer side), ≤ 1
         show_warnings: Whether to show warnings for transitional flow
     """
@@ -362,35 +386,37 @@ def rectangular_duct_friction_factor(Re, a_over_b=1, show_warnings=False):
     if a_over_b > 1:
         a_over_b = 1 / a_over_b
 
-    if Re <= 0:
+    if reynolds <= 0:
         return 0.0
 
-    if Re <= 2300:  # Laminar
-        return _interp_friction_rectangular(a_over_b) / Re
+    if reynolds <= 2300:  # Laminar
+        return _interp_friction_rectangular(a_over_b) / reynolds
 
-    elif Re > 1e4:  # Turbulent
-        return von_karman_nikuradse_smooth(Re)
+    elif reynolds > 1e4:  # Turbulent
+        return von_karman_nikuradse_smooth(reynolds)
 
     else:  # Transitional
         if show_warnings:
-            warnings.warn(f"Flow is transitional (Re={Re:.1e})")
+            warnings.warn(f"Flow is transitional (reynolds={reynolds:.1e})", stacklevel=2)
         # Interpolate between laminar and turbulent
-        Re_fit, n_fit = 4500, 4
-        f_lam = _interp_friction_rectangular(a_over_b) / Re
+        reynolds_fit, n_fit = 4500, 4
+        f_lam = _interp_friction_rectangular(a_over_b) / reynolds
         f_turb = von_karman_nikuradse_smooth(1e4)
-        return (f_lam + (Re / Re_fit) ** n_fit * f_turb) / (1 + (Re / Re_fit) ** n_fit)
+        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (
+            1 + (reynolds / reynolds_fit) ** n_fit
+        )
 
 
-def rectangular_duct_nusselt(Re, a_over_b=1, Pr=0.7, show_warnings=False):
+def rectangular_duct_nusselt(reynolds, a_over_b=1, prandtl=0.7, show_warnings=False):
     """
     Calculate Nusselt number for rectangular ducts.
     Uses interpolated data from Kays & London for laminar flow.
     Uses Gnielinski correlation for turbulent flow.
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         a_over_b: Aspect ratio of rectangular duct (shorter/longer side), ≤ 1
-        Pr: Prandtl number
+        prandtl: Prandtl number
         show_warnings: Whether to show warnings
 
     Returns:
@@ -403,36 +429,41 @@ def rectangular_duct_nusselt(Re, a_over_b=1, Pr=0.7, show_warnings=False):
     if a_over_b > 1:
         a_over_b = 1 / a_over_b
 
-    if Re <= 2300:  # Laminar
+    if reynolds <= 2300:  # Laminar
         return _interp_nusselt_q_cst_rectangular(a_over_b)
 
-    elif Re > 1e4:  # Turbulent
-        f = rectangular_duct_friction_factor(Re, a_over_b)
-        return nusselt_gnielinski(f, Re, Pr)
+    elif reynolds > 1e4:  # Turbulent
+        f = rectangular_duct_friction_factor(reynolds, a_over_b)
+        return nusselt_gnielinski(f, reynolds, prandtl)
 
     else:  # Transitional
         if show_warnings:
-            warnings.warn(f"Flow is transitional (Re={Re:.1e})")
+            warnings.warn(f"Flow is transitional (reynolds={reynolds:.1e})", stacklevel=2)
         # Interpolate between laminar and turbulent using j/f method
         j_f_lam = _interp_nusselt_q_cst_rectangular(a_over_b) / (
-            Pr ** (1 / 3) * _interp_friction_rectangular(a_over_b)
+            prandtl ** (1 / 3) * _interp_friction_rectangular(a_over_b)
         )
 
-        # Get turbulent j/f at Re=1e4
+        # Get turbulent j/f at reynolds=1e4
         f_turb = rectangular_duct_friction_factor(1e4, a_over_b)
-        Nu_turb = nusselt_gnielinski(f_turb, 1e4, Pr)
-        j_f_turb = Nu_turb / (Pr ** (1 / 3) * 1e4 * f_turb)
+        nusselt_turb = nusselt_gnielinski(f_turb, 1e4, prandtl)
+        j_f_turb = nusselt_turb / (prandtl ** (1 / 3) * 1e4 * f_turb)
 
         # Linear interpolation in log space
         a = (j_f_turb - j_f_lam) / (np.log10(1e4) - np.log10(2300))
         b = j_f_lam - a * np.log10(2300)
-        j_f = a * np.log10(Re) + b
+        j_f = a * np.log10(reynolds) + b
 
-        return j_f * rectangular_duct_friction_factor(Re, a_over_b) * Re * Pr ** (1 / 3)
+        return (
+            j_f
+            * rectangular_duct_friction_factor(reynolds, a_over_b)
+            * reynolds
+            * prandtl ** (1 / 3)
+        )
 
 
 def offset_strip_fin_friction_factor(
-    Re: float,
+    reynolds: float,
     s_over_h_prime: float,
     delta_over_l_s: float,
     delta_over_s: float,
@@ -443,7 +474,7 @@ def offset_strip_fin_friction_factor(
     From Shah (2003) p516 eqn (7.124), based on Manglik and Bergles (1995).
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         s_over_h_prime: Ratio of fin spacing to fin height
         delta_over_l_s: Ratio of fin thickness to fin length
         delta_over_s: Ratio of fin thickness to fin spacing
@@ -452,21 +483,23 @@ def offset_strip_fin_friction_factor(
     Returns:
         Fanning friction factor
 
-    Valid for 120 < Re < 1e4
+    Valid for 120 < reynolds < 1e4
     """
-    if show_warnings and (Re < 120 or Re > 1e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 120-1e4")
+    if show_warnings and (reynolds < 120 or reynolds > 1e4):
+        warnings.warn(
+            f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2
+        )
 
     return (
         9.6243
-        * Re**-0.7422
+        * reynolds**-0.7422
         * s_over_h_prime**-0.1856
         * delta_over_l_s**0.3053
         * delta_over_s**-0.2659
         * (
             1
             + 7.669e-8
-            * Re**4.429
+            * reynolds**4.429
             * s_over_h_prime**0.920
             * delta_over_l_s**3.767
             * delta_over_s**0.236
@@ -476,7 +509,7 @@ def offset_strip_fin_friction_factor(
 
 
 def offset_strip_fin_j_factor(
-    Re: float,
+    reynolds: float,
     s_over_h_prime: float,
     delta_over_l_s: float,
     delta_over_s: float,
@@ -485,10 +518,10 @@ def offset_strip_fin_j_factor(
     """
     Calculate j-factor for offset strip fins using Manglik and Bergles correlation.
     From Shah (2003) p516 eqn (7.124), based on Manglik and Bergles (1995).
-    j = St * Pr^(2/3), where St is the Stanton number.
+    j = St * prandtl^(2/3), where St is the Stanton number.
 
     Args:
-        Re: Reynolds number
+        reynolds: Reynolds number
         s_over_h_prime: Ratio of fin spacing to fin height
         delta_over_l_s: Ratio of fin thickness to fin length
         delta_over_s: Ratio of fin thickness to fin spacing
@@ -498,22 +531,24 @@ def offset_strip_fin_j_factor(
         Colburn j-factor
 
     Valid for:
-    - 1.2e2 < Re < 1e4
-    - 0.5 < Pr < 15
+    - 1.2e2 < reynolds < 1e4
+    - 0.5 < prandtl < 15
     """
-    if show_warnings and (Re < 120 or Re > 1e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 120-1e4")
+    if show_warnings and (reynolds < 120 or reynolds > 1e4):
+        warnings.warn(
+            f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2
+        )
 
     return (
         0.6522
-        * Re**-0.5403
+        * reynolds**-0.5403
         * s_over_h_prime**-0.1541
         * delta_over_l_s**0.1499
         * delta_over_s**-0.0678
         * (
             1
             + 5.269e-5
-            * Re**1.340
+            * reynolds**1.340
             * s_over_h_prime**0.504
             * delta_over_l_s**0.456
             * delta_over_s**-1.055
@@ -522,35 +557,43 @@ def offset_strip_fin_j_factor(
     )
 
 
-def general_hex_j_factor(Re: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
+def general_hex_j_factor(
+    reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
+) -> float:
     """
     Calculate j-factor for general heat exchangers.
     From Milten (2024) eqn (15), based on HEx from Kays and London (1984) like LaHaye (1974).
     """
-    if show_warnings and (Re < 2e3 or Re > 2e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
+    if show_warnings and (reynolds < 2e3 or reynolds > 2e4):
+        warnings.warn(
+            f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2
+        )
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
         warnings.warn(
-            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8"
+            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8",
+            stacklevel=2,
         )
 
-    return 0.360 * l_s_over_d_h**-0.401 * Re**-0.413 + 2.13e-5 * l_s_over_d_h
+    return 0.360 * l_s_over_d_h**-0.401 * reynolds**-0.413 + 2.13e-5 * l_s_over_d_h
 
 
 def general_hex_friction_factor(
-    Re: float, l_s_over_d_h: float, show_warnings: bool = False
+    reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:
     """
     Calculate friction factor for general heat exchangers.
     From Milten (2024) eqn (16), based on HEx from Kays and London (1984) like LaHaye (1974).
     """
-    if show_warnings and (Re < 2e3 or Re > 2e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
+    if show_warnings and (reynolds < 2e3 or reynolds > 2e4):
+        warnings.warn(
+            f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2
+        )
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
         warnings.warn(
-            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8"
+            f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8",
+            stacklevel=2,
         )
 
-    return 0.492 * l_s_over_d_h**-0.501 * Re**-0.232
+    return 0.492 * l_s_over_d_h**-0.501 * reynolds**-0.232
