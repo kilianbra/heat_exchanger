@@ -1,6 +1,8 @@
-from abc import ABC, abstractmethod
-import numpy as np
 import sys
+
+from abc import ABC, abstractmethod
+
+import numpy as np
 
 
 class FluidPropertiesStrategy(ABC):
