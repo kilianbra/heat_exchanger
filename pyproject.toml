@@ -1,27 +1,22 @@
 [project]
-name = "heat-x-restart"
+name = "heat-exchanger"
 version = "0.1.0"
-description = "Add your description here"
+description = "Heat exchanger model for first order evaluating and designing."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "matplotlib>=3.10.3",
     "numpy>=2.3.1",
     "scipy>=1.16.0",
+    "tabulate>=0.9.0",
 ]
 
 [dependency-groups]
-dev = [
-    "pre-commit>=4.2.0",
-    "ruff>=0.12.4",
-]
-docs = [
-    "mkdocs-bibtex>=4.4.0",
-    "mkdocs-material>=9.6.15",
-]
+dev = ["pre-commit>=4.2.0", "ruff>=0.12.4"]
+docs = ["mkdocs-bibtex>=4.4.0", "mkdocs-material>=9.6.15"]
 
 [tool.uv]
-default-groups = ["dev","docs"]
+default-groups = ["dev", "docs"]
 
 [tool.ruff]
 line-length = 100
@@ -43,3 +38,8 @@ ignore = ["E501", "N803", "N806"]
 [tool.ruff.lint.per-file-ignores]
 # Ignore `T201` (print statements) in all `analysis/*.py` files.
 "analysis/*.py" = ["T201"]
+
+
+[build-system]
+requires = ["uv_build>=0.8.0,<0.9.0"]
+build-backend = "uv_build"
