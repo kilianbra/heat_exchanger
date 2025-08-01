@@ -824,6 +824,55 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
     return friction_factor_k_and_l
 
 
+def tube_bank_nusselt_number_and_friction_factor(
+    reynolds, spacing_long, spacing_trans, prandtl=0.7, inline=True, n_rows=11
+):
+    """Calculates the Nusselt number and friction factor for a tube bank in cross flow.
+    Implementation based on Shah 2003, reframed from Martin 2002, original from Gnielinski 1979.
+
+    Args:
+        reynolds: Reynolds number based on minimum free flow area and tube diameter.
+        spacing_long: Longitudinal spacing between tubes, divided by tube outer diameter.
+        spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
+        prandtl: Prandtl number of the fluid.
+        inline: Whether the tubes are in line (True) or staggered (False).
+        n_rows: Number of rows of tubes (if above 10 makes no difference).
+    Returns:
+        Nusselt number and friction factor.
+    """
+
+    hagen = calculate_new_Hg(reynolds, spacing_long, spacing_trans, inline=inline, Nr=n_rows)
+    if inline:
+        leveque = 1.18 * hagen * prandtl * (4 * spacing_trans / np.pi - 1) / spacing_long
+    elif spacing_long >= 1:
+        spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
+        leveque = 0.92 * hagen * prandtl * (4 * spacing_trans / np.pi - 1) / spacing_diag
+    else:
+        spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
+        leveque = (
+            0.92
+            * hagen
+            * prandtl
+            * (4 * spacing_trans * spacing_long / np.pi - 1)
+            / spacing_diag
+            / spacing_long
+        )
+    assert isinstance(leveque, (int | float)) and not isinstance(leveque, complex), (
+        f"The variable leveque must be a real number but is {leveque}"
+    )
+
+    # Shah 2003 Fundamentals of HX Equation 7.117
+    # by Martin 2002
+    if inline:
+        nusselt = 0.404 * leveque ** (1.0 / 3) * ((reynolds + 1) / (reynolds + 1000)) ** 0.1
+    else:
+        nusselt = 0.404 * leveque ** (1.0 / 3)
+    assert isinstance(nusselt, (int | float)) and not isinstance(nusselt, complex), (
+        f"The variable Nu must be a real number but is {nusselt}"
+    )
+    return nusselt, hagen
+
+
 def general_hex_j_factor(
     reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:
