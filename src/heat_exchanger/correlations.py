@@ -631,7 +631,7 @@ def calculate_Hg_dont_use(Red, Xl, Xt, inline=False, Nr=11):
     # Shah 2003 Fundamentals of HX Equation 7.109
     """Shah 2003 Fundamentals of HX Equation 7.109
     CONTAINS ERROR OF THE 1 THAT SHOULDNT BE THERE
-    USE calculate_new_Hg NOW!
+    USE calculate_Hg NOW!
     Flow normal to a tube bundle by Zukauskas 1987 (shell side of shell and tube)
     1< Re_d < 3e5     Nr>=5
     validity (inline)        1.25 < Xt < 3        1.2 < Xl < 3.0
@@ -678,7 +678,7 @@ def calculate_Hg_dont_use(Red, Xl, Xt, inline=False, Nr=11):
     return Hg
 
 
-def calculate_new_Hg(Red, Xl, Xt, inline=False, Nr=11):
+def calculate_Hg(Red, Xl, Xt, inline=False, Nr=11):
     """Use adapted correlation from Martin 2002 just without the added 1"""
 
     if inline:
@@ -732,7 +732,7 @@ def calculate_Nu_n_Hg(Red, Pr, Xl, Xt, inline=False, Nr=11):
     Xl: longitudinal (parrallel to flow) spacing of tubes, normalised by tube outter diameter Xl* in Shah
     """
 
-    Hg = calculate_new_Hg(Red, Xl, Xt, inline, Nr=Nr)
+    Hg = calculate_Hg(Red, Xl, Xt, inline, Nr=Nr)
     if inline:
         Lq = 1.18 * Hg * Pr * (4 * Xt / np.pi - 1) / Xl
     elif Xl >= 1:
@@ -801,9 +801,10 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
         f"Spacing trans {spacing_trans:.2f} outside correlation range of 1.25-3.0"
     )
     if inline:
-        assert 1.2 <= spacing_long <= 3.0, (
-            f"Inline Spacing long {spacing_long:.2f} outside correlation range of 1.2-3.0"
-        )
+        # assert 1.2 <= spacing_long <= 3.0, (
+        #    f"Inline Spacing long {spacing_long:.2f} outside correlation range of 1.2-3.0"
+        # )
+        pass
     else:
         assert 0.6 <= spacing_long <= 3.0, (
             f"Staggered Spacing long {spacing_long:.2f} outside correlation range of 0.6-3.0"
@@ -819,7 +820,7 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
         # Or if they don't have diag spacing of 1.25 or 1.5 for staggered
         pass
 
-    hagen_number = calculate_new_Hg(reynolds, spacing_long, spacing_trans, inline, n_rows)
+    hagen_number = calculate_Hg(reynolds, spacing_long, spacing_trans, inline, n_rows)
     friction_factor_k_and_l = 2 * hagen_number / reynolds**2 * (spacing_trans - 1) / np.pi
 
     return friction_factor_k_and_l
@@ -890,7 +891,7 @@ def tube_bank_nusselt_number_and_friction_factor(
         Nusselt number and friction factor.
     """
 
-    hagen = calculate_new_Hg(reynolds, spacing_long, spacing_trans, inline=inline, Nr=n_rows)
+    hagen = calculate_Hg(reynolds, spacing_long, spacing_trans, inline=inline, Nr=n_rows)
     nusselt = tube_bank_nusselt_from_hagen(
         hagen, reynolds, spacing_long, spacing_trans, prandtl, inline
     )

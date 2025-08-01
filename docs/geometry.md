@@ -47,7 +47,7 @@ For tube banks
 The pressure drop across a heat exchanger with varying density can be expressed as:
 
 $$
-\Delta p = \frac{G^2}{2} \left[ (1 + \sigma^2) \left( \frac{1}{\rho_2} - \frac{1}{\rho_1} \right) + f_o \frac{A_q}{A_o} \left( \frac{1}{\rho} \right)_\text{m} \right]
+\Delta p = \frac{G^2}{2} \left[ (1 + \sigma^2) \left( \frac{1}{\rho_2} - \frac{1}{\rho_1} \right) + f_o \frac{A_w}{A_o} \left( \frac{1}{\rho} \right)_\text{m} \right]
 $$
 
 where:
@@ -56,13 +56,13 @@ where:
 - $\sigma$ is the contraction ratio (A_frontal/A_o)
 - $\rho_1$ and $\rho_2$ are the fluid densities at the inlet and outlet, respectively,
 - $f_o$ is the equivalent friction factor,
-- $A_q$ is the heat transfer area,
+- $A_w$ is the wetted surface area (over which friction occurs),
 - $A_o$ is the minimum free flow area,
 - $\left( \frac{1}{\rho} \right)_\text{m}$ is the mean value of the reciprocal density along the flow path.
 
 This equation accounts for both the static pressure change due to density variation and the frictional pressure drop.
 
-If we assume small pressure change due to density change (flow acceleration and entrance/exit effects), then this friction factor can be related to $\text{Hg} = \xi \text{Re}^2$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ for a rectangular or axial involute tube bank.
+If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor can be related to $\text{Hg} = \xi \frac{\text{Re}^2}{2}$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ for a rectangular or axial involute tube bank.
 
 ## Property variation of properties in the direction of flow
 
