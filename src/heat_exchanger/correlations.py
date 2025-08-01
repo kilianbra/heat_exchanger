@@ -557,9 +557,210 @@ def offset_strip_fin_j_factor(
     )
 
 
+def calculate_Hglam(Red, Xl, Xt, inline=False):
+    # Shah 2003 Fundamentals of HX Equation 7.110
+    if inline or (Xl >= 0.5 * (2 * Xt + 1) ** 0.5):
+        Hglam = 140 * Red * ((Xl**0.5 - 0.6) ** 2 + 0.75) / (Xt**1.6 * (4 * Xt * Xl / np.pi - 1))
+    else:
+        Xd = (Xt**2 + Xl**2) ** 0.5
+        Hglam = 140 * Red * ((Xl**0.5 - 0.6) ** 2 + 0.75) / (Xd**1.6 * (4 * Xt * Xl / np.pi - 1))
+    test = Hglam
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Hglam must be a real number but is {test}"
+    )
+    return Hglam
+
+
+def calculate_Hgturb_i(Red, Xt, Xl, Nr=11):
+    # Shah 2003 Fundamentals of HX Equation 7.111
+    # Need to correct for number of tube rows
+    if Nr > 10:
+        phi_t_n = 0
+    else:  # Shah Equation (7.114)
+        if Nr < 5:
+            # warn_with_custom_format(f"({Nr:.0f}<5 tube rows is too little for correlation")
+            pass
+        if Xl >= 0.5 * np.sqrt(2 * Xt + 1):
+            phi_t_n = (1 / Nr - 1 / 10) / (2 * Xt**2)
+        else:
+            Xd = (Xt**2 + Xl**2) ** 0.5
+            phi_t_n = 2 * (1 / Nr - 1 / 10) * ((Xd - 1) / (Xt * (Xt - 1))) ** 2
+
+    #           First term is frictional pressure drop in the bundle                                                                                                  Second term inlet/outlet
+    Hgturb_i = (
+        (0.11 + 0.6 * (1 - 0.94 / Xl) ** 0.6 / (Xt - 0.85) ** 1.3) * 10 ** (0.47 * (Xl / Xt - 1.5))
+        + 0.015 * (Xt - 1) * (Xl - 1)
+    ) * Red ** (2 - 0.1 * Xl / Xt) + phi_t_n * Red**2
+    assert isinstance(Hgturb_i, (int, float)) and not isinstance(Hgturb_i, complex), (
+        f"The variable Hgturb_i must be a real number but is {Hgturb_i}"
+    )
+    return Hgturb_i
+
+
+def calculate_Hgturb_s(Red, Xt, Xl, Nr):
+    # Shah 2003 Fundamentals of HX Equation 7.112
+    # Need to correct for number of tube rows
+    if Nr > 10:
+        phi_t_n = 0
+    else:  # Shah Equation (7.114)
+        if Nr < 5:
+            warn_with_custom_format(f"({Nr:.0f}<5 tube rows is too little for correlation")
+        if Xl >= 0.5 * np.sqrt(2 * Xt + 1):
+            phi_t_n = (1 / Nr - 1 / 10) / (2 * Xt**2)
+        else:
+            Xd = (Xt**2 + Xl**2) ** 0.5
+            phi_t_n = 2 * (1 / Nr - 1 / 10) * ((Xd - 1) / (Xt * (Xt - 1))) ** 2
+    #           First term is frictional pressure drop in the bundle                                                       Second term inlet/outlet
+    Hgturb_s = (
+        (1.25 + 0.6 / (Xt - 0.85) ** 1.08) + 0.2 * (Xl / Xt - 1) ** 3 - 0.005 * (Xt / Xl - 1) ** 3
+    ) * Red**1.75 + phi_t_n * Red**2
+
+    if Red > 250000:
+        Hgturb_s = Hgturb_s * (
+            1 + (Red - 250000) / 325000
+        )  # Shah 2003 Fundamentals of HX Equation 7.113
+    test = Hgturb_s
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Hgturb_s must be a real number but is {test}"
+    )
+    return Hgturb_s
+
+
+def calculate_Hg_dont_use(Red, Xl, Xt, inline=False, Nr=11):
+    # Shah 2003 Fundamentals of HX Equation 7.109
+    """Shah 2003 Fundamentals of HX Equation 7.109
+    CONTAINS ERROR OF THE 1 THAT SHOULDNT BE THERE
+    USE calculate_new_Hg NOW!
+    Flow normal to a tube bundle by Zukauskas 1987 (shell side of shell and tube)
+    1< Re_d < 3e5     Nr>=5
+    validity (inline)        1.25 < Xt < 3        1.2 < Xl < 3.0
+    validity (staggered)     1.25 < Xt < 3        0.6 < Xl < 3.0 and Xd > 1.25
+    Correlations based on 7.9 < d_o < 73 mm experimental diameters
+
+    Red : Reynolds number based on tube (outer) diameter
+    Xt: tangential (normal to flow) spacing of tubes, normalised by tube outter diameter (Xt* in Shah)
+    Xl: longitudinal (parrallel to flow) spacing of tubes, normalised by tube outter diameter (Xl* in Shah)
+    """
+    if inline:
+        if not (1.25 <= Xt <= 3):
+            # raise ValueError(f'Xt value {Xt:.2} is not within the range (1.25, 3)')
+            pass
+        if not (1.2 <= Xl <= 3.0):
+            raise ValueError(f"Xl value {Xl:.2} is not within the range (1.2, 3.0)")
+    else:
+        Xd = (Xt**2 + Xl**2) ** 0.5
+        if not (1.25 <= Xt <= 3):
+            # raise ValueError(f'Xt value {Xt:.2} is not within the range (1.25, 3)')
+            pass
+        if not (0.6 <= Xl <= 3):
+            raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
+        if not (5 <= Nr):
+            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+        if Xd is None or Xd < 1.25:
+            raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
+
+    Hglam = calculate_Hglam(Red, Xl, Xt, inline)
+    if inline:
+        Hgturb = calculate_Hgturb_i(Red, Xt, Xl, Nr)
+        Hg = Hglam + Hgturb * (1 - np.exp(1 - (Red + 1000) / 2000))  # 1 is ERROR HERE!
+    else:
+        Hgturb = calculate_Hgturb_s(Red, Xt, Xl, Nr)
+        Hg = Hglam + Hgturb * (1 - np.exp(1 - (Red + 200) / 1000))  # 1 is ERROR HERE!
+    if Hg < 0:
+        test = np.sqrt(-1)
+
+    test = Hg
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Hg must be a real number but is {test}"
+    )
+
+    return Hg
+
+
+def calculate_new_Hg(Red, Xl, Xt, inline=False, Nr=11):
+    """Use adapted correlation from Martin 2002 just without the added 1"""
+
+    if inline:
+        if not (1.25 <= Xt <= 3):
+            # raise ValueError(f'Xt value {Xt:.2} is not within the range (1.25, 3)')
+            pass
+        if not (1.2 <= Xl <= 3.0):
+            raise ValueError(f"Xl value {Xl:.2} is not within the range (1.2, 3.0)")
+    else:
+        Xd = (Xt**2 + Xl**2) ** 0.5
+        if not (1.25 <= Xt <= 3):
+            # raise ValueError(f'Xt value {Xt:.2} is not within the range (1.25, 3)')
+            pass
+        if not (0.6 <= Xl <= 3):
+            raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
+        if not (5 <= Nr):
+            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+        if Xd is None or Xd < 1.25:
+            raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
+
+    Hglam = calculate_Hglam(Red, Xl, Xt, inline)
+    if inline:
+        Hgturb = calculate_Hgturb_i(Red, Xt, Xl, Nr)
+        Hg = Hglam + Hgturb * (1 - np.exp(-(Red + 1000) / 2000))
+    else:
+        Hgturb = calculate_Hgturb_s(Red, Xt, Xl, Nr)
+        Hg = Hglam + Hgturb * (1 - np.exp(-(Red + 200) / 1000))
+    if Hg < 0:
+        test = np.sqrt(-1)
+
+    test = Hg
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Hg must be a real number but is {test}"
+    )
+
+    return Hg
+
+
+def calculate_Nu_n_Hg(Red, Pr, Xl, Xt, inline=False, Nr=11):
+    """Shah 2003 Fundamentals of HX Equation 7.117 & 7.118
+    Flow normal to a tube bundle by Martin 2002 (shell side of shell and tube)
+    1< Re_d < 2e6     0.7 < Pr < 700  (also probably valid for larger than 700, defo not for lower than 0.6)
+    validity (inline)        1.02 < Xt < 3        0.6 < Xl < 3    2< Nr <15 WEIRD, Xl<1 for inline is not physically possible
+    validity (staggered)     1.02 < Xt < 3        0.6 < Xl < 3    4< Nr <80
+    Correlations based on 7.9 < d < 73 mm
+    Prediction of Nusselt number within +/- 20% for inline and 14% for staggered. Can improve with better friction data (experimental)
+
+    Red : Reynolds number based on tube diameter and velocity at narrowest cross section
+    Pr: Prandlt number of the fluid
+    Xt: tangential (normal to flow) spacing of tubes, normalised by tube outter diameter Xt* in Shah
+    Xl: longitudinal (parrallel to flow) spacing of tubes, normalised by tube outter diameter Xl* in Shah
+    """
+
+    Hg = calculate_new_Hg(Red, Xl, Xt, inline, Nr=Nr)
+    if inline:
+        Lq = 1.18 * Hg * Pr * (4 * Xt / np.pi - 1) / Xl
+    elif Xl >= 1:
+        Xd = (Xt**2 + Xl**2) ** 0.5
+        Lq = 0.92 * Hg * Pr * (4 * Xt / np.pi - 1) / Xd
+    else:
+        Xd = (Xt**2 + Xl**2) ** 0.5
+        Lq = 0.92 * Hg * Pr * (4 * Xt * Xl / np.pi - 1) / Xd / Xl
+    test = Lq
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Lq must be a real number but is {test}"
+    )
+
+    # Shah 2003 Fundamentals of HX Equation 7.117
+    # by Martin 2002
+    if inline:
+        Nu = 0.404 * Lq ** (1.0 / 3) * ((Red + 1) / (Red + 1000)) ** 0.1
+    else:
+        Nu = 0.404 * Lq ** (1.0 / 3)
+    test = Nu
+    assert isinstance(test, (int, float)) and not isinstance(test, complex), (
+        f"The variable Nu must be a real number but is {test}"
+    )
+    return Nu, Hg
+
+
 def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True, n_rows=11):
     """Calculates the friction factor for a tube bank in cross flow.
-    Implementation based on Shah 2003, originally from Martin 2002.
+    Implementation based on Shah 2003, reframed from Martin 2002, original from Gaddis and Gnielinski 1985.
 
     Args:
         reynolds: Reynolds number based on minimum free flow area and tube diameter.
@@ -568,12 +769,59 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
         inline: Whether the tubes are in line (True) or staggered (False).
         n_rows: Number of rows of tubes (if above 10 makes no difference).
     Returns:
-        Fanning friction factor.
+        Kays and London equivalent friction factor.
 
     Valid for:
-    - 120 < reynolds < 1e4
-    - 1.2 < spacing_long/spacing_trans < 10
+    - 1 <= reynolds <= 3e5
+    - 5 <= n_rows
+
+    The spacings used to create this data is unreliably presented in Shah and Martin. In the
+    original Gaddis and Gnielinski paper, it is clearly stated that the following spacings had
+    experimental data available, and are the basis of this correlation:
+
+    spacing_trans x spacing_long:
+
+    Re < 1e3:
+        inline: 1.25 x 1.25, 1.5 x 1.5, 2.0 x 2.0
+        staggered: 1.25 x 1.0825, 1.5 x 1.299, 1.768 x 0.884
+        (these have spacing_diag = 1.25, 1.5 and 1.25 respectively)
+    Re >= 1e3:
+        inline: 1.25 <= spacing_trans <= 3.0, 1.2 <= spacing_long <= 3.0
+        staggered: 1.25 <= spacing_trans <= 3.0, 0.6 <= spacing_long <= 3.0 but with
+        spacing_diag >= 1.25 (diag = sqrt((spacing_trans/2)**2 + spacing_long**2))
+
     """
+
+    assert 1 <= reynolds <= 3e5, (
+        f"Reynolds number {reynolds:.1e} outside correlation range of 1-3e5"
+    )
+    assert n_rows >= 5, f"Number of rows {n_rows:.0f} outside correlation range of 5"
+    assert 1.25 <= spacing_trans <= 3.0, (
+        f"Spacing trans {spacing_trans:.2f} outside correlation range of 1.25-3.0"
+    )
+    if inline:
+        assert 1.2 <= spacing_long <= 3.0, (
+            f"Inline Spacing long {spacing_long:.2f} outside correlation range of 1.2-3.0"
+        )
+    else:
+        assert 0.6 <= spacing_long <= 3.0, (
+            f"Staggered Spacing long {spacing_long:.2f} outside correlation range of 0.6-3.0"
+        )
+        spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
+        assert spacing_diag >= 1.25, (
+            f"Staggered Spacing diag {spacing_diag:.2f} must be greater than 1.25"
+        )
+
+    if reynolds < 1e3:
+        # There are very few experimental data points for reynolds < 1e3, so we should warn user
+        # Especially if they use non square spacing for inline
+        # Or if they don't have diag spacing of 1.25 or 1.5 for staggered
+        pass
+
+    hagen_number = calculate_new_Hg(reynolds, spacing_long, spacing_trans, inline, n_rows)
+    friction_factor_k_and_l = 2 * hagen_number / reynolds**2 * (spacing_trans - 1) / np.pi
+
+    return friction_factor_k_and_l
 
 
 def general_hex_j_factor(
