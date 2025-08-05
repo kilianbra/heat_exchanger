@@ -1,4 +1,9 @@
-from heat_exchanger.hex_basic import ntu, dp_tube_bank
+import sys
+import os
+# Add the src directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from heat_exchanger.hex_basic import ntu, dp_tube_bank, dp_friction_only
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 from heat_exchanger.geometry_tube_bank import (
     area_heat_transfer_bank,
@@ -139,11 +144,19 @@ temp_cold_out = temp_cold_in + heat_transfer / heat_capacity_flux_cold
 
 rho_hot_in = hot_air.get_density(temp_hot_in, p_hot_in)
 rho_hot_out_approx = hot_air.get_density(temp_hot_out, p_hot_in)
+rho_cold_in = cold_hydrogen.get_density(temp_cold_in, p_cold_in)
+print(f"rho_cold_in: {rho_cold_in:.2e}")
 
 dp_hot = dp_tube_bank(
-    area_ratio_q_over_o_hot, mdot_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
+    area_ratio_q_over_o_hot, mdot_hot/ area_free_flow_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
+    # area_ratio_q_over_o_hot, mdot_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
 )
+dp_cold = dp_friction_only(
+    area_ratio_q_over_o_cold, mdot_cold/ area_free_flow_cold, 1/rho_cold_in, f_cold
+)
+
 
 print(f"NTU: {ntu:.2f}")
 print(f"effectiveness: {epsilon:.2%}")
 print(f"dp_hot: {dp_hot / p_hot_in:.2%} of inlet pressure")
+print(f"dp_cold: {dp_cold / p_cold_in:.2%} of inlet pressure")
