@@ -1,9 +1,22 @@
-__all__ = [
+__all__ = [  # adding to namespace means functions can be accessed directly from the package namespace
     "epsilon_ntu",
     "dp_friction_only",
     "dp_tube_bank",
     "PerfectGasProperties",
-]  # Makes these functions imported when import * but also important for general code working
+    "area_free_flow_bank",
+    "area_frontal_bank",
+    "area_heat_transfer_bank",
+    "area_heat_transfer_in_tubes",
+    "axial_involute_tube_length",
+    "sigma_tube_bank",
+    "circular_pipe_friction_factor",
+    "circular_pipe_nusselt",
+    "rectangular_duct_friction_factor",
+    "rectangular_duct_nusselt",
+    "tube_bank_friction_factor",
+    "tube_bank_nusselt_from_hagen",
+    "tube_bank_nusselt_number_and_friction_factor",
+]  # Makes these functions imported when import * but also allows changing structure of package without breaking code
 
 
 from heat_exchanger.correlations import (
