@@ -1,5 +1,3 @@
-import sys
-
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -104,12 +102,12 @@ class PerfectGasProperties(FluidPropertiesStrategy):
         # assume entropy is zero at zero T=300K, P=101325Pa
         return self.cp * np.log(T / 300) - self.R_specific * np.log(P / 101325)
 
-    def get_hse_and_Tse_p_T(self, P: float, T: float, pd: float) -> float:
+    def get_isentropic_exit_h_and_temp_from_p_temp(self, P: float, T: float, pd: float) -> float:
         # get isentropic exit temperature from isentropic expansion
         Tse = T * (pd / P) ** ((self.gamma - 1) / self.gamma)
         return self.get_specific_enthalpy(Tse, pd), Tse
 
-    def get_hse_and_Tse_s(self, s: float, pd: float, Td: float) -> float:
+    def get_isentropic_exit_h_and_temp_from_s(self, s: float, pd: float, Td: float) -> float:
         # get isentropic exit temperature from isobaric entropy increase
         Tse = Td * np.exp((s - self.get_specific_entropy(Td, pd)) / self.cp)
         return self.get_specific_enthalpy(Tse, pd), Tse
