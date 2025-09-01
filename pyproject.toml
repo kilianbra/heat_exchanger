@@ -32,8 +32,13 @@ select = [
     "T",   # pycodestyle
     "UP",  # pyupgrade
 ]
-ignore = ["E501", "N803", "N806"]
-# Ignore N803 and N806 if want to have variables with capital letters
+ignore = [
+    "E501",
+    "N802",  # Allow function names with capital letters
+    "N803",  # Allow argument names with capital letters
+    "N806",  # Allow variable names in functions with capital letters
+    "UP038", # allow isinstance(var, (int, float)) rather than requiring isinstance(var, int | float)
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore `T201` (print statements) in all `analysis/*.py` files.
