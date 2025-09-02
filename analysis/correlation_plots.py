@@ -2,7 +2,7 @@ import numpy as np
 from tabulate import tabulate
 
 from heat_exchanger.correlations import (
-    calculate_new_Hg,
+    calculate_Hg,
     circular_pipe_friction_factor,
     circular_pipe_nusselt,
     rectangular_duct_friction_factor,
@@ -143,7 +143,7 @@ print(
 )
 
 # Step 1: Calculate Hagen number
-hagen_number = calculate_new_Hg(Re_example, spacing_long, spacing_trans, inline=True, Nr=n_rows)
+hagen_number = calculate_Hg(Re_example, spacing_long, spacing_trans, inline=True, Nr=n_rows)
 print(f"Hagen number: {hagen_number:.2f}")
 
 # Step 2: Calculate Nusselt number from Hagen number
@@ -210,7 +210,7 @@ print("\n" + "=" * 80)
 print("EXCEL COPY-PASTE FORMAT - COMPREHENSIVE DATA")
 print("=" * 80)
 
-print("Tab-separated for easy Excel paste (Reynolds\tf_exp\tf_corr\tj_exp\tj_corr):")
+print("Tab-separated for easy Excel paste\n (Reynolds\tf_exp\tf_corr\tj_exp\tj_corr):")
 for i, Re in enumerate(Re_values):
     print(
         f"{Re}\t{f_exp_k_and_l[i]:.6f}\t{f_corr_list_new[i]:.6f}\t{j_exp_list[i]:.6f}\t{j_corr_list[i]:.6f}"
