@@ -20,6 +20,8 @@ As there are mistakes in the transcription of the correlation in Shah the compar
 
 For a tube bank with tube outer diameter based Reynolds number $\text{Re} \triangleq \frac{Gd}{\mu}$, the mass velocity $G \triangleq \dot{m}/A_o$ is based on the minimum flow area. For inline tubes this always occurs at the same location but for transverse tubes if the tubes are narrowly enough spaced longitudinally, the highest velocities can occur in a direction different to the bulk flow (Make image).
 
+### Hagen number (Martin 2002 and Shah 2003)
+
 The Hagen number is used by Martin 2002 (eqn A.3) and Shah 2003 (eqn 7.115)
 
 $$
@@ -27,6 +29,8 @@ $$
 \text{Hg} \triangleq \frac{\Delta p}{N_r} \cdot \frac{\rho d_\text{o}^2}{\mu^2}
 \end{equation}
 $$
+
+### Drag coefficient $\xi$ (Gaddis and Gnielinski 1985 and VDI Heat Atlas 2010)
 
 In the original Gaddis and Gnielinski 1985 correlation (eqn 1), or as presented in the VDI Heat Atlas 2010 (L1.4 eqn 1), the pressure drop is presented in the form of the drag coefficient $\xi$
 
@@ -62,7 +66,23 @@ where:
 
 This equation accounts for both the static pressure change due to density variation and the frictional pressure drop.
 
+### Equivalent friction factor $f_o$ (Kays and London 1985)
+
 If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor can be related to $\text{Hg} = \xi \frac{\text{Re}^2}{2}$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ for a rectangular or axial involute tube bank.
+
+### Corrected half friction factor (Gunter and Shaw 1944)
+
+The correlation used in a recent MIT article (Gomez-Vega et al 2025 [https://doi.org/10.2514/6.2025-0089](https://doi.org/10.2514/6.2025-0089)), another correlation is used by Gunter and Shaw 1944 [https://doi.org/10.1115/1.4018353](https://doi.org/10.1115/1.4018353) is used which is based on the non dimensional group
+
+$$
+\begin{equation}
+\frac{\Delta p}{L} \cdot \frac{\rho}{G^2} d_v = \frac{\Delta p}{N_r} \cdot \frac{\rho}{G^2} \frac{d_v}{X_l} = \frac{\Delta p}{N_r} \cdot \frac{\rho}{G^2} \frac{\frac{4X_l^*X_t^*}{\pi}-1}{X_l^*}
+\end{equation}
+$$
+
+where $d_v$ is the volumetric hydraulic diameter which Kilian calculated to be $d_\text{o} (\frac{4X_l^*X_t^*}{\pi}-1)$ for both inline and staggered configurations.
+
+The above assumes that the fluid flow length $L=N_rX_l^*d_\text{o}$
 
 ## Property variation of properties in the direction of flow
 
