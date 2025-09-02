@@ -74,10 +74,9 @@ def _intersect_ray_with_polyline(
         a = np.array([poly_x[i], poly_y[i]], dtype=float)
         b = np.array([poly_x[i + 1], poly_y[i + 1]], dtype=float)
         lmbda, u = _intersect_ray_with_segment(p, d, a, b, eps=eps)
-        if lmbda is not None and lmbda >= -eps:
-            if best_dist is None or lmbda < best_dist:
-                best_dist = lmbda
-                best_point = p + lmbda * d
+        if lmbda is not None and lmbda >= -eps and (best_dist is None or lmbda < best_dist):
+            best_dist = lmbda
+            best_point = p + lmbda * d
     if best_point is None:
         # Fallback: snap to nearest endpoint that lies on the ray line (within tolerance)
         for i in (0, len(poly_x) - 1):
