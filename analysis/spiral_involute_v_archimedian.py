@@ -21,7 +21,8 @@ def calculate_spirals(flow_angle_deg, r_min):
     # 3) Involute of circle
     a = 1 / np.sqrt(1 + S**2)  # circle radius
     phi1 = S
-    phi0 = max(0, np.sqrt((r_min / a) ** 2 - 1))
+    sqrt_arg = (r_min / a) ** 2 - 1
+    phi0 = max(0, np.sqrt(sqrt_arg)) if sqrt_arg > 0 else 0
     phi = np.linspace(phi0, phi1, 500)
 
     x = a * (np.cos(phi) + phi * np.sin(phi))
@@ -71,8 +72,8 @@ r_min = 0.8  # default
 x_s, y_s, X, Y = calculate_spirals(flow_angle_deg, r_min)
 
 # Plot the spirals
-(line1,) = ax.plot(x_s, y_s, "b-", linewidth=2, label="Archimedean Spiral")
-(line2,) = ax.plot(X, Y, "r-", linewidth=2, label="Involute of Circle")
+(line1,) = ax.plot(x_s, y_s, "b-", linewidth=1, label="Archimedean Spiral")
+(line2,) = ax.plot(X, Y, "r-", linewidth=1, label="Involute of Circle")
 
 # Plot reference unit circle
 theta_circle = np.linspace(0, 2 * np.pi, 100)
