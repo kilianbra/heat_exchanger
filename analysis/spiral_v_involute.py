@@ -108,7 +108,7 @@ def update(val):
     circle_mask.set_radius(r_min_val)
 
     # Update title with current parameters
-    ax.set_title(f"Flow Angle: {flow_angle:.1f}°, r_min: {r_min_val:.2f}")
+    ax.set_title(rf"Init. Flow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f}")
 
     # Handle spacing/offset optional curves
     if offset_ax.get_visible():
@@ -127,13 +127,6 @@ def update(val):
         flow_angle_rad = np.deg2rad(flow_angle)
         S = np.tan(flow_angle_rad)
         a_radius = 1.0 / np.sqrt(1.0 + S**2)
-        phi1 = S
-        sqrt_arg = (r_min_val / a_radius) ** 2 - 1.0
-        phi0 = np.sqrt(sqrt_arg) if sqrt_arg > 0 else 0.0
-        # Rotation to place outer point at top
-        x1_pre = a_radius * (np.cos(phi1) + phi1 * np.sin(phi1))
-        y1_pre = a_radius * (np.sin(phi1) - phi1 * np.cos(phi1))
-        alpha = np.pi / 2.0 - np.arctan2(y1_pre, x1_pre)
 
         # Spiral orthogonals
         # 1) main at r=r_min -> offset
@@ -345,9 +338,9 @@ def update(val):
             return f"{x:.0%}" if np.isfinite(x) else "n/a"
 
         ax.set_title(
-            f"Flow Angle: {flow_angle:.1f}°, r_min: {r_min_val:.2f} | "
-            f"spiral_ratio = {_fmt_ratio(sp_ratio)} ({_fmt_ratio(sp_rad_ratio)}), "
-            f"involute_ratio = {_fmt_ratio(iv_ratio)}"
+            rf"Init. Flow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f} | "
+            f"spiral_r = {_fmt_ratio(sp_ratio)} ({_fmt_ratio(sp_rad_ratio)}), "
+            f"inv_r = {_fmt_ratio(iv_ratio)}"
         )
 
         # Show only the orthogonal lines; hide previous tangent lines if any
@@ -380,7 +373,7 @@ def on_radio_spacing(label: str):
 # Create the figure and axis
 fig, ax = plt.subplots(figsize=(10, 8))
 # Reserve space on the right for controls
-plt.subplots_adjust(right=0.78)
+plt.subplots_adjust(right=0.75)
 
 # Initial parameters
 flow_angle_deg = 75  # default
@@ -405,15 +398,15 @@ circle_mask = patches.Circle(
 )
 
 # Add center point
-ax.plot(0, 0, "ko", markersize=3, label="Center")
+ax.plot(0, 0, "ko", markersize=3)
 
 # Set up the plot
 ax.set_xlim(-1.1, 1.1)
 ax.set_ylim(-1.1, 1.1)
 ax.set_aspect("equal")
 ax.grid(True, alpha=0.3)
-ax.legend()
-ax.set_title(f"Flow Angle: {flow_angle_deg}°, r_min: {r_min:.2f}")
+ax.legend(loc="upper left")
+ax.set_title(rf"Init. Flow Angle: {flow_angle_deg:.1f}°, $r_{{{'min'}}}$: {r_min:.2f}")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 
@@ -422,19 +415,21 @@ ax.add_patch(circle_mask)
 
 """Controls on the right"""
 # Sliders on the right side
-ax_slider1 = plt.axes([0.81, 0.65, 0.17, 0.03])
-ax_slider2 = plt.axes([0.81, 0.60, 0.17, 0.03])
-slider1 = Slider(ax_slider1, "Flow Angle (deg)", 45, 89.9, valinit=flow_angle_deg, valstep=0.1)
-slider2 = Slider(ax_slider2, "r_min", 0.01, 0.99, valinit=r_min, valstep=0.01)
+ax_slider1 = plt.axes([0.81, 0.65, 0.15, 0.03])  # numbers mean left, bottom, width, height
+ax_slider2 = plt.axes([0.81, 0.60, 0.15, 0.03])
+slider1 = Slider(
+    ax_slider1, "Flow Angle", 45, 89.9, valinit=flow_angle_deg, valstep=0.1, valfmt="%.1f°"
+)
+slider2 = Slider(ax_slider2, r"$r_{min}$", 0.01, 0.99, valinit=r_min, valstep=0.01)
 
 # Radio buttons for spacing toggle
-radio_ax = plt.axes([0.81, 0.48, 0.17, 0.10])
+radio_ax = plt.axes([0.78, 0.48, 0.21, 0.10])
 radio = RadioButtons(radio_ax, ("spacing off", "spacing on"), 0)
 radio.on_clicked(on_radio_spacing)
 
 # Offset slider (initially hidden)
-offset_ax = plt.axes([0.81, 0.42, 0.17, 0.03])
-offset_slider = Slider(offset_ax, "offset (deg)", 0.0, 30.0, valinit=15.0, valstep=0.1)
+offset_ax = plt.axes([0.81, 0.42, 0.15, 0.03])
+offset_slider = Slider(offset_ax, "offset", 0.0, 30.0, valinit=15.0, valstep=0.1, valfmt="%.1f°")
 offset_ax.set_visible(False)
 offset_slider.on_changed(update)
 
