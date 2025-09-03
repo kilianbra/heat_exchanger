@@ -63,11 +63,14 @@ print(
 print("=" * 80)
 
 
-# Data for Kays and London inline surface from Fig 10-12: I1.50 - 1.25(a)
+# Data for Kays and London inline surface from
 spacing_trans = 1.5
 spacing_long = 1.25
 n_rows = 15
-
+# Table 10-2 I1.50-1.25(s)  (corresponds to Fig 10-12: I1.50 - 1.25(a))
+# These Reynolds numbers are based on the tube diameter (in KnL they are based on d_h)
+Re_hydraulic = [10_000, 8_000, 6_000, 5_000, 4_000, 3_000, 2_500, 2_000, 1_500, 1_200, 1_000, 800]
+# These reynolds are based on the tube outer diameter
 Re_values = [12627, 10101, 7576, 6313, 5051, 3788, 3157, 2525, 1894, 1515, 1263, 1010]
 
 f_exp_k_and_l = [
@@ -84,7 +87,6 @@ f_exp_k_and_l = [
     0.0281,
     0.0265,
 ]
-
 j_exp_knl = [
     0.00752,
     0.00820,
@@ -192,7 +194,7 @@ comprehensive_table_data = []
 for i, Re in enumerate(Re_values):
     comprehensive_table_data.append(
         [
-            f"{Re:.1e}",  # Reynolds in scientific notation
+            f"{Re:.4e}",  # Reynolds in scientific notation
             f"{f_exp_k_and_l[i]:.4f}",  # Experimental friction factor
             f"{f_corr_list_new[i]:.4f}",  # Correlation friction factor
             f"{j_exp_list[i]:.5f}",  # Experimental j-factor
