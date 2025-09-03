@@ -35,7 +35,7 @@ temp_cold_in = 264  # K
 mdot_hot = 19.07  # kg/s
 mdot_cold = 0.166  # kg/s
 
-p_hot_in = 4e4  # Pa
+p_hot_in = 7e4  # Pa
 p_cold_in = 17.3e5  # Pa
 
 total_diameter_outer = 1.265  # m
@@ -148,7 +148,7 @@ rho_cold_in = cold_hydrogen.get_density(temp_cold_in, p_cold_in)
 print(f"rho_cold_in: {rho_cold_in:.2e}")
 
 dp_hot = dp_tube_bank(
-    area_ratio_q_over_o_hot, mdot_hot/ area_free_flow_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
+    area_ratio_q_over_o_hot, mdot_hot/area_free_flow_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
     # area_ratio_q_over_o_hot, mdot_hot, rho_hot_in, rho_hot_out_approx, sigma, f_hot
 )
 dp_cold = dp_friction_only(

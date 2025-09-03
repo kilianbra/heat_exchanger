@@ -22,7 +22,7 @@ def dp_tube_bank(
     sigma,
     friction_factor,
     one_over_rho_mean=None,
-):
+):  
     if one_over_rho_mean is None:
         one_over_rho_mean = (1 / rho_in + 1 / rho_out) / 2
     dp_momentum = 1 / 2 * mass_velocity**2 * (1 + sigma**2) * (1 / rho_out - 1 / rho_in)
