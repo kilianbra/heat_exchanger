@@ -936,6 +936,70 @@ def tube_bank_corrected_xi_gunter_and_shaw(
     return xi
 
 
+def tube_bank_stanton_number_from_murray(reynolds, spacing_long, spacing_trans, prandtl=0.7):
+    spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
+    xls = spacing_long
+    xts = spacing_trans
+    xlxt = xls * xts  # product of pitches
+    kd = spacing_diag - 1
+    kmin = min(2 * kd, xts - 1)
+    # St4000 correlation
+    St4000 = (
+        (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2)
+        / (kmin * xls) ** 0.35
+        / prandtl ** (2 / 3)
+    )
+    # St correlation
+    St = St4000 * 25.6238 * reynolds ** (-0.3913)
+
+    return St
+
+
+def htc_murray(G, Cp, Re, Pr, xls, xts, OD):
+    """
+    Inputs:
+        G: mass velocity [kg/m^2/s]
+        Cp: specific heat [J/kg/K]
+        Re: Reynolds number based on hydraulic diameter
+        Pr: Prandtl number
+        xls: longitudinal pitch (normalised)
+        xts: transverse pitch (normalised)
+        OD: outer diameter [m]
+    """
+    xlxt = xls * xts  # product of pitches
+    # distances between tube centers
+    bt = 0.5 * OD * (xts - 1)  # transverse pitch
+    bd = np.sqrt((xls * OD) ** 2 + (0.5 * xts * OD) ** 2)  # diagonal pitch
+    # spacing ratios
+    kt = bt / OD  # transverse spacing ratio
+    kb = bd / OD  # diagonal spacing ratio
+    kmin = min(kt, kb)  # minimum spacing ratio
+    kmax = max(kt, kb)  # maximum spacing ratio
+
+    # St4000 correlation
+    St4000 = (
+        (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2)
+        / (kmin * xls) ** 0.35
+        / Pr ** (2 / 3)
+    )
+    # St correlation
+    St = St4000 * 25.6238 * Re ** (-0.3913)
+    # htc
+    h = St * Cp * G
+
+    # 4000f correlation
+    f4000 = 0.0122 * (xlxt - 1) * (3 * xlxt - 2) / (kmin * xls)
+    # f correlation
+    if Re > 3000:
+        beta = 0.184
+        f = f4000 * (Re / 4000) ** (-1 * beta)
+    else:
+        beta = 0.184 + 0.2820 * (1 - 2 * kmax)
+        f = f4000 * (Re / 3000) ** (-1 * beta)
+
+    return h, f
+
+
 def general_hex_j_factor(
     reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:
