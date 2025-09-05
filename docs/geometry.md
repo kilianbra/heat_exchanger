@@ -22,7 +22,7 @@ For a tube bank with tube outer diameter based Reynolds number $\text{Re} \trian
 
 ### Hagen number (Martin 2002 and Shah 2003)
 
-The Hagen number is used by Martin 2002 (eqn A.3) and Shah 2003 (eqn 7.115)
+The Hagen number is used by Martin 2002 (eqn A.3) and Shah 2003 (eqn 7.115). It's main advantage is that it does not depend on any velocity and hence there can be no confusion/difficulty to determine experimentally.
 
 $$
 \begin{equation}
@@ -32,7 +32,7 @@ $$
 
 ### Drag coefficient $\xi$ (Gaddis and Gnielinski 1985 and VDI Heat Atlas 2010)
 
-In the original Gaddis and Gnielinski 1985 correlation (eqn 1), or as presented in the VDI Heat Atlas 2010 (L1.4 eqn 1), the pressure drop is presented in the form of the drag coefficient $\xi$
+In the original Gaddis and Gnielinski 1985 correlation (eqn 1), or as presented in the VDI Heat Atlas 2010 (L1.4 eqn 1), the pressure drop is presented in the form of the drag coefficient $\xi$. This definition depends on the pressure drop per passage through a row of main resistors (which can be thought of as approximately the number of rows for tube banks with many rows).
 
 $$
 \begin{equation}
@@ -40,9 +40,9 @@ $$
 \end{equation}
 $$
 
-Where the number of main resistors $n_\text{MR}$ is equal to the number of rows ($n_\text{MR} = N_r$) for inline banks and staggered banks where the minimum free flow area occurs between to tubes of the same row. In the other case ($2X_l^* < \sqrt{2X_t^*+1}$), $n_\text{MR} = N_r-1$.
+The number of main resistors $n_\text{MR}$ is equal to the number of rows ($n_\text{MR} = N_r$) for inline banks and staggered banks where the minimum free flow area occurs between to tubes of the same row. In the other case the flow has it's highest velocity not between two tubes of the same row but in the diagonal between a tube of one row and the next ($2X_l^* < \sqrt{2X_t^*+1}$), hence for $N_r$ staggered tube rows there are only $n_\text{MR} = N_r-1$ occurences of this maximum velocity.
 
-This means that for the cases where $n_\text{MR} = N_r$, $\text{Hg} = \xi \frac{\text{Re}^2}{2}$.
+For the cases where $n_\text{MR} = N_r$, $\text{Hg} = \xi \frac{\text{Re}^2}{2}$.
 
 These two formula for pressure drop assume negligible (static) pressure change due to density changes along the direction of flow. Heat Exchangers have changes in temperature and hence of density, which is not neglected in the defintion of the Kays and London effective friction factor or effective shear stress.
 
@@ -57,7 +57,7 @@ $$
 where:
 
 - $G$ is the mass velocity (based on minimum free flow area),
-- $\sigma$ is the contraction ratio (A_frontal/A_o)
+- $\sigma$ is the contraction ratio ($A_\text{frontal}/A_o$)
 - $\rho_1$ and $\rho_2$ are the fluid densities at the inlet and outlet, respectively,
 - $f_o$ is the equivalent friction factor,
 - $A_w$ is the wetted surface area (over which friction occurs),
@@ -68,7 +68,15 @@ This equation accounts for both the static pressure change due to density variat
 
 ### Equivalent friction factor $f_o$ (Kays and London 1985)
 
-If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor can be related to $\text{Hg} = \xi \frac{\text{Re}^2}{2}$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ for a rectangular or axial involute tube bank.
+If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor $f_o$ is
+
+$$
+\begin{equation}
+f_o \triangleq \frac{2\rho\tau_o}{G^2} \simeq \frac{A_o\Delta p}{A_w} \cdot \frac{2\rho}{G^2}
+\end{equation}
+$$
+
+and can related to the drag coefficient $\xi$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ (for tube bankes that are rectangular or axial involute).
 
 ### Corrected half friction factor (Gunter and Shaw 1944)
 
