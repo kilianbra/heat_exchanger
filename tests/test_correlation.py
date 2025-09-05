@@ -237,4 +237,4 @@ class TestTubeBankCorrelations:
 
             # Nusselt number should be positive and reasonable
             assert nu_comprehensive > 0
-            assert nu_comprehensive < 1e6  # Reasonable upper bound
+            assert nu_comprehensive < 1e6  # Reasonable? upper bound
