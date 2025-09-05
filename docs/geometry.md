@@ -20,7 +20,9 @@ As there are mistakes in the transcription of the correlation in Shah the compar
 
 For a tube bank with tube outer diameter based Reynolds number $\text{Re} \triangleq \frac{Gd}{\mu}$, the mass velocity $G \triangleq \dot{m}/A_o$ is based on the minimum flow area. For inline tubes this always occurs at the same location but for transverse tubes if the tubes are narrowly enough spaced longitudinally, the highest velocities can occur in a direction different to the bulk flow (Make image).
 
-The Hagen number is used by Martin 2002 (eqn A.3) and Shah 2003 (eqn 7.115)
+### Hagen number (Martin 2002 and Shah 2003)
+
+The Hagen number is used by Martin 2002 (eqn A.3) and Shah 2003 (eqn 7.115). It's main advantage is that it does not depend on any velocity and hence there can be no confusion/difficulty to determine experimentally.
 
 $$
 \begin{equation}
@@ -28,7 +30,9 @@ $$
 \end{equation}
 $$
 
-In the original Gaddis and Gnielinski 1985 correlation (eqn 1), or as presented in the VDI Heat Atlas 2010 (L1.4 eqn 1), the pressure drop is presented in the form of the drag coefficient $\xi$
+### Drag coefficient $\xi$ (Gaddis and Gnielinski 1985 and VDI Heat Atlas 2010)
+
+In the original Gaddis and Gnielinski 1985 correlation (eqn 1), or as presented in the VDI Heat Atlas 2010 (L1.4 eqn 1), the pressure drop is presented in the form of the drag coefficient $\xi$. This definition depends on the pressure drop per passage through a row of main resistors (which can be thought of as approximately the number of rows for tube banks with many rows).
 
 $$
 \begin{equation}
@@ -36,9 +40,9 @@ $$
 \end{equation}
 $$
 
-Where the number of main resistors $n_\text{MR}$ is equal to the number of rows ($n_\text{MR} = N_r$) for inline banks and staggered banks where the minimum free flow area occurs between to tubes of the same row. In the other case ($2X_l^* < \sqrt{2X_t^*+1}$), $n_\text{MR} = N_r-1$.
+The number of main resistors $n_\text{MR}$ is equal to the number of rows ($n_\text{MR} = N_r$) for inline banks and staggered banks where the minimum free flow area occurs between to tubes of the same row. In the other case the flow has it's highest velocity not between two tubes of the same row but in the diagonal between a tube of one row and the next ($2X_l^* < \sqrt{2X_t^*+1}$), hence for $N_r$ staggered tube rows there are only $n_\text{MR} = N_r-1$ occurences of this maximum velocity.
 
-This means that for the cases where $n_\text{MR} = N_r$, $\text{Hg} = \xi \frac{\text{Re}^2}{2}$.
+For the cases where $n_\text{MR} = N_r$, $\text{Hg} = \xi \frac{\text{Re}^2}{2}$.
 
 These two formula for pressure drop assume negligible (static) pressure change due to density changes along the direction of flow. Heat Exchangers have changes in temperature and hence of density, which is not neglected in the defintion of the Kays and London effective friction factor or effective shear stress.
 
@@ -53,7 +57,7 @@ $$
 where:
 
 - $G$ is the mass velocity (based on minimum free flow area),
-- $\sigma$ is the contraction ratio (A_frontal/A_o)
+- $\sigma$ is the contraction ratio ($A_\text{frontal}/A_o$)
 - $\rho_1$ and $\rho_2$ are the fluid densities at the inlet and outlet, respectively,
 - $f_o$ is the equivalent friction factor,
 - $A_w$ is the wetted surface area (over which friction occurs),
@@ -62,7 +66,31 @@ where:
 
 This equation accounts for both the static pressure change due to density variation and the frictional pressure drop.
 
-If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor can be related to $\text{Hg} = \xi \frac{\text{Re}^2}{2}$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ for a rectangular or axial involute tube bank.
+### Equivalent friction factor $f_o$ (Kays and London 1985)
+
+If we assume small pressure change due to density change (flow acceleration and entrance/exit effects) and neglect the friction area on the insulated outer and inner walls compared to the heat transfer area of the tubes, then this friction factor $f_o$ is
+
+$$
+\begin{equation}
+f_o \triangleq \frac{2\rho\tau_o}{G^2} \simeq \frac{A_o\Delta p}{A_w} \cdot \frac{2\rho}{G^2}
+\end{equation}
+$$
+
+and can related to the drag coefficient $\xi$ by the following equation: $f_o = \frac{X_t^*-1}{\pi} \xi$ (for tube bankes that are rectangular or axial involute).
+
+### Corrected half friction factor (Gunter and Shaw 1944)
+
+The correlation used in a recent MIT article (Gomez-Vega et al 2025 [https://doi.org/10.2514/6.2025-0089](https://doi.org/10.2514/6.2025-0089)), another correlation is used by Gunter and Shaw 1944 [https://doi.org/10.1115/1.4018353](https://doi.org/10.1115/1.4018353) is used which is based on the non dimensional group
+
+$$
+\begin{equation}
+\frac{\Delta p}{L} \cdot \frac{\rho}{G^2} d_v = \frac{\Delta p}{N_r} \cdot \frac{\rho}{G^2} \frac{d_v}{X_l} = \frac{\Delta p}{N_r} \cdot \frac{\rho}{G^2} \frac{\frac{4X_l^*X_t^*}{\pi}-1}{X_l^*}
+\end{equation}
+$$
+
+where $d_v$ is the volumetric hydraulic diameter which Kilian calculated to be $d_\text{o} (\frac{4X_l^*X_t^*}{\pi}-1)$ for both inline and staggered configurations.
+
+The above assumes that the fluid flow length $L=N_rX_l^*d_\text{o}$
 
 ## Property variation of properties in the direction of flow
 
