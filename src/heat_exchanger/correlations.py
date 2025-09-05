@@ -901,6 +901,41 @@ def tube_bank_nusselt_number_and_friction_factor(
     return nusselt, friction_factor_k_and_l
 
 
+def tube_bank_corrected_xi_gunter_and_shaw(
+    reynolds, spacing_long, spacing_trans, bulk_to_wall_viscosity_ratio=1
+):
+    """Calculates the corrected half friction factor for a tube bank in cross flow.
+    Based on Gunter and Shaw 1945. Applicable to inline and staggered tube banks.
+    Not xi/2 but xi!
+    Correlation initially based on correcting Delta p/L rho d_v/G^2 with two factors + viscosity
+    ratio.
+    returns xi = Delta p / N_rows * 2 rho / G^2 (in paper a different 'f/2' is returned)
+    Args:
+        reynolds: Reynolds number based on minimum free flow area and tube diameter.
+        spacing_long: Longitudinal spacing between tubes, divided by tube outer diameter.
+        spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
+        bulk_to_wall_viscosity_ratio: Bulk to wall viscosity ratio.
+    """
+
+    # For now ignore transition region from laminar to turbulent (slight curvature)
+
+    ratio_dh_over_od = 4 * spacing_long * spacing_trans / np.pi - 1
+    # tube outer diameter OD is used in many correlations and is used in inputed reynolds
+    reynolds_od = np.asarray(reynolds) if isinstance(reynolds, (list, np.ndarray)) else reynolds
+    reynolds_dh = reynolds_od * ratio_dh_over_od
+    phi = np.where(reynolds_dh < 200, 90 / reynolds_dh, 0.96 * reynolds_dh ** (-0.145))
+    xi = (
+        phi
+        * bulk_to_wall_viscosity_ratio ** (-0.14)
+        * (ratio_dh_over_od / spacing_trans) ** 0.4
+        * (spacing_long / spacing_trans) ** 0.6
+        * (spacing_long / ratio_dh_over_od)  # added term from D_v/L = D_v/X_l/N_r in paper
+        * 2  # convert from half friction factor to full friction factor
+    )
+
+    return xi
+
+
 def general_hex_j_factor(
     reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:
