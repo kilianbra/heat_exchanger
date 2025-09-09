@@ -1001,7 +1001,9 @@ def tube_bank_corrected_xi_gunter_and_shaw(
     return xi
 
 
-def tube_bank_stanton_number_from_murray(reynolds_od, spacing_long, spacing_trans, prandtl=0.7):
+def tube_bank_stanton_number_from_murray(
+    reynolds_od, spacing_long, spacing_trans, prandtl=0.7, use_outside_bounds=True
+):
     """
     This correlation is based on Murray 1998's thesis at the University of Bristol with Reaction
     Engines Ltd.
@@ -1016,7 +1018,7 @@ def tube_bank_stanton_number_from_murray(reynolds_od, spacing_long, spacing_tran
     reynolds_od = (
         np.asarray(reynolds_od) if isinstance(reynolds_od, (list, np.ndarray)) else reynolds_od
     )
-    reynolds_dh = reynolds_od * 4 * spacing_long * spacing_trans / np.pi
+
     spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
     xls = spacing_long
     xts = spacing_trans
@@ -1024,6 +1026,11 @@ def tube_bank_stanton_number_from_murray(reynolds_od, spacing_long, spacing_tran
     kd = spacing_diag - 1
     kmin = min(2 * kd, xts - 1)
     kmax = max(2 * kd, xts - 1)
+
+    reynolds_dh = reynolds_od * 4 * spacing_long * kmin / np.pi
+    if not use_outside_bounds:
+        mask = (reynolds_dh < 2e3) | (reynolds_dh > 5e3)
+        reynolds_dh = np.where(mask, np.nan, reynolds_dh)
     # St4000 correlation
     j4000 = (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2) / (kd * xls) ** 0.35
     St4000 = j4000 / prandtl ** (2 / 3)
