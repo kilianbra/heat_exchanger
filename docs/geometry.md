@@ -108,14 +108,14 @@ The general definition of a hydraulic diameter for a non-unfirom and non-circula
 
 $$
 \begin{equation}
-d_h \triangleq \frac{4V}{A_\tau} \geq d_h
+d_v \triangleq \frac{4V}{A_\tau} \geq d_h
 \end{equation}
 $$
 
 The inequality is strict for cases like tube banks where the cross sectional flow area is on average greater than the minimum flow area.
 
 For all straight tube banks, $d_v/d_\text{o} =\frac{4X_l^*X_t^*}{\pi}-1$
-And if $X_o^* = \text{min}(X^*_t-1, 2(X_d^*-1))$ where $(X_d^*)^2 = (X_t^*/2)^2 + (X_l^*)^2$, then $d_h/d_o = 4X_l^*X_o^*/\pi$
+And if the dimensionless throat spacing is denoted $X_o^* = \text{min}(X^*_t-1, 2(X_d^*-1))$ where the dimensionless diagonal spacing is $(X_d^*)^2 = (X_t^*/2)^2 + (X_l^*)^2$, then $d_h/d_o = 4X_l^*X_o^*/\pi$
 
 ## Property variation of properties in the direction of flow
 
