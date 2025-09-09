@@ -901,8 +901,66 @@ def tube_bank_nusselt_number_and_friction_factor(
     return nusselt, friction_factor_k_and_l
 
 
+def tube_bank_nusselt_gnielinski_vdi(
+    reynolds,
+    spacing_long,
+    spacing_trans,
+    prandtl=0.7,
+    inline=True,
+    n_rows=11,
+    use_outside_bounds=True,
+):
+    """
+    Correlation is based on Reynolds of the velocity outside the bundle! not in minimum cross section
+    Correlation is based on longitudinal spacing > 1.2 diameters or with b/a >1
+    """
+    a = spacing_trans
+    b = spacing_long
+
+    if not inline and b < 0.5 * np.sqrt(2 * a + 1):  # throat is in diagonal
+        d = np.sqrt((a / 2) ** 2 + (b) ** 2)
+        sigma = 2 * (d - 1) / a
+    else:
+        sigma = (a - 1) / a
+
+    reynolds_od = np.asarray(reynolds) if isinstance(reynolds, (list, np.ndarray)) else reynolds
+
+    void_frac = 1 - np.pi / 4 / a if b >= 1 else 1 - np.pi / 4 / a / b
+    # in VDI heat atlas Reynolds is based on l=pi/2 * d_o, not d_o
+    # furthermore all other correlations are based on minimum free flow area, here is velocity outside bundle
+    reynolds_psi = reynolds_od * np.pi / 2 / void_frac * sigma
+
+    if not use_outside_bounds:
+        mask = (reynolds_psi < 10) | (reynolds_psi > 1e6)
+        reynolds_psi = np.where(mask, np.nan, reynolds_psi)
+
+    nusselt_laminar = 0.664 * reynolds_psi**0.5 * prandtl ** (1 / 3)
+    nusselt_turb = (
+        0.037
+        * reynolds_psi**0.8
+        * prandtl
+        / (1 + 2.443 * reynolds_psi ** (-0.1) * (prandtl ** (2 / 3) - 1))
+    )
+
+    nusselt_uncorrected = 0.3 + np.sqrt(nusselt_laminar**2 + nusselt_turb**2)
+
+    if inline:
+        f_A = 1 + 0.7 * (b / a - 0.3) / void_frac**1.5 / (b / a + 0.7) ** 2
+    else:
+        f_A = 1 + 2 / 3 / b
+
+    if n_rows >= 10:
+        nusselt = (
+            f_A * nusselt_uncorrected / (np.pi / 2)
+        )  # division by pi to make result Nusselt in d_o lengthscale
+    else:
+        nusselt = (1 + (n_rows - 1) * f_A) / n_rows * nusselt_uncorrected
+
+    return nusselt
+
+
 def tube_bank_corrected_xi_gunter_and_shaw(
-    reynolds, spacing_long, spacing_trans, bulk_to_wall_viscosity_ratio=1
+    reynolds, spacing_long, spacing_trans, bulk_to_wall_viscosity_ratio=1, use_outside_bounds=True
 ):
     """Calculates the corrected half friction factor for a tube bank in cross flow.
     Based on Gunter and Shaw 1945. Applicable to inline and staggered tube banks.
