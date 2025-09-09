@@ -51,7 +51,7 @@ For tube banks
 The pressure drop across a heat exchanger with varying density can be expressed as:
 
 $$
-\Delta p = \frac{G^2}{2} \left[ (1 + \sigma^2) \left( \frac{1}{\rho_2} - \frac{1}{\rho_1} \right) + f_o \frac{A_w}{A_o} \left( \frac{1}{\rho} \right)_\text{m} \right]
+\Delta p = \frac{G^2}{2} \left[ (1 + \sigma^2) \left( \frac{1}{\rho_2} - \frac{1}{\rho_1} \right) + f_o \frac{A_\tau}{A_o} \left( \frac{1}{\rho} \right)_\text{m} \right]
 $$
 
 where:
@@ -60,7 +60,7 @@ where:
 - $\sigma$ is the contraction ratio ($A_\text{frontal}/A_o$)
 - $\rho_1$ and $\rho_2$ are the fluid densities at the inlet and outlet, respectively,
 - $f_o$ is the equivalent friction factor,
-- $A_w$ is the wetted surface area (over which friction occurs),
+- $A_\tau$ is the wetted surface area (over which friction occurs),
 - $A_o$ is the minimum free flow area,
 - $\left( \frac{1}{\rho} \right)_\text{m}$ is the mean value of the reciprocal density along the flow path.
 
@@ -72,7 +72,7 @@ If we assume small pressure change due to density change (flow acceleration and 
 
 $$
 \begin{equation}
-f_o \triangleq \frac{2\rho\tau_o}{G^2} \simeq \frac{A_o\Delta p}{A_w} \cdot \frac{2\rho}{G^2}
+f_o \triangleq \frac{2\rho\tau_o}{G^2} \simeq \frac{A_o\Delta p}{A_\tau} \cdot \frac{2\rho}{G^2}
 \end{equation}
 $$
 
@@ -91,6 +91,31 @@ $$
 where $d_v$ is the volumetric hydraulic diameter which Kilian calculated to be $d_\text{o} (\frac{4X_l^*X_t^*}{\pi}-1)$ for both inline and staggered configurations.
 
 The above assumes that the fluid flow length $L=N_rX_l^*d_\text{o}$
+
+### Different hydraulic diameters $d_v\neq d_h$
+
+Kays and London, Murray and other authors call hydraulic diameter the quantity
+
+$$
+\begin{equation}
+d_h \triangleq \frac{4A_o L}{A_\tau}
+\end{equation}
+$$
+
+Where L is, in the case of tube banks, the equivalent flow length from the "leading edge of the first tube row to the leading edge of a tube row that would follow the last tube row, were another tube row present" (KnL p8).
+
+The general definition of a hydraulic diameter for a non-unfirom and non-circular cross-section is called the volumetric hydraulic diameter by Gunter and Shaw and is based on the wetted volume and is independent of the minimum free-flow cross sectional area $A_o$.
+
+$$
+\begin{equation}
+d_h \triangleq \frac{4V}{A_\tau} \geq d_h
+\end{equation}
+$$
+
+The inequality is strict for cases like tube banks where the cross sectional flow area is on average greater than the minimum flow area.
+
+For all straight tube banks, $d_v/d_\text{o} =\frac{4X_l^*X_t^*}{\pi}-1$
+And if $X_o^* = \text{min}(X^*_t-1, 2(X_d^*-1))$ where $(X_d^*)^2 = (X_t^*/2)^2 + (X_l^*)^2$, then $d_h/d_o = 4X_l^*X_o^*/\pi$
 
 ## Property variation of properties in the direction of flow
 
