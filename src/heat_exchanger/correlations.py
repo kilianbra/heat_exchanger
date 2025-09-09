@@ -910,53 +910,83 @@ def tube_bank_corrected_xi_gunter_and_shaw(
     Correlation initially based on correcting Delta p/L rho d_v/G^2 with two factors + viscosity
     ratio.
     returns xi = Delta p / N_rows * 2 rho / G^2 (in paper a different 'f/2' is returned)
+    Use volumetric hydraulic diameter in reynolds, so need to convert from outer diameter to d_v
     Args:
         reynolds: Reynolds number based on minimum free flow area and tube diameter.
         spacing_long: Longitudinal spacing between tubes, divided by tube outer diameter.
         spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
         bulk_to_wall_viscosity_ratio: Bulk to wall viscosity ratio.
+        use_outside_bounds: Whether to use the outside bounds of the correlation.
+    Bounds on Reynolds number dv 0.01 to 3e5
     """
 
     # For now ignore transition region from laminar to turbulent (slight curvature)
 
-    ratio_dh_over_od = 4 * spacing_long * spacing_trans / np.pi - 1
+    ratio_dv_over_od = 4 * spacing_long * spacing_trans / np.pi - 1
     # tube outer diameter OD is used in many correlations and is used in inputed reynolds
     reynolds_od = np.asarray(reynolds) if isinstance(reynolds, (list, np.ndarray)) else reynolds
-    reynolds_dh = reynolds_od * ratio_dh_over_od
-    phi = np.where(reynolds_dh < 200, 90 / reynolds_dh, 0.96 * reynolds_dh ** (-0.145))
+    reynolds_dv = reynolds_od * ratio_dv_over_od
+    if not use_outside_bounds:
+        # Return NaN where outside bounds (200 <= Re_dv <= 3e5)
+        mask = (reynolds_dv < 1e-2) | (reynolds_dv > 3e5)
+        reynolds_dv = np.where(mask, np.nan, reynolds_dv)
+    phi = np.where(reynolds_dv < 200, 90 / reynolds_dv, 0.96 * reynolds_dv ** (-0.145))
     xi = (
         phi
         * bulk_to_wall_viscosity_ratio ** (-0.14)
-        * (ratio_dh_over_od / spacing_trans) ** 0.4
+        * (ratio_dv_over_od / spacing_trans) ** 0.4
         * (spacing_long / spacing_trans) ** 0.6
-        * (spacing_long / ratio_dh_over_od)  # added term from D_v/L = D_v/X_l/N_r in paper
+        * (spacing_long / ratio_dv_over_od)  # added term from D_v/L = D_v/X_l/N_r in paper
         * 2  # convert from half friction factor to full friction factor
     )
 
     return xi
 
 
-def tube_bank_stanton_number_from_murray(reynolds, spacing_long, spacing_trans, prandtl=0.7):
+def tube_bank_stanton_number_from_murray(reynolds_od, spacing_long, spacing_trans, prandtl=0.7):
+    """
+    This correlation is based on Murray 1998's thesis at the University of Bristol with Reaction
+    Engines Ltd.
+    In the thesis private communications with Bond A. at Reaction Engines is cited as source.
+    The correlation uses the hydraulic diameter to calculate the Reynolds number.
+    Re = G * d_h / mu
+    This function uses the outer diameter and converts to hydraulic diameter.
+    Returns Stanton number and friction factor.
+    Beta = 0.184 is valid for Re_dh between 3e3 and 15e3
+    Correction is made for lower Reynolds but was only used for Reynolds under 2e3 in thesis
+    """
+    reynolds_od = (
+        np.asarray(reynolds_od) if isinstance(reynolds_od, (list, np.ndarray)) else reynolds_od
+    )
+    reynolds_dh = reynolds_od * 4 * spacing_long * spacing_trans / np.pi
     spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
     xls = spacing_long
     xts = spacing_trans
     xlxt = xls * xts  # product of pitches
     kd = spacing_diag - 1
     kmin = min(2 * kd, xts - 1)
+    kmax = max(2 * kd, xts - 1)
     # St4000 correlation
-    St4000 = (
-        (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2)
-        / (kmin * xls) ** 0.35
-        / prandtl ** (2 / 3)
-    )
+    j4000 = (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2) / (kd * xls) ** 0.35
+    St4000 = j4000 / prandtl ** (2 / 3)
     # St correlation
-    St = St4000 * 25.6238 * reynolds ** (-0.3913)
+    St = St4000 * 25.6238 * reynolds_dh ** (-0.3913)
 
-    return St
+    f4000 = 0.0122 * (xlxt - 1) * (3 * xlxt - 2) / (kd * xls)
+
+    beta = np.where(reynolds_dh >= 3000, 0.184, 0.184 + 0.2820 * (1 - 2 * kmax))
+
+    f = np.where(
+        reynolds_dh >= 3000,
+        f4000 * (reynolds_dh / 4000) ** (-beta),
+        f4000 * (reynolds_dh / 3000) ** (-beta),
+    )
+
+    return St, f
 
 
 def htc_murray(G, Cp, Re, Pr, xls, xts, OD):
-    """
+    """COPY PASTED FROM ZELI
     Inputs:
         G: mass velocity [kg/m^2/s]
         Cp: specific heat [J/kg/K]
