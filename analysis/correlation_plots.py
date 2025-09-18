@@ -125,6 +125,10 @@ f_exp_k_and_l_inline = [
     0.0281,
     0.0265,
 ]
+
+# 2D CFD results for inline Xl*=1.25 Xt*=1.5 configuration
+Re_cfd_inline = [380, 508, 658, 848, 1100, 1515, 1945, 2461, 2752, 3015]
+f_cfd_inline = [0.041, 0.034, 0.028, 0.025, 0.022, 0.0196, 0.0174, 0.0163, 0.016, 0.01702]
 j_exp_knl_inline = [
     0.00752,
     0.00820,
@@ -622,6 +626,7 @@ def _plot_tube_bank_interactive():
 
     # Experimental scatters (created upfront, toggled visible)
     exp_scatter = ax.scatter([], [], label="Kays & London (exp)", color="black", marker="x")
+    cfd_scatter = ax.scatter([], [], label="2D CFD", color="red", marker="o", s=50)
 
     ax.set_xscale("log")
     ax.set_xlabel("Re (based on tube diameter)")
@@ -791,6 +796,15 @@ def _plot_tube_bank_interactive():
             exp_scatter.set_visible(True)
         else:
             exp_scatter.set_visible(False)
+
+        # CFD data overlay when sliders match defaults AND inline layout AND friction coefficient
+        show_cfd = show_exp and is_inline and metric == "Friction coeff."
+        if show_cfd:
+            cfd_y = f_cfd_inline
+            cfd_scatter.set_offsets(np.column_stack((Re_cfd_inline, cfd_y)))
+            cfd_scatter.set_visible(True)
+        else:
+            cfd_scatter.set_visible(False)
 
         ax.relim()
         if metric == "j/f":
