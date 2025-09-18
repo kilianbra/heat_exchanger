@@ -901,6 +901,200 @@ def tube_bank_nusselt_number_and_friction_factor(
     return nusselt, friction_factor_k_and_l
 
 
+def tube_bank_nusselt_gnielinski_vdi(
+    reynolds,
+    spacing_long,
+    spacing_trans,
+    prandtl=0.7,
+    inline=True,
+    n_rows=11,
+    use_outside_bounds=True,
+):
+    """
+    Correlation is based on Reynolds of the velocity outside the bundle! not in minimum cross section
+    Correlation is based on longitudinal spacing > 1.2 diameters or with b/a >1
+    """
+    a = spacing_trans
+    b = spacing_long
+
+    if not inline and b < 0.5 * np.sqrt(2 * a + 1):  # throat is in diagonal
+        d = np.sqrt((a / 2) ** 2 + (b) ** 2)
+        sigma = 2 * (d - 1) / a
+    else:
+        sigma = (a - 1) / a
+
+    reynolds_od = np.asarray(reynolds) if isinstance(reynolds, (list, np.ndarray)) else reynolds
+
+    void_frac = 1 - np.pi / 4 / a if b >= 1 else 1 - np.pi / 4 / a / b
+    # in VDI heat atlas Reynolds is based on l=pi/2 * d_o, not d_o
+    # furthermore all other correlations are based on minimum free flow area, here is velocity outside bundle
+    reynolds_psi = reynolds_od * np.pi / 2 / void_frac * sigma
+
+    if not use_outside_bounds:
+        mask = (reynolds_psi < 10) | (reynolds_psi > 1e6)
+        reynolds_psi = np.where(mask, np.nan, reynolds_psi)
+
+    nusselt_laminar = 0.664 * reynolds_psi**0.5 * prandtl ** (1 / 3)
+    nusselt_turb = (
+        0.037
+        * reynolds_psi**0.8
+        * prandtl
+        / (1 + 2.443 * reynolds_psi ** (-0.1) * (prandtl ** (2 / 3) - 1))
+    )
+
+    nusselt_uncorrected = 0.3 + np.sqrt(nusselt_laminar**2 + nusselt_turb**2)
+
+    if inline:
+        f_A = 1 + 0.7 * (b / a - 0.3) / void_frac**1.5 / (b / a + 0.7) ** 2
+    else:
+        f_A = 1 + 2 / 3 / b
+
+    if n_rows >= 10:
+        nusselt = (
+            f_A * nusselt_uncorrected / (np.pi / 2)
+        )  # division by pi to make result Nusselt in d_o lengthscale
+    else:
+        nusselt = (1 + (n_rows - 1) * f_A) / n_rows * nusselt_uncorrected
+
+    return nusselt
+
+
+def tube_bank_corrected_xi_gunter_and_shaw(
+    reynolds, spacing_long, spacing_trans, bulk_to_wall_viscosity_ratio=1, use_outside_bounds=True
+):
+    """Calculates the corrected half friction factor for a tube bank in cross flow.
+    Based on Gunter and Shaw 1945. Applicable to inline and staggered tube banks.
+    Not xi/2 but xi!
+    Correlation initially based on correcting Delta p/L rho d_v/G^2 with two factors + viscosity
+    ratio.
+    returns xi = Delta p / N_rows * 2 rho / G^2 (in paper a different 'f/2' is returned)
+    Use volumetric hydraulic diameter in reynolds, so need to convert from outer diameter to d_v
+    Args:
+        reynolds: Reynolds number based on minimum free flow area and tube diameter.
+        spacing_long: Longitudinal spacing between tubes, divided by tube outer diameter.
+        spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
+        bulk_to_wall_viscosity_ratio: Bulk to wall viscosity ratio.
+        use_outside_bounds: Whether to use the outside bounds of the correlation.
+    Bounds on Reynolds number dv 0.01 to 3e5
+    """
+
+    # For now ignore transition region from laminar to turbulent (slight curvature)
+
+    ratio_dv_over_od = 4 * spacing_long * spacing_trans / np.pi - 1
+    # tube outer diameter OD is used in many correlations and is used in inputed reynolds
+    reynolds_od = np.asarray(reynolds) if isinstance(reynolds, (list, np.ndarray)) else reynolds
+    reynolds_dv = reynolds_od * ratio_dv_over_od
+    if not use_outside_bounds:
+        # Return NaN where outside bounds (200 <= Re_dv <= 3e5)
+        mask = (reynolds_dv < 1e-2) | (reynolds_dv > 3e5)
+        reynolds_dv = np.where(mask, np.nan, reynolds_dv)
+    phi = np.where(reynolds_dv < 200, 90 / reynolds_dv, 0.96 * reynolds_dv ** (-0.145))
+    xi = (
+        phi
+        * bulk_to_wall_viscosity_ratio ** (-0.14)
+        * (ratio_dv_over_od / spacing_trans) ** 0.4
+        * (spacing_long / spacing_trans) ** 0.6
+        * (spacing_long / ratio_dv_over_od)  # added term from D_v/L = D_v/X_l/N_r in paper
+        * 2  # convert from half friction factor to full friction factor
+    )
+
+    return xi
+
+
+def tube_bank_stanton_number_from_murray(
+    reynolds_od, spacing_long, spacing_trans, prandtl=0.7, use_outside_bounds=True
+):
+    """
+    This correlation is based on Murray 1998's thesis at the University of Bristol with Reaction
+    Engines Ltd.
+    In the thesis private communications with Bond A. at Reaction Engines is cited as source.
+    The correlation uses the hydraulic diameter to calculate the Reynolds number.
+    Re = G * d_h / mu
+    This function uses the outer diameter and converts to hydraulic diameter.
+    Returns Stanton number and friction factor.
+    Beta = 0.184 is valid for Re_dh between 3e3 and 15e3
+    Correction is made for lower Reynolds but was only used for Reynolds under 2e3 in thesis
+    """
+    reynolds_od = (
+        np.asarray(reynolds_od) if isinstance(reynolds_od, (list, np.ndarray)) else reynolds_od
+    )
+
+    spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
+    xls = spacing_long
+    xts = spacing_trans
+    xlxt = xls * xts  # product of pitches
+    kd = spacing_diag - 1
+    kmin = min(2 * kd, xts - 1)
+    kmax = max(2 * kd, xts - 1)
+
+    reynolds_dh = reynolds_od * 4 * spacing_long * kmin / np.pi
+    if not use_outside_bounds:
+        mask = (reynolds_dh < 2e3) | (reynolds_dh > 5e3)
+        reynolds_dh = np.where(mask, np.nan, reynolds_dh)
+    # St4000 correlation
+    j4000 = (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2) / (kd * xls) ** 0.35
+    St4000 = j4000 / prandtl ** (2 / 3)
+    # St correlation
+    St = St4000 * 25.6238 * reynolds_dh ** (-0.3913)
+
+    f4000 = 0.0122 * (xlxt - 1) * (3 * xlxt - 2) / (kd * xls)
+
+    beta = np.where(reynolds_dh >= 3000, 0.184, 0.184 + 0.2820 * (1 - 2 * kmax))
+
+    f = np.where(
+        reynolds_dh >= 3000,
+        f4000 * (reynolds_dh / 4000) ** (-beta),
+        f4000 * (reynolds_dh / 3000) ** (-beta),
+    )
+
+    return St, f
+
+
+def htc_murray(G, Cp, Re, Pr, xls, xts, OD):
+    """COPY PASTED FROM ZELI
+    Inputs:
+        G: mass velocity [kg/m^2/s]
+        Cp: specific heat [J/kg/K]
+        Re: Reynolds number based on hydraulic diameter
+        Pr: Prandtl number
+        xls: longitudinal pitch (normalised)
+        xts: transverse pitch (normalised)
+        OD: outer diameter [m]
+    """
+    xlxt = xls * xts  # product of pitches
+    # distances between tube centers
+    bt = 0.5 * OD * (xts - 1)  # transverse pitch
+    bd = np.sqrt((xls * OD) ** 2 + (0.5 * xts * OD) ** 2)  # diagonal pitch
+    # spacing ratios
+    kt = bt / OD  # transverse spacing ratio
+    kb = bd / OD  # diagonal spacing ratio
+    kmin = min(kt, kb)  # minimum spacing ratio
+    kmax = max(kt, kb)  # maximum spacing ratio
+
+    # St4000 correlation
+    St4000 = (
+        (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2)
+        / (kmin * xls) ** 0.35
+        / Pr ** (2 / 3)
+    )
+    # St correlation
+    St = St4000 * 25.6238 * Re ** (-0.3913)
+    # htc
+    h = St * Cp * G
+
+    # 4000f correlation
+    f4000 = 0.0122 * (xlxt - 1) * (3 * xlxt - 2) / (kmin * xls)
+    # f correlation
+    if Re > 3000:
+        beta = 0.184
+        f = f4000 * (Re / 4000) ** (-1 * beta)
+    else:
+        beta = 0.184 + 0.2820 * (1 - 2 * kmax)
+        f = f4000 * (Re / 3000) ** (-1 * beta)
+
+    return h, f
+
+
 def general_hex_j_factor(
     reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
 ) -> float:

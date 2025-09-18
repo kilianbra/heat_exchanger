@@ -90,11 +90,32 @@ def _intersect_ray_with_polyline(
     return best_point
 
 
+# Add this helper below _intersect_ray_with_polyline or near other helpers
+def _flow_angle_deg_at_point(
+    position: np.ndarray, tangent: np.ndarray, eps: float = 1e-12
+) -> float:
+    # Angle between inward radial direction (-r_hat) and tangent vector
+    pos_norm = np.linalg.norm(position)
+    tan_norm = np.linalg.norm(tangent)
+    if pos_norm < eps or tan_norm < eps:
+        return float("nan")
+    r_inward_hat = -position / pos_norm
+    cos_theta = np.dot(tangent, r_inward_hat) / tan_norm
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    theta = np.arccos(np.abs(cos_theta))  # acute angle
+    return float(np.rad2deg(theta))
+
+
 def update(val):
     """Update function for sliders"""
     flow_angle = slider1.val
     r_min_val = slider2.val
     offset_deg = offset_slider.val if offset_ax.get_visible() else 0.0
+
+    # Add these lines right after reading slider values:
+    flow_angle_rad = np.deg2rad(flow_angle)
+    S = np.tan(flow_angle_rad)
+    a_radius = 1.0 / np.sqrt(1.0 + S**2)
 
     # Recalculate spirals
     x_s, y_s, X, Y = calculate_spirals(flow_angle, r_min_val)
@@ -108,6 +129,31 @@ def update(val):
 
     # Update title with current parameters
     ax.set_title(rf"Init. Flow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f}")
+
+    # Compute flow angles at inner radii for legend
+    # Spiral at r = r_min -> last point in (x_s, y_s)
+    if len(x_s) >= 2:
+        p_sp = np.array([x_s[-1], y_s[-1]])
+        t_sp = np.array([x_s[-1] - x_s[-2], y_s[-1] - y_s[-2]])
+        angle_sp_deg = _flow_angle_deg_at_point(p_sp, t_sp)
+    else:
+        angle_sp_deg = float("nan")
+
+    # Involute: 0° if r_min < a, else evaluate at first point (r = r_min)
+    if r_min_val < a_radius or len(X) < 2:
+        angle_iv_deg = 0.0
+    else:
+        p_iv = np.array([X[0], Y[0]])
+        t_iv = np.array([X[1] - X[0], Y[1] - Y[0]])
+        angle_iv_deg = _flow_angle_deg_at_point(p_iv, t_iv)
+
+    # Update labels and legend
+    line1.set_label(f"Archimedean Spiral ({angle_sp_deg:.1f}°)")
+    line2.set_label(f"Involute of Circle ({angle_iv_deg:.1f}°)")
+    # circle_mask.set_label(f"r_min = {r_min_val:.2f}")
+    if ax.legend_ is not None:
+        ax.legend_.remove()
+    ax.legend(loc="upper left")
 
     # Handle spacing/offset optional curves
     if offset_ax.get_visible():
@@ -381,20 +427,39 @@ r_min = 0.5  # default
 # Calculate initial spirals
 x_s, y_s, X, Y = calculate_spirals(flow_angle_deg, r_min)
 
-# Plot the spirals
-(line1,) = ax.plot(x_s, y_s, "b-", linewidth=1, label="Archimedean Spiral")
-(line2,) = ax.plot(X, Y, "r-", linewidth=1, label="Involute of Circle")
+# Compute initial inner-radius flow angles for legend labels
+flow_angle_rad_init = np.deg2rad(flow_angle_deg)
+S_init = np.tan(flow_angle_rad_init)
+a_radius_init = 1.0 / np.sqrt(1.0 + S_init**2)
+
+# Spiral initial angle at r_min
+if len(x_s) >= 2:
+    p_sp_init = np.array([x_s[-1], y_s[-1]])
+    t_sp_init = np.array([x_s[-1] - x_s[-2], y_s[-1] - y_s[-2]])
+    angle_sp_init = _flow_angle_deg_at_point(p_sp_init, t_sp_init)
+else:
+    angle_sp_init = float("nan")
+
+# Involute initial angle: 0° if r_min < a else angle at first point
+if r_min < a_radius_init or len(X) < 2:
+    angle_iv_init = 0.0
+else:
+    p_iv_init = np.array([X[0], Y[0]])
+    t_iv_init = np.array([X[1] - X[0], Y[1] - Y[0]])
+    angle_iv_init = _flow_angle_deg_at_point(p_iv_init, t_iv_init)
+
+# Plot the spirals with labels including angles
+(line1,) = ax.plot(x_s, y_s, "b-", linewidth=1, label=f"Archimedean Spiral ({angle_sp_init:.1f}°)")
+(line2,) = ax.plot(X, Y, "r-", linewidth=1, label=f"Involute of Circle ({angle_iv_init:.1f}°)")
 
 # Plot reference unit circle
 theta_circle = np.linspace(0, 2 * np.pi, 100)
 x_circle = np.cos(theta_circle)
 y_circle = np.sin(theta_circle)
-ax.plot(x_circle, y_circle, "k--", linewidth=1, alpha=0.5, label="Unit Circle")
+ax.plot(x_circle, y_circle, "k--", linewidth=1, alpha=0.5, label="Inner/Outer Circle")
 
 # Add inner circle mask to show r_min boundary
-circle_mask = patches.Circle(
-    (0, 0), r_min, fill=False, edgecolor="gray", linestyle="--", alpha=0.7, label=f"r_min = {r_min}"
-)
+circle_mask = patches.Circle((0, 0), r_min, fill=False, edgecolor="gray", linestyle="--", alpha=0.7)
 
 # Add center point
 ax.plot(0, 0, "ko", markersize=3)
@@ -437,8 +502,8 @@ slider1.on_changed(update)
 slider2.on_changed(update)
 
 # Lines for offset curves (created but hidden initially)
-(line1_off,) = ax.plot([], [], "b--", linewidth=1, alpha=0.8, label="Archimedean Spiral (offset)")
-(line2_off,) = ax.plot([], [], "r--", linewidth=1, alpha=0.8, label="Involute of Circle (offset)")
+(line1_off,) = ax.plot([], [], "b--", linewidth=1, alpha=0.8)
+(line2_off,) = ax.plot([], [], "r--", linewidth=1, alpha=0.8)
 line1_off.set_visible(False)
 line2_off.set_visible(False)
 
