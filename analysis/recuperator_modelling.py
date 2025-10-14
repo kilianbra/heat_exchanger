@@ -4,7 +4,7 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluid_properties import PerfectGasProperties
+from heat_exchanger.fluid_properties import CoolPropProperties, PerfectGasProperties
 from heat_exchanger.geometry_tube_bank import (
     area_free_flow_bank,
     area_free_flow_in_tubes,
@@ -16,12 +16,21 @@ from heat_exchanger.geometry_tube_bank import (
 )
 from heat_exchanger.hex_basic import dp_tube_bank, ntu
 
-hot_air = PerfectGasProperties(
-    molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4
-)
-cold_hydrogen = PerfectGasProperties(
-    molecular_weight=2.016, gamma=1.4, Pr=0.7, mu_ref=8.4e-6, T_ref=273.15, S=110.4
-)
+try:
+    hot_air = CoolPropProperties(fluid_name="Air")
+    cold_hydrogen = CoolPropProperties(fluid_name="Hydrogen")
+    print("Using CoolPropProperties")
+except Exception as e:
+    print(f"Error using CoolPropProperties: {e}")
+    print("Using PerfectGasProperties")
+
+    hot_air = PerfectGasProperties(
+        molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4
+    )
+    cold_hydrogen = PerfectGasProperties(
+        molecular_weight=2.016, gamma=1.4, Pr=0.7, mu_ref=8.4e-6, T_ref=273.15, S=110.4
+    )
+
 
 # Brewer recuperator values
 temp_hot_in = 778  # K
