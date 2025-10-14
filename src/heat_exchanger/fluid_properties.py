@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
+import CoolProp.CoolProp as CP
 
 
 class FluidPropertiesStrategy(ABC):
@@ -111,3 +112,62 @@ class PerfectGasProperties(FluidPropertiesStrategy):
         # get isentropic exit temperature from isobaric entropy increase
         Tse = Td * np.exp((s - self.get_specific_entropy(Td, pd)) / self.cp)
         return self.get_specific_enthalpy(Tse, pd), Tse
+
+
+class CoolPropProperties(FluidPropertiesStrategy):
+    """
+    Fluid properties from CoolProp library. Requires CoolProp to be installed.
+    """
+
+    def __init__(self, fluid_name: str):
+        self.fluid = fluid_name
+        try:
+            self.CP = CP
+            self.AS = CP.AbstractState("HEOS", fluid_name)
+        except ImportError:
+            raise ImportError("CoolProp library is required for CoolPropProperties")
+
+    def get_transport_properties(self, T: float, P: float) -> tuple:
+        self.AS.update(self.CP.PT_INPUTS, P, T)
+        rho = self.AS.rhomass()
+        cp = self.AS.cpmass()
+        mu = self.AS.viscosity()
+        k = self.AS.conductivity()
+        return rho, cp, mu, k
+
+    def get_density(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("D", "T", T, "P", P, self.fluid)
+
+    def get_cp(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("Cpmass", "T", T, "P", P, self.fluid)
+
+    def get_specific_enthalpy(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("Hmass", "T", T, "P", P, self.fluid)
+
+    def get_viscosity(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("V", "T", T, "P", P, self.fluid)
+
+    def get_thermal_conductivity(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("L", "T", T, "P", P, self.fluid)
+
+    def get_specific_entropy(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("Smass", "T", T, "P", P, self.fluid) - self.CP.PropsSI(
+            "Smass", "T", 300, "P", 101325, self.fluid
+        )
+
+    def get_speed_of_sound(self, T: float, P: float) -> float:
+        return self.CP.PropsSI("A", "T", T, "P", P, self.fluid)
+
+    def get_isentropic_exit_h_and_temp_from_p_temp(self, P: float, T: float, pd: float) -> float:
+        # get isentropic exit temperature from isentropic expansion
+        self.AS.update(self.CP.PT_INPUTS, P, T)
+        s = self.AS.smass()
+        self.AS.update(self.CP.PSmass_INPUTS, pd, s)
+        return self.AS.hmass(), self.AS.T()
+
+    def get_isentropic_exit_h_and_temp_from_s(self, s: float, pd: float, Td: float) -> float:
+        # get isentropic exit temperature from isobaric entropy increase
+        self.AS.update(self.CP.PT_INPUTS, pd, Td)
+        sd = self.AS.smass()
+        self.AS.update(self.CP.PSmass_INPUTS, pd, s)
+        return self.AS.hmass(), self.AS.T()
