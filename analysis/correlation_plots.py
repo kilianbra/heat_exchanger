@@ -1,6 +1,8 @@
+from contextlib import suppress
+
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.widgets import RadioButtons, Slider
+import numpy as np
 from tabulate import tabulate
 
 from heat_exchanger.correlations import (
@@ -129,9 +131,21 @@ f_exp_k_and_l_inline = [
 # 2D CFD results for inline Xl*=1.25 Xt*=1.5 configuration
 Re_cfd_inline = [380, 508, 658, 848, 1100, 1515, 1945, 2461, 2752, 3015]
 f_cfd_inline = [0.041, 0.034, 0.028, 0.025, 0.022, 0.0196, 0.0174, 0.0163, 0.016, 0.01702]
+# 39k cells 3D CFD - probs not mesh independent
+# Re_cfd_inline_3D = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
+# f_cfd_inline_3D = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
 
-Re_cfd_inline_3D = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
-f_cfd_inline_3D = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
+re_cfd_inline_3d = [2494, 3000, 4989, 5997, 8980] + [1164, 1013, 750, 470, 241, 78]
+f_cfd_inline_3d = [0.0181, 0.0170, 0.017936, 0.017934, 0.0183] + [
+    0.0254,
+    0.0269,
+    0.0308,
+    0.0396,
+    0.0609,
+    0.1482,
+]
+
+
 j_exp_knl_inline = [
     0.00752,
     0.00820,
@@ -630,7 +644,12 @@ def _plot_tube_bank_interactive():
     # Experimental scatters (created upfront, toggled visible)
     exp_scatter = ax.scatter([], [], label="Kays & London (exp)", color="black", marker="x")
     cfd_scatter = ax.scatter([], [], label="2D CFD", color="red", marker="o", s=50)
-    cfd_3d_scatter = ax.scatter([], [], label="3D CFD", color="orange", marker="s", s=50)
+    cfd_3d_scatter = ax.scatter(
+        [], [], label="3D CFD (249k cells)", color="orange", marker="s", s=50
+    )
+
+    # Handle for shaded CFD agreement band (managed to avoid duplicates)
+    cfd_band = None
 
     ax.set_xscale("log")
     ax.set_xlabel("Re (based on tube diameter)")
@@ -752,6 +771,7 @@ def _plot_tube_bank_interactive():
         return gg_y, gs_y, mr_y, gn_y, is_inline
 
     def update_plot(_=None):
+        nonlocal cfd_band
         metric = metric_radio.value_selected
         layout_name = layout_radio.value_selected
         xl_val = xl_slider.val
@@ -810,12 +830,41 @@ def _plot_tube_bank_interactive():
             cfd_scatter.set_visible(True)
 
             # 3D CFD data
-            cfd_3d_y = f_cfd_inline_3D
-            cfd_3d_scatter.set_offsets(np.column_stack((Re_cfd_inline_3D, cfd_3d_y)))
+            cfd_3d_y = f_cfd_inline_3d
+            cfd_3d_scatter.set_offsets(np.column_stack((re_cfd_inline_3d, cfd_3d_y)))
             cfd_3d_scatter.set_visible(True)
+
+            # Manage shaded agreement band between f_GG and 0.6 * f_GG without accumulating artists
+            lower_band = [0.6 * fv if np.isfinite(fv) else np.nan for fv in gg_y]
+            if cfd_band is None:
+                cfd_band = ax.fill_between(
+                    reynolds,
+                    lower_band,
+                    gg_y,
+                    color="blue",
+                    alpha=0.1,
+                    label="G&G -40%",
+                    zorder=0,
+                )
+            else:
+                # Replace existing band with updated data
+                with suppress(Exception):
+                    cfd_band.remove()
+                cfd_band = ax.fill_between(
+                    reynolds,
+                    lower_band,
+                    gg_y,
+                    color="blue",
+                    alpha=0.1,
+                    label="G&G -40%",
+                    zorder=0,
+                )
+            cfd_band.set_visible(True)
         else:
             cfd_scatter.set_visible(False)
             cfd_3d_scatter.set_visible(False)
+            if cfd_band is not None:
+                cfd_band.set_visible(False)
 
         ax.relim()
         if metric == "j/f":
