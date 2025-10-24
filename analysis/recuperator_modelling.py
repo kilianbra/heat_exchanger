@@ -47,8 +47,8 @@ total_diameter_inner = 0.564  # m
 spacing_trans = 6.0  # out of correlation, overruled correlation checks
 spacing_long = 1.25
 
-tube_diameter_outer = 0.478e-2  # m
-t_tubes = 0.03e-2  # 300 microns
+tube_diameter_outer = 0.478e-2  # m - 4.78 mm
+t_tubes = 0.03e-2  # m -  300 microns or 0.3 mm
 tube_diameter_inner = tube_diameter_outer - 2 * t_tubes
 
 n_passes_cold = 8
@@ -76,8 +76,9 @@ print(
     f" heat transfer areas hot & cold: {area_heat_transfer_hot:.2f} & {area_heat_transfer_cold:.2f} m^2"
 )
 
-print(f"free flow areas hot & cold: {area_free_flow_hot:.2f} & {area_free_flow_cold:.2f} m^2")
+print(f"free flow areas hot & cold: {area_free_flow_hot:.2f} & {area_free_flow_cold:.4f} m^2")
 
+print(f"Hot viscosity: {hot_air.get_viscosity(temp_hot_in, p_hot_in):.2e} Pa.s")
 
 reynolds_hot_in = (
     mdot_hot
@@ -110,7 +111,7 @@ area_ratio_q_over_o_hot = area_heat_transfer_hot / area_free_flow_hot
 area_ratio_q_over_o_cold = area_heat_transfer_cold / area_free_flow_cold
 
 print(
-    f"heat transfer to minimum flow area ratio: {area_ratio_q_over_o_hot:.2f} & {area_ratio_q_over_o_cold:.2f}"
+    f"heat transfer to minimum flow area ratio (4L/d_h with K&L def): {area_ratio_q_over_o_hot:.2f} & {area_ratio_q_over_o_cold:.2f}"
 )
 
 ntu = ntu(
