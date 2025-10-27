@@ -274,6 +274,19 @@ class MixtureProperties(FluidPropertiesStrategy):
     """
     Mixture fluid properties with REFPROP as primary backend and CoolProp as fallback.
     Handles high water content mixtures using correlation approach when needed.
+
+    For molar water content <= 5% can use REFPROP directly to get transport properties.
+    If molar water content > 5%, REFPROP can return rho and c_p but not viscosity and conductivity.
+    Hence use a correlation for polar mixtures to get viscosity and conductivity.
+    The correlation is based on a constant where the default value of 3.5 is unsatisfactory
+    so hence a better value is derived by checking the transport properties of a scaled mixture
+    with 4.5% vol water fraction. So if 9% H2O and 93% N2 by vol, then instead will calculate
+    the transport properties of 4.5% H2O and 95.5% N2 and determine the constant from applying
+    the correlation at that value. This ensures relative continuity with respect to FAR.
+    If Refprop is not available or fails, uses CoolProps HAPropsSI for humid air at T < 350 C.
+    At higher temperatures just defaults to returning the properties of air.
+
+    Note that therefore this should mainly be used for air like mixtures
     """
 
     def __init__(self, components: list, mole_fractions: list, prefer_refprop: bool = True):
@@ -303,7 +316,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             "Air": 28.97,
         }
 
-        # Calculate water mole fraction for correlation logic
+        # Calculate water mole fraction for correlation, which deifferentiates polar components.
         self.x_H2O = 0.0
         if "H2O" in components:
             h2o_idx = components.index("H2O")
@@ -567,6 +580,10 @@ class CombustionProductsProperties(FluidPropertiesStrategy):
             fuel_type: 'H2' for hydrogen or 'C092H2' for hydrocarbon
             FAR_mass: Fuel-to-air mass ratio (mdot_fuel/mdot_dry_air)
             prefer_refprop: If True, prefer REFPROP over CoolProp
+
+        If FAR < 1e-6 just model as 21 % vol O2 and 79 % vol N2
+        Else consider combustion balance for one mole of fuel.
+        Pass on to MixtureProperties object to actually calculate properties.
         """
         self.fuel_type = fuel_type
         self.FAR_mass = FAR_mass
