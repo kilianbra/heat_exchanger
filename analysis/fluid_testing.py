@@ -217,7 +217,7 @@ def plot_mu_combustion_products_one_temp_as_function_of_FAR(
     ax.legend()
 
 
-def main():
+def main_table():
     # Cold side (H2 / p-H2) at 28 bar
     P_cold = 28.0 * BAR_TO_PA
     cold_states = [(264.0, P_cold), (677.0, P_cold)]
@@ -268,6 +268,9 @@ def main():
             rows.append(row)
         print_table(f"Hot-side transport properties at T={T:.1f} K, P=0.4 bar", rows)
 
+
+if __name__ == "__main__":
+    main_table()
     # Kerosene products cp(T) plots
     # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
     # plt.show()
@@ -276,7 +279,3 @@ def main():
         T=750.0, P=0.4 * BAR_TO_PA, FAR_H2=None, FAR_kero=None, prefer_refprop=True
     )
     plt.show()
-
-
-if __name__ == "__main__":
-    main()
