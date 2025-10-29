@@ -638,7 +638,7 @@ def _plot_tube_bank_interactive():
     # Lines
     (line_gg,) = ax.plot([], [], label="Gaddis and Gnielinski", color="#1f77b4", linestyle="-")
     (line_gs,) = ax.plot([], [], label="Gunter and Shaw", color="#9467bd", linestyle="--")
-    (line_mr,) = ax.plot([], [], label="Murray (REL)", color="#2ca02c", linestyle=":")
+    (line_mr,) = ax.plot([], [], label="Murray (REL)", color="#2ca02c", linestyle=":", marker="o")
     (line_gn,) = ax.plot([], [], label="Gnielinski VDI", color="#ff7f0e", linestyle="-.")
 
     # Experimental scatters (created upfront, toggled visible)
