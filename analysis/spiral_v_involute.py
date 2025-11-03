@@ -128,7 +128,7 @@ def update(val):
     circle_mask.set_radius(r_min_val)
 
     # Update title with current parameters
-    ax.set_title(rf"Init. Flow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f}")
+    ax.set_title(rf"Init. RFlow Angle w tube: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f}")
 
     # Compute flow angles at inner radii for legend
     # Spiral at r = r_min -> last point in (x_s, y_s)
@@ -383,7 +383,7 @@ def update(val):
             return f"{x:.0%}" if np.isfinite(x) else "n/a"
 
         ax.set_title(
-            rf"Init. Flow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f} | "
+            rf"Init. RFlow Angle: {flow_angle:.1f}°, $r_{{{'min'}}}$: {r_min_val:.2f} | "
             f"spiral_r = {_fmt_ratio(sp_ratio)} ({_fmt_ratio(sp_rad_ratio)}), "
             f"inv_r = {_fmt_ratio(iv_ratio)}"
         )
@@ -470,7 +470,7 @@ ax.set_ylim(-1.1, 1.1)
 ax.set_aspect("equal")
 ax.grid(True, alpha=0.3)
 ax.legend(loc="upper left")
-ax.set_title(rf"Init. Flow Angle: {flow_angle_deg:.1f}°, $r_{{{'min'}}}$: {r_min:.2f}")
+ax.set_title(rf"Init. RFlow Angle w tube: {flow_angle_deg:.1f}°, $r_{{{'min'}}}$: {r_min:.2f}")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
 
