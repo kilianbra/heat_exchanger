@@ -26,6 +26,7 @@ from heat_exchanger.correlations import (
     circular_pipe_nusselt,
     circular_pipe_friction_factor,
 )
+from heat_exchanger.conservation import update_static_properties
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 from heat_exchanger.fluid_properties import CoolPropProperties
 
@@ -369,51 +370,66 @@ def _solve_involute_hx(params: Dict[str, Any], debug: bool = False) -> Dict[str,
         q_max[j] = C_min[j] * (Th[j] - Tc[j])
         q[j] = eps_local[j] * q_max[j]
 
-        dT0_hot = -q[j] / C_h[j]
-        dT0_cold = q[j] / C_c[j]
-        dFA_hot = -f_h[j] * (Aht_hot[j] / Aff_hot[j]) * (G_h[j] ** 2) / (2 * rho_h[j])
-        dFA_cold = -f_c[j] * (Aht_cold[j] / Aff_cold[j]) * (G_c[j] ** 2) / (2 * rho_c[j])
+        dh0_hot = -q[j] / mflow_h
+        dh0_cold = q[j] / mflow_c
+        tau_dA_A_c_hot = f_h[j] * (Aht_hot[j] / Aff_hot[j]) * (G_h[j] ** 2) / (2 * rho_h[j])
+        tau_dA_A_c_cold = f_c[j] * (Aht_cold[j] / Aff_cold[j]) * (G_c[j] ** 2) / (2 * rho_c[j])
 
         if outboard == 0:  # if inboard
             local_hot_in = j + 1  # hot is going from high r to low r i.e. against j
             local_hot_out = j
             local_cold_in = j  # cold is going from low r to high r i.e. with j
             local_cold_out = j + 1
-            Th[local_hot_in] = Th[local_hot_out] - dT0_hot
-            Tc[local_cold_out] = Tc[local_cold_in] + dT0_cold
+
+            Th[local_hot_in], Ph[local_hot_in], _ = update_static_properties(
+                fluid_h,
+                G_h[j],
+                dh0_hot,
+                tau_dA_A_c_hot,
+                Th[local_hot_out],
+                rho_h[local_hot_out],
+                Ph[local_hot_out],
+                a_is_in=False,
+                b_is_in=False,
+            )
+            Tc[local_cold_out], Pc[local_cold_out], _ = update_static_properties(
+                fluid_c,
+                G_c[j],
+                dh0_cold,
+                tau_dA_A_c_cold,
+                Tc[local_cold_in],
+                rho_c[local_cold_in],
+                Pc[local_cold_in],
+                a_is_in=True,
+                b_is_in=True,
+            )
         else:  # outboard
             local_hot_in = j  # hot is going from low r to high r i.e. with j
             local_hot_out = j + 1
             local_cold_in = j + 1  # cold is going from high r to low r i.e. against j
             local_cold_out = j
-            Th[local_hot_out] = Th[local_hot_in] + dT0_hot
-            Tc[local_cold_in] = Tc[local_cold_out] - dT0_cold
-
-        # Pressure drops considering friction only
-        dP_h[j] = (
-            dp_friction_only(Aht_hot[j] / Aff_hot[j], G_h[j], 1.0 / rho_h[j], f_h[j])
-            * dp_tuning_factor
-        )
-        dP_c[j] = dp_friction_only(Aht_cold[j] / Aff_cold[j], G_c[j], 1.0 / rho_c[j], f_c[j])
-
-        if outboard == 0:
-            Ph[j + 1] = Ph[j] + dP_h[j]
-            Pc[j + 1] = Pc[j] - dP_c[j]
-        else:
-            Ph[j + 1] = Ph[j] - dP_h[j]
-            Pc[j + 1] = Pc[j] + dP_c[j]
-
-        # Momentum-inclusive friction and momentum for hot side
-        rho_h[j + 1] = fluid_h.get_density(Th[j + 1], Ph[j])
-        rho_c[j + 1] = fluid_c.get_density(Tc[j + 1], Pc[j])
-        dP_h[j] = (
-            dp_tube_bank(Aht_hot[j] / Aff_hot[j], G_h[j], rho_h[j], rho_h[j + 1], Ah_sigma, f_h[j])
-            * dp_tuning_factor
-        )
-        if outboard == 0:
-            Ph[j + 1] = Ph[j] + dP_h[j]
-        else:
-            Ph[j + 1] = Ph[j] - dP_h[j]
+            Th[local_hot_out], Ph[local_hot_out], _ = update_static_properties(
+                fluid_h,
+                G_h[j],
+                dh0_hot,
+                tau_dA_A_c_hot,
+                Th[local_hot_in],
+                rho_h[local_hot_in],
+                Ph[local_hot_in],
+                a_is_in=True,
+                b_is_in=True,
+            )
+            Tc[local_cold_in], Pc[local_cold_in], _ = update_static_properties(
+                fluid_c,
+                G_c[j],
+                dh0_cold,
+                tau_dA_A_c_cold,
+                Tc[local_cold_out],
+                rho_c[local_cold_out],
+                Pc[local_cold_out],
+                a_is_in=False,
+                b_is_in=False,
+            )
 
     # End of loop: calculate overall HEx metrics
     # Enthalpy-balance based totals (align with colleague's summary approach)
@@ -702,7 +718,7 @@ if __name__ == "__main__":
     # compute_involute_hx(params, debug=True)
 
     # 3) Sweep r_max while keeping Inv_b constant; 5 steps of +0.01 m
-    sweep_results = sweep_rmax_keep_b(params, dr=0.05, steps=10, debug_each=False)
-    table = summarize_sweep(sweep_results)
-    print_table(table)
+    # sweep_results = sweep_rmax_keep_b(params, dr=0.05, steps=10, debug_each=False)
+    # table = summarize_sweep(sweep_results)
+    # print_table(table)
     # plot_eps_vs_ntu(table, title="VIPER: Epsilon vs NTU (r_max sweep, Inv_b constant)")
