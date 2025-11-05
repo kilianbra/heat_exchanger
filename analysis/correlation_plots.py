@@ -632,7 +632,7 @@ def _plot_tube_bank_interactive():
     layout_radio = RadioButtons(rax_layout, ("Inline", "Staggered"), active=0)
 
     # Sliders - will be updated based on layout selection
-    xt_slider = Slider(sax_xt, "Xt*", 1.25, 3.0, valinit=default_xt, valstep=0.01)
+    xt_slider = Slider(sax_xt, "Xt*", 1.25, 6.0, valinit=default_xt, valstep=0.01)
     xl_slider = Slider(sax_xl, "Xl*", 1.2, 3.0, valinit=default_xl, valstep=0.01)
 
     # Lines
@@ -648,6 +648,9 @@ def _plot_tube_bank_interactive():
     cfd_3d_scatter = ax.scatter(
         [], [], label="3D CFD (249k cells)", color="orange", marker="s", s=50
     )
+
+    # Brewer point (only shown for specific Xt*, Xl*)
+    brewer_scatter = ax.scatter([], [], label="Brewer", color="black", marker="+", s=70)
 
     # Handle for shaded CFD agreement band (managed to avoid duplicates)
     cfd_band = None
@@ -666,7 +669,7 @@ def _plot_tube_bank_interactive():
 
         if is_inline:
             # Inline bounds: Xt* [1.25, 3.0], Xl* [1.2, 3.0]
-            xt_min, xt_max = 1.25, 3.0
+            xt_min, xt_max = 1.25, 6.0
             xl_min, xl_max = 1.2, 3.0
         else:
             # Staggered bounds: Xt* [1.25, 3.0], Xl* [0.6, 3.0]
@@ -690,7 +693,7 @@ def _plot_tube_bank_interactive():
         values: list[float], xl_val: float, xt_val: float, is_inline: bool
     ) -> list[float]:
         if is_inline:
-            valid = (xt_val >= 1.25) and (xt_val <= 3.0) and (xl_val >= 1.2) and (xl_val <= 3.0)
+            valid = (xt_val >= 1.25) and (xt_val <= 6.0) and (xl_val >= 1.2) and (xl_val <= 3.0)
         else:
             valid = (xt_val >= 1.25) and (xt_val <= 3.0) and (xl_val >= 0.6) and (xl_val <= 3.0)
         if not valid:
@@ -919,6 +922,19 @@ def _plot_tube_bank_interactive():
             if cfd_band is not None:
                 cfd_band.set_visible(False)
 
+        # Brewer point overlay when Inline, Friction coeff., Xt*=6.0 and Xl*=1.25
+        show_brewer = (
+            is_inline
+            and metric == "Friction coeff."
+            and abs(xl_val - 1.25) < 1e-6
+            and abs(xt_val - 6.0) < 1e-6
+        )
+        if show_brewer:
+            brewer_scatter.set_offsets(np.array([[3000.0, 0.05]]))
+            brewer_scatter.set_visible(True)
+        else:
+            brewer_scatter.set_visible(False)
+
         ax.relim()
         if metric == "j/f":
             ax.set_ylim(0.0, 0.5)
@@ -926,7 +942,29 @@ def _plot_tube_bank_interactive():
             ax.set_ylim(0.01, 2e0)  # Include CFD data down to ~0.016
         else:
             ax.autoscale(axis="y")
-        ax.legend(loc="best")
+        # Dynamic legend: include only visible artists
+        legend_artists = [
+            art
+            for art in [
+                line_gg,
+                line_gs,
+                line_mr,
+                line_gn,
+                line_zk,
+                exp_scatter,
+                cfd_scatter,
+                cfd_3d_scatter,
+                brewer_scatter,
+            ]
+            if art.get_visible()
+        ]
+        if cfd_band is not None and cfd_band.get_visible():
+            legend_artists.append(cfd_band)
+        if legend_artists:
+            ax.legend(handles=legend_artists, loc="best")
+        else:
+            # Fallback to default legend behavior if everything is hidden (unlikely)
+            ax.legend(loc="best")
         plt.draw()
 
     def on_layout_change(_):
