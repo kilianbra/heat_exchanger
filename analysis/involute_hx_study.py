@@ -379,14 +379,15 @@ def _solve_involute_hx(params: Dict[str, Any], debug: bool = False) -> Dict[str,
             local_hot_out = j
             local_cold_in = j  # cold is going from low r to high r i.e. with j
             local_cold_out = j + 1
+            Th[local_hot_in] = Th[local_hot_out] - dT0_hot
+            Tc[local_cold_out] = Tc[local_cold_in] + dT0_cold
         else:  # outboard
             local_hot_in = j  # hot is going from low r to high r i.e. with j
             local_hot_out = j + 1
             local_cold_in = j + 1  # cold is going from high r to low r i.e. against j
             local_cold_out = j
-
-        Th[local_hot_out] = Th[local_hot_in] + dT0_hot
-        Tc[local_cold_out] = Tc[local_cold_in] + dT0_cold
+            Th[local_hot_out] = Th[local_hot_in] + dT0_hot
+            Tc[local_cold_in] = Tc[local_cold_out] - dT0_cold
 
         # Pressure drops considering friction only
         dP_h[j] = (
