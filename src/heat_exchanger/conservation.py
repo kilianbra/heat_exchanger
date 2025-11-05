@@ -71,16 +71,29 @@ def update_static_properties(
 ):
     """
     Solve simultaneously for T_not_a and p_not_b so that:
-      1) (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
-      2) (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = dFA
+      1) Energy/stagnation enthalpy: (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
+      2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = -tau_dA_over_A_c
 
     a can either be in (if a_is_in is True) or out (if a_is_in is False) of the heat exchanger.
     b can either be in (if b_is_in is True) or out (if b_is_in is False) of the heat exchanger.
 
-    Note:  tau_eff dA_friction / A_cross_section > 0
+    Tolerances and finite-difference steps:
+      - tol_T: Absolute convergence tolerance on the energy residual R1 (units of J/kg).
+               When |R1| < tol_T, the energy equation is considered converged.
+      - rel_tol_p: Relative convergence tolerance on the momentum residual R2, scaled by p_b.
+                   Converged when |R2| < rel_tol_p * p_b (units of Pa).
+      - fd_eps_T: Finite-difference perturbation on temperature used to estimate dR/dT (units of K).
+                  This should be small enough to linearize but large enough to avoid numerical noise.
+      - fd_eps_p: Finite-difference perturbation on pressure used to estimate dR/dp (units of Pa).
+                  Since pressure convergence uses a relative tolerance, an absolute FD step of ~O(\(10^2\) Pa)
+                  is typically adequate near 1 bar. Internally, an effective step is used:
+                      fd_eps_p_eff = max(fd_eps_p, 0.5 * rel_tol_p * p_b)
+                  so that the derivative remains well-scaled when p_b changes.
+
+    Note:  tau_eff dA_friction / A_cross_section > 0.
 
     Returns:
-      (T_not_a, p_not_b, rho_not_a)
+        (T_not_a, p_not_b, rho_not_a)
     """
 
     # ------------------------------------------------------------
@@ -164,10 +177,11 @@ def update_static_properties(
         dR1_dT = (R1p - R1) / fd_eps_T
         dR2_dT = (R2p - R2) / fd_eps_T
 
-        # We'll do a small shift in p:
-        R1p, R2p = compute_residuals(T_guess, p_guess + fd_eps_p)
-        dR1_dp = (R1p - R1) / fd_eps_p
-        dR2_dp = (R2p - R2) / fd_eps_p
+        # We'll do a small shift in p (scale step to relative tolerance):
+        fd_eps_p_eff = max(fd_eps_p, 0.5 * rel_tol_p * p_b)
+        R1p, R2p = compute_residuals(T_guess, p_guess + fd_eps_p_eff)
+        dR1_dp = (R1p - R1) / fd_eps_p_eff
+        dR2_dp = (R2p - R2) / fd_eps_p_eff
 
         # Build the Jacobian and the residual vector
         #    [ R1 ]   and   J = [ dR1/dT   dR1/dp ]
