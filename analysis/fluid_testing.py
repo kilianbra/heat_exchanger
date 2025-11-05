@@ -124,7 +124,7 @@ def plot_cp_kerosene_products_three_FAR_as_function_of_temperature():
     """
     FARs = [0.0, 0.0135, 0.027]
     H2_FARs = [0.0, 0.0036, 0.0072]
-    T_vals = np.linspace(300.0, 1800.0, 200)
+    T_vals = np.linspace(300.0, 1800.0, 50)
     P = 1.0 * BAR_TO_PA
 
     # REFPROP-first plot
@@ -132,7 +132,7 @@ def plot_cp_kerosene_products_three_FAR_as_function_of_temperature():
     for FAR in FARs:
         model = CombustionProductsProperties(fuel_type="C092H2", FAR_mass=FAR, prefer_refprop=True)
         cps = [model.get_cp(T, P) for T in T_vals]
-        plt.plot(T_vals, cps, label=f"FAR={FAR}")
+        plt.scatter(T_vals, cps, marker="+", label=f"FAR={FAR}")
     plt.ylim([1e3, 1.4e3])
     plt.xlabel("T [K]")
     plt.ylabel("cp [J/kg-K]")
@@ -145,7 +145,7 @@ def plot_cp_kerosene_products_three_FAR_as_function_of_temperature():
     for FAR in FARs:
         model = CombustionProductsProperties(fuel_type="C092H2", FAR_mass=FAR, prefer_refprop=False)
         cps = [model.get_cp(T, P) for T in T_vals]
-        plt.plot(T_vals, cps, label=f"FAR={FAR}")
+        plt.scatter(T_vals, cps, marker="+", label=f"FAR={FAR}")
     # plt.ylim([1e3, 1.4e3])
     plt.xlabel("T [K]")
     plt.ylabel("cp [J/kg-K]")
@@ -270,12 +270,17 @@ def main_table():
 
 
 if __name__ == "__main__":
-    main_table()
+    FAR = 0.0135
+    P = 1.0e5
+    model = CombustionProductsProperties(fuel_type="C092H2", FAR_mass=FAR, prefer_refprop=True)
+    for T in np.linspace(630.0, 1000.0, 5):
+        # cps = model.get_cp(T, P)
+        cps = model.mixture_state.cpmass()
+        print(f"T={T:.1f} K, cp={cps:.3e} J/kg-K")
+    # main_table()
     # Kerosene products cp(T) plots
-    # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
-    # plt.show()
-
-    plot_mu_combustion_products_one_temp_as_function_of_FAR(
-        T=750.0, P=0.4 * BAR_TO_PA, FAR_H2=None, FAR_kero=None, prefer_refprop=True
-    )
+    plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
     plt.show()
+
+    # plot_mu_combustion_products_one_temp_as_function_of_FAR(T=750.0, P=0.4 * BAR_TO_PA, FAR_H2=None, FAR_kero=None, prefer_refprop=True)
+    # plt.show()
