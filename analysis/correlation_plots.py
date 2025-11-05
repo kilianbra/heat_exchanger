@@ -640,6 +640,7 @@ def _plot_tube_bank_interactive():
     (line_gs,) = ax.plot([], [], label="Gunter and Shaw", color="#9467bd", linestyle="--")
     (line_mr,) = ax.plot([], [], label="Murray (REL)", color="#2ca02c", linestyle=":", marker="o")
     (line_gn,) = ax.plot([], [], label="Gnielinski VDI", color="#ff7f0e", linestyle="-.")
+    (line_zk,) = ax.plot([], [], label="Zukauskas (1972)", color="#8c564b", linestyle="-.")
 
     # Experimental scatters (created upfront, toggled visible)
     exp_scatter = ax.scatter([], [], label="Kays & London (exp)", color="black", marker="x")
@@ -704,6 +705,7 @@ def _plot_tube_bank_interactive():
         gs_y = []
         mr_y = []
         gn_y = []
+        zk_y = []
 
         for Re in reynolds:  # based on tube diameter
             try:
@@ -735,11 +737,52 @@ def _plot_tube_bank_interactive():
                 else:
                     St_mr, f_mr = np.nan, np.nan
 
+                # Zukauskas (1972) correlation for tube banks (external crossflow)
+                # NOTE: Ignore the row correction (C2 = 1). Valid for 1e3 <= Re <= 2e5.
+                # Velocity for Re in Zukauskas is based on the mean velocity in the minimum free cross-section,
+                # i.e. G_max = G_inf * Xt / (Xt - 1); Re uses the tube diameter (Eq. 7 in Zukauskas 1972; nomenclature there).
+                if 1e3 <= Re <= 2e5:
+                    if is_inline:
+                        # Inline default: C1 = 0.27, m = 0.63 (Zukauskas)
+                        zuk_C1 = 0.27
+                        zuk_m = 0.63
+                        # Override m for specific (Xt*, Xl*) pairs (Fig. 51 guided values)
+                        # NOTE: would need to also get values of C1 but not shown in Zuk 1972
+                        overrides = {
+                            (1.30, 2.60): 0.60,
+                            (1.30, 2.00): 0.60,
+                            (1.30, 1.30): 0.63,
+                            (2.50, 2.00): 0.63,
+                            (2.50, 1.30): 0.65,
+                            (2.50, 1.10): 0.73,
+                            (1.65, 2.00): 0.62,
+                            (2.00, 2.00): 0.635,
+                            (1.95, 1.30): 0.645,
+                        }
+                        for (xt_o, xl_o), m_o in overrides.items():
+                            if np.isclose(xt_val, xt_o, rtol=0, atol=1e-3) and np.isclose(
+                                xl_val, xl_o, rtol=0, atol=1e-3
+                            ):
+                                zuk_m = m_o
+                                break
+                    else:
+                        # Staggered: spacing dependence per Zukauskas
+                        if xt_val / xl_val < 2:
+                            zuk_C1 = 0.35 * (xt_val / xl_val) ** 0.2
+                            zuk_m = 0.6
+                        else:
+                            zuk_C1 = 0.4
+                            zuk_m = 0.6
+                    nu_zk = zuk_C1 * (Re**zuk_m) * (pr_local**0.36)
+                else:
+                    nu_zk = np.nan
+
                 if metric_name == "Friction coeff.":
                     gg_y.append(f_gg)
                     gs_y.append(f_gs)
                     mr_y.append(f_mr)
                     gn_y.append(np.nan)  # Gnielinski VDI doesn't provide friction
+                    zk_y.append(np.nan)  # Zukauskas shown only for Stanton number
                 elif metric_name == "Stanton number":
                     St_gg = nu / (Re * pr_local)
                     St_gn = nu_gn / (Re * pr_local)
@@ -748,6 +791,7 @@ def _plot_tube_bank_interactive():
                     gs_y.append(np.nan)
                     mr_y.append(St_mr)
                     gn_y.append(St_gn)
+                    zk_y.append(nu_zk / (Re * pr_local) if np.isfinite(nu_zk) else np.nan)
                 else:  # j/f
                     j_gg = nu / (Re * pr_local ** (1 / 3))
                     gg_y.append(j_gg / f_gg if f_gg else np.nan)
@@ -758,17 +802,20 @@ def _plot_tube_bank_interactive():
                     gs_y.append(np.nan)
                     # Gnielinski VDI doesn't provide friction, so j/f not available
                     gn_y.append(np.nan)
+                    zk_y.append(np.nan)  # Zukauskas shown only for Stanton number
             except (AssertionError, Exception):
                 gg_y.append(np.nan)
                 gs_y.append(np.nan)
                 mr_y.append(np.nan)
                 gn_y.append(np.nan)
+                zk_y.append(np.nan)
 
         gg_y = mask_bounds(gg_y, xl_val, xt_val, is_inline)
         gs_y = mask_bounds(gs_y, xl_val, xt_val, is_inline)
         mr_y = mask_bounds(mr_y, xl_val, xt_val, is_inline)
         gn_y = mask_bounds(gn_y, xl_val, xt_val, is_inline)
-        return gg_y, gs_y, mr_y, gn_y, is_inline
+        zk_y = mask_bounds(zk_y, xl_val, xt_val, is_inline)
+        return gg_y, gs_y, mr_y, gn_y, zk_y, is_inline
 
     def update_plot(_=None):
         nonlocal cfd_band
@@ -777,15 +824,21 @@ def _plot_tube_bank_interactive():
         xl_val = xl_slider.val
         xt_val = xt_slider.val
 
-        gg_y, gs_y, mr_y, gn_y, is_inline = compute_series(metric, layout_name, xl_val, xt_val)
+        gg_y, gs_y, mr_y, gn_y, zk_y, is_inline = compute_series(
+            metric, layout_name, xl_val, xt_val
+        )
         line_gg.set_data(reynolds, gg_y)
         line_gs.set_data(reynolds, gs_y)
         line_mr.set_data(reynolds, mr_y)
         line_gn.set_data(reynolds, gn_y)
+        line_zk.set_data(reynolds, zk_y)
 
         # Show/hide lines based on layout and metric
         line_mr.set_visible(not is_inline)  # Murray only for staggered
-        line_gn.set_visible(metric == "Stanton number")  # Gnielinski VDI only for Stanton number
+        # Gnielinski VDI only for Stanton number
+        line_gn.set_visible(metric == "Stanton number")
+        # Zukauskas only for Stanton number
+        line_zk.set_visible(metric == "Stanton number")
 
         # Y-axis scaling
         ax.set_yscale("log" if metric != "j/f" else "linear")
