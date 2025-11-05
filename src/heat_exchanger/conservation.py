@@ -57,96 +57,95 @@ def update_static_properties(
     fluid_props,
     G,
     dh0,
-    dFA,
-    T_in,
-    p_sp,
-    rho_in,
-    reverse_pressure_marching=False,
+    tau_dA_over_A_c,
+    T_a,
+    rho_a,
+    p_b,
+    a_is_in=True,
+    b_is_in=True,
     max_iter=10,
     tol_T=1e-3,
-    tol_p=10.0,  # Pa tolerance
+    rel_tol_p=1e-3,  # Pa tolerance
     fd_eps_T=1e-3,
     fd_eps_p=50.0,
 ):
     """
-    Solve simultaneously for (T_out, p_out) (or p_in) so that:
+    Solve simultaneously for T_not_a and p_not_b so that:
       1) (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
       2) (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = dFA
 
-    If reverse_pressure_marching=True:
-       - p_sp is p_out (the known outlet pressure),
-         and we solve for p_in.
-       - R2 is rearranged accordingly.
+    a can either be in (if a_is_in is True) or out (if a_is_in is False) of the heat exchanger.
+    b can either be in (if b_is_in is True) or out (if b_is_in is False) of the heat exchanger.
+
+    Note:  tau_eff dA_friction / A_cross_section > 0
 
     Returns:
-      (T_out, p_out, rho_out)  or  (T_out, p_in, rho_out)
-      [depending on forward or reverse meaning of "p_out"]
+      (T_not_a, p_not_b, rho_not_a)
     """
 
     # ------------------------------------------------------------
-    # 1) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
+    # 1) Initial Guesses for T_non_a assumes no pressure drop for c_p
+    # ------------------------------------------------------------
+    # Could improve guess by then using c_p(T_avg) to get T_guess
+    if a_is_in:
+        T_in = T_a
+        rho_in = rho_a
+        cp_in = fluid_props.get_cp(T_in, p_b)
+        T_guess = T_in + dh0 / cp_in
+    else:
+        T_out = T_a
+        rho_out = rho_a
+        cp_out = fluid_props.get_cp(T_out, p_b)
+        T_guess = T_out - dh0 / cp_out
+    # For p_guess, a naive shift by dFA is typical (neglect density change)
+    if b_is_in:
+        p_in = p_b
+        p_guess = p_b - tau_dA_over_A_c
+    else:
+        p_out = p_b
+        p_guess = p_b + tau_dA_over_A_c
+
+    # ------------------------------------------------------------
+    # 2) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
     # ------------------------------------------------------------
     def compute_residuals(T_guess, p_guess):
         """
         Returns R1, R2 given the current guess of T, p
         """
+        # Build local variables for both sides to avoid scoping issues
+        # Pressures
+        if b_is_in:
+            p_in_loc = p_b
+            p_out_loc = p_guess
+        else:
+            p_in_loc = p_guess
+            p_out_loc = p_b
 
-        # Evaluate fluid properties at 'specified' side
-        #  (whichever side p_sp is meant for)
+        # Temperatures
+        if a_is_in:
+            T_in_loc = T_a
+            T_out_loc = T_guess
+        else:
+            T_in_loc = T_guess
+            T_out_loc = T_a
 
-        if not reverse_pressure_marching:
-            # Evaluate fluid properties at exit, unknown pressure
-            rho_out = fluid_props.get_density(T_guess, p_guess)
-            h_out = fluid_props.get_specific_enthalpy(T_guess, p_guess)
-            h0_out = h_out + 0.5 * (G / rho_out) ** 2
+        # Densities
+        rho_in_loc = fluid_props.get_density(T_in_loc, p_in_loc)
+        rho_out_loc = fluid_props.get_density(T_out_loc, p_out_loc)
 
-            # Forward:  p_in = p_sp is known
-            rho_in = fluid_props.get_density(T_in, p_sp)
-            h_in = fluid_props.get_specific_enthalpy(T_in, p_sp)
-            h0_in = h_in + 0.5 * (G / rho_in) ** 2  # "inlet" total enthalpy if forward
-            # R1:  (h0_guess - h0_in) - dh0 = 0
-            R1 = (h0_out - h0_in) - dh0
+        # Enthalpies
+        h_in = fluid_props.get_specific_enthalpy(T_in_loc, p_in_loc)
+        h_out = fluid_props.get_specific_enthalpy(T_out_loc, p_out_loc)
 
-            # R2:  [p_guess + G^2/rho_guess] - [p_in + G^2/rho_in] - dFA = 0
-            # We interpret p_guess as p_out
-            R2 = (p_guess + G**2 / rho_out) - (p_sp + G**2 / rho_in) - dFA
+        # Stagnation enthalpies (per unit mass)
+        h0_in = h_in + 0.5 * (G / rho_in_loc) ** 2
+        h0_out = h_out + 0.5 * (G / rho_out_loc) ** 2
 
-        else:  # Reverse: p_out = p_sp is known
-            # Evaluate fluid properties at exit, known pressure
-            rho_out = fluid_props.get_density(T_guess, p_sp)
-            h_out = fluid_props.get_specific_enthalpy(T_guess, p_sp)
-            h0_out = h_out + 0.5 * (G / rho_out) ** 2
-
-            rho_in = fluid_props.get_density(T_in, p_guess)  # used for KE reference
-            h_in = fluid_props.get_specific_enthalpy(T_in, p_guess)
-            h0_in = h_in + 0.5 * (G / rho_in) ** 2
-            #        p_sp + G^2 / rho_sp
-            # R1:  (h0_in - h0_out) - dh0 = 0  => sign might differ
-            #      but let's keep the same sign as forward:
-            # we want h0_guess (the 'unknown side') to differ from h0_sp by dh0
-            R1 = (h0_out - h0_in) - dh0  # or negative of above, just keep consistent
-
-            # R2: [p_sp + G^2/rho_sp] - [p_guess + G^2/rho_in] - dFA = 0
-            #    p_guess is 'inlet' now
-            R2 = (p_sp + G**2 / rho_out) - (p_guess + G**2 / rho_in) - dFA
+        # Residuals
+        R1 = (h0_out - h0_in) - dh0
+        R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + tau_dA_over_A_c
 
         return R1, R2
-
-    # ------------------------------------------------------------
-    # 2) Initial Guesses for T_out and p_non_sp
-    # ------------------------------------------------------------
-    cp_in = fluid_props.get_cp(T_in, p_sp)
-
-    # For T_guess, a naive shift by dh0 / cp is typical
-    T_guess = T_in + dh0 / cp_in
-
-    # Could improve guess by then using c_p(T_avg) to get T_guess
-
-    # For p_guess, a naive shift by dFA is typical (small dp << p_sp assumption)
-    if not reverse_pressure_marching:
-        p_guess = p_sp + dFA  # forward => p_out ~ p_in + dFA (rough guess)
-    else:
-        p_guess = p_sp - dFA  # reverse => p_in ~ p_out - dFA (rough guess)
 
     # ------------------------------------------------------------
     # 3) Newton Iteration (using finite-diff partial derivatives)
@@ -156,7 +155,7 @@ def update_static_properties(
         R1, R2 = compute_residuals(T_guess, p_guess)
 
         # Check if close enough
-        if abs(R1) < tol_T and abs(R2) < tol_p:
+        if abs(R1) < tol_T and abs(R2) < rel_tol_p * p_b:
             break
 
         # ~~~~~~~~ Finite-difference to get partial derivatives dR/dT, dR/dp ~~~~~~~~
@@ -199,15 +198,12 @@ def update_static_properties(
     # End iteration
     if iteration == max_iter - 1:
         raise ValueError(
-            f"Failed to converge at T_in={T_in:.2f} K, p_sp={p_sp:.2f} Pa in {max_iter} iterations"
+            f"Failed to converge at T_a={T_a:.2f} K, p_b={p_b:.2f} Pa in {max_iter} iterations"
         )
     # Compute final residuals or do final get_density
-    if not reverse_pressure_marching:
-        rho_out = fluid_props.get_density(T_guess, p_guess)
-    else:
-        rho_out = fluid_props.get_density(T_guess, p_sp)
+    if a_is_in == b_is_in:  # then a = b (not a is not b)
+        rho_not_a = fluid_props.get_density(T_guess, p_guess)
+    else:  # they are different so not a is b
+        rho_not_a = fluid_props.get_density(T_guess, p_b)
 
-    T_out = T_guess
-    p_not_sp = p_guess
-
-    return T_out, p_not_sp, rho_out
+    return T_guess, p_guess, rho_not_a
