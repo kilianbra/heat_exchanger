@@ -84,7 +84,7 @@ def update_static_properties(
     """
 
     # ------------------------------------------------------------
-    # 1) Helper: compute R1, R2 for a given guess of (T, p_unknown)
+    # 1) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
     # ------------------------------------------------------------
     def compute_residuals(T_guess, p_guess):
         """
@@ -133,7 +133,7 @@ def update_static_properties(
         return R1, R2
 
     # ------------------------------------------------------------
-    # 2) Initial Guesses for T_guess, p_guess
+    # 2) Initial Guesses for T_out and p_non_sp
     # ------------------------------------------------------------
     cp_in = fluid_props.get_cp(T_in, p_sp)
 
@@ -197,10 +197,17 @@ def update_static_properties(
         p_guess = p_guess + alpha * (p_guess_new - p_guess)
 
     # End iteration
+    if iteration == max_iter - 1:
+        raise ValueError(
+            f"Failed to converge at T_in={T_in:.2f} K, p_sp={p_sp:.2f} Pa in {max_iter} iterations"
+        )
     # Compute final residuals or do final get_density
     if not reverse_pressure_marching:
         rho_out = fluid_props.get_density(T_guess, p_guess)
     else:
         rho_out = fluid_props.get_density(T_guess, p_sp)
 
-    return T_guess, p_guess, rho_out
+    T_out = T_guess
+    p_not_sp = p_guess
+
+    return T_out, p_not_sp, rho_out
