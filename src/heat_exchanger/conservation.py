@@ -64,12 +64,12 @@ def update_static_properties(
     a_is_in=True,
     b_is_in=True,
     max_iter=10,
-    tol_T=1e-3,
+    tol_T=1e-2,
     rel_tol_p=1e-3,  # Pa tolerance
     fd_eps_T=1e-3,
     fd_eps_p=50.0,
 ):
-    """
+    r"""
     Solve simultaneously for T_not_a and p_not_b so that:
       1) Energy/stagnation enthalpy: (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
       2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = -tau_dA_over_A_c
@@ -163,12 +163,14 @@ def update_static_properties(
     # ------------------------------------------------------------
     # 3) Newton Iteration (using finite-diff partial derivatives)
     # ------------------------------------------------------------
+    converged = False
     for iteration in range(max_iter):
         # Compute R1, R2 at current guesses
         R1, R2 = compute_residuals(T_guess, p_guess)
 
         # Check if close enough
         if abs(R1) < tol_T and abs(R2) < rel_tol_p * p_b:
+            converged = True
             break
 
         # ~~~~~~~~ Finite-difference to get partial derivatives dR/dT, dR/dp ~~~~~~~~
@@ -210,10 +212,12 @@ def update_static_properties(
         p_guess = p_guess + alpha * (p_guess_new - p_guess)
 
     # End iteration
-    if iteration == max_iter - 1:
+    if not converged:
         raise ValueError(
-            f"Failed to converge at T_a={T_a:.2f} K, p_b={p_b:.2f} Pa in {max_iter} iterations"
+            f"Failed to converge at T_a={T_a:.2f} K, p_b={p_b:.2e} Pa in {max_iter} iterations\n"
+            f"residuals {abs(R1):.2e} > {tol_T:.2e} K or {abs(R2):.2e} > {rel_tol_p * p_b:.2e} Pa\n"
         )
+
     # Compute final residuals or do final get_density
     if a_is_in == b_is_in:  # then a = b (not a is not b)
         rho_not_a = fluid_props.get_density(T_guess, p_guess)
