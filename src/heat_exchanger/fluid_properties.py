@@ -52,12 +52,25 @@ class PerfectGasProperties(FluidPropertiesStrategy):
     """
     Perfect gas model with constant specific heat.
     Uses Sutherland's formula for viscosity and assumes constant Prandtl number.
+
+    Sutherland's law constants for common gases:
+
+      Gas      S (K)     T_ref (K)    mu_ref (Pa.s)
+    ---------------------------------------------------------------
+      Air      111       273          1.716e-5
+      N2       107       273          1.663e-5
+      H2        97       273          8.411e-6
+      Steam   1064       350          1.12e-5
+      Helium    79.4     273          1.9e-5
+
+    Reference: https://doc.comsol.com/6.2/doc/com.comsol.help.cfd/cfd_ug_fluidflow_high_mach.08.41.html
+    except Helium use https://de.wikipedia.org/wiki/Sutherland-Modell
     """
 
     def __init__(
         self,
         molecular_weight: float,
-        gamma: float,
+        gamma: float = 1.4,
         Pr: float = 0.7,
         mu_ref: float = 1.8e-5,
         T_ref: float = 300.0,
@@ -384,8 +397,7 @@ class MixtureProperties(FluidPropertiesStrategy):
         # Calculate mass fraction of water for HAPropsSI
         if self.x_H2O > 0:
             total_mass = sum(
-                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97)
-                for i, comp in enumerate(self.components)
+                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97) for i, comp in enumerate(self.components)
             )
             h2o_mass = self.x_H2O * self.molar_masses["H2O"]
             self.w_H2O = h2o_mass / total_mass
