@@ -1,0 +1,406 @@
+"""Solve the inboard involute HX shooting problem for the VIPER case.
+
+This analysis script:
+  1) Builds the VIPER inputs (legacy notation mapped to new geometry API)
+  2) Computes a fast 0D two-step initial guess for the hot inner boundary
+  3) Solves the shooting residuals with SciPy's root-finder using ``F_inboard``
+"""
+
+# ruff: noqa: I001
+
+from __future__ import annotations
+
+import logging
+
+import numpy as np
+from scipy.optimize import root
+
+from heat_exchanger.conservation import update_static_properties
+from heat_exchanger.correlations import (
+    circular_pipe_friction_factor,
+    circular_pipe_nusselt,
+    tube_bank_nusselt_number_and_friction_factor,
+)
+from heat_exchanger.epsilon_ntu import epsilon_ntu
+from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid
+from heat_exchanger.involute_inboard import (
+    F_inboard,
+    MarchingOptions,
+    RadialInvoluteGeometry,
+)
+from heat_exchanger.logging_utils import configure_logging
+
+
+logger = logging.getLogger(__name__)
+
+
+def load_case(case: str) -> dict[str, object]:
+    """Return configuration for a named case (currently only ``viper``)."""
+
+    case_key = case.strip().lower()
+    if case_key == "viper":
+        return {
+            "case_name": "VIPER",
+            "Th_in": 298.0,
+            "Ph_in": 1.02e5,
+            "Tc_in": 96.0,
+            "Pc_in": 150e5,
+            "tube_outer_diam": 0.98e-3,
+            "tube_thick": 0.04e-3,
+            "tube_spacing_trv": 2.5,
+            "tube_spacing_long": 1.1,
+            "staggered": True,
+            "n_headers": 31,
+            "n_rows_per_header": 4,
+            "n_rows_axial": 200,
+            "radius_outer_whole_hex": 478e-3,
+            "inv_angle_deg": 360.0,
+            "rectangular": False,
+            "mflow_h_total": 12.26,
+            "mflow_c_total": 1.945,
+            "wall_conductivity": 14.0,
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("Helium"),
+        }
+
+    raise ValueError(f"Unknown case '{case}'. Currently supported: 'viper'.")
+
+
+def _compute_involute_length(
+    radius_inner: float, radius_outer: float, inv_angle_deg: float
+) -> float:
+    theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), 64)
+    b = (radius_outer - radius_inner) / max(np.deg2rad(inv_angle_deg), 1e-12)
+    r_vals = radius_inner + b * theta_vals
+    return float(np.trapezoid(np.sqrt(r_vals**2 + b**2), theta_vals))
+
+
+def _zero_d_two_step_guess(
+    geom: RadialInvoluteGeometry,
+    fluid_hot: FluidModel,
+    fluid_cold: FluidModel,
+    mflow_h_total: float,
+    mflow_c_total: float,
+    Th_in: float,
+    Ph_in: float,
+    Tc_in: float,
+    Pc_in: float,
+    *,
+    wall_k: float,
+) -> tuple[float, float]:
+    """Return (Th_inner_guess, Ph_inner_guess) using a two-step 0D estimate.
+
+    The first step evaluates properties at the inlet conditions; the second step
+    re-evaluates at the mean of the inlet and the first-step outlet to refine the
+    guess.
+    """
+
+    tube_ID = geom.tube_outer_diam - 2.0 * geom.tube_thick
+    r_in = geom.radius_inner_whole_hex()
+    r_out = geom.radius_outer_whole_hex
+    Lx = geom.n_rows_axial * geom.tube_spacing_trv * geom.tube_outer_diam
+
+    # Global single-tube areas using total involute length
+    inv_len = _compute_involute_length(r_in, r_out, geom.inv_angle_deg)
+    A_ht_hot_one = np.pi * geom.tube_outer_diam * inv_len
+    A_ht_cold_one = np.pi * tube_ID * inv_len
+
+    n_rows_radial = geom.n_rows_per_header * geom.n_headers
+    n_tubes_total = geom.n_rows_axial * n_rows_radial
+    A_total_hot0 = A_ht_hot_one * n_tubes_total
+    A_total_cold0 = A_ht_cold_one * n_tubes_total
+
+    # Frontal/free areas at mid-radius and total cold frontal area (per sector/header)
+    r_mid = 0.5 * (r_in + r_out)
+    Afr_hot_mid = Lx * 2.0 * np.pi * r_mid
+    spacing_trv = geom.tube_spacing_trv * geom.tube_outer_diam
+    spacing_long = geom.tube_spacing_long * geom.tube_outer_diam
+    sigma_hot = (spacing_trv - geom.tube_outer_diam) / spacing_trv
+    if geom.staggered:
+        diag_spacing = np.sqrt(spacing_long**2 + (0.5 * spacing_trv) ** 2)
+        sigma_hot = min(sigma_hot, 2.0 * (diag_spacing - geom.tube_outer_diam) / spacing_trv)
+    Aff_hot_mid = Afr_hot_mid * sigma_hot
+
+    Aff_cold_total = n_tubes_total * np.pi * tube_ID**2 / 4.0
+
+    G_h0 = mflow_h_total / Aff_hot_mid
+    G_c0 = mflow_c_total / Aff_cold_total
+
+    def _0d_model(
+        _Th_in: float,
+        _Ph_in: float,
+        _Tc_in: float,
+        _Pc_in: float,
+        Th_eval: float,
+        Ph_eval: float,
+        Tc_eval: float,
+        Pc_eval: float,
+    ) -> tuple[float, float, float, float]:
+        """Single 0D estimate using property evaluation at (eval) and inlets (b)."""
+        sh = fluid_hot.state(Th_eval, Ph_eval)
+        sc = fluid_cold.state(Tc_eval, Pc_eval)
+        Pr_h = sh.mu * sh.cp / sh.k
+        Pr_c = sc.mu * sc.cp / sc.k
+        rho_h = sh.rho
+        rho_c = sc.rho
+        Re_h_OD = G_h0 * geom.tube_outer_diam / sh.mu
+        Re_c = G_c0 * tube_ID / sc.mu
+
+        Nu_h, f_h = tube_bank_nusselt_number_and_friction_factor(
+            Re_h_OD,
+            geom.tube_spacing_long,
+            geom.tube_spacing_trv,
+            Pr_h,
+            inline=(not geom.staggered),
+            n_rows=n_rows_radial,
+        )
+        logger.debug(
+            "0D guess tube bank for Re_od=%5.2e: St_h=%5.2f, f_h=%5.2e",
+            Re_h_OD,
+            Nu_h / Re_h_OD / Pr_h,
+            f_h,
+        )
+        Nu_c = circular_pipe_nusselt(Re_c, 0, prandtl=Pr_c)
+        f_c = circular_pipe_friction_factor(Re_c, 0)
+
+        h_h = Nu_h * sh.k / geom.tube_outer_diam
+        h_c = Nu_c * sc.k / tube_ID
+
+        wall_term = geom.tube_outer_diam / (2.0 * wall_k) * np.log(geom.tube_outer_diam / tube_ID)
+        U = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / tube_ID) + wall_term)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "0D guess geometry ratios: UA_master=%5.3e, A_hot/Aff_hot=%5.3e, A_cold/Aff_cold=%5.3e",
+                U * A_total_hot0,
+                A_total_hot0 / Aff_hot_mid,
+                A_total_cold0 / Aff_cold_total,
+            )
+
+        C_h_tot = mflow_h_total * sh.cp
+        C_c_tot = mflow_c_total * sc.cp
+        C_min = min(C_h_tot, C_c_tot)
+        C_max = max(C_h_tot, C_c_tot)
+        Cr = C_min / C_max
+
+        NTU = U * A_total_hot0 / C_min
+        eps = epsilon_ntu(
+            NTU, Cr, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1
+        )
+        logger.debug("0D guess epsilon-NTU: NTU=%5.2f, eps=%5.2f", NTU, eps)
+        Q = eps * C_min * (_Th_in - _Tc_in)
+
+        tau_h = f_h * (A_total_hot0 / Aff_hot_mid) * (G_h0**2) / (2.0 * rho_h)
+        tau_c = f_c * (A_total_cold0 / Aff_cold_total) * (G_c0**2) / (2.0 * rho_c)
+
+        dh0_h = -Q / mflow_h_total
+        dh0_c = Q / mflow_c_total
+        Th_out, Ph_out = update_static_properties(
+            fluid_hot,
+            G_h0,
+            dh0_h,
+            tau_h,
+            T_a=_Th_in,
+            p_b=_Ph_in,
+            a_is_in=True,
+            b_is_in=True,
+        )
+        Tc_out, Pc_out = update_static_properties(
+            fluid_cold,
+            G_c0,
+            dh0_c,
+            tau_c,
+            T_a=_Tc_in,
+            p_b=_Pc_in,
+            a_is_in=True,
+            b_is_in=True,
+        )
+
+        return Th_out, Tc_out, Ph_out, Pc_out
+
+    logger.debug(
+        "0D guess 0: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%5.2e Pa, Pc_in =%5.2e Pa",
+        Th_in,
+        Tc_in,
+        Ph_in,
+        Pc_in,
+    )
+    Th_o1, Tc_o1, Ph_o1, Pc_o1 = _0d_model(
+        Th_in,
+        Ph_in,
+        Tc_in,
+        Pc_in,
+        Th_in,
+        Ph_in,
+        Tc_in,
+        Pc_in,
+    )
+    logger.debug(
+        "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+        Th_o1,
+        Tc_o1,
+        Ph_o1,
+        Pc_o1,
+    )
+    Th_mean = 0.5 * (Th_in + Th_o1)
+    Tc_mean = 0.5 * (Tc_in + Tc_o1)
+    Ph_mean = 0.5 * (Ph_in + Ph_o1)
+    Pc_mean = 0.5 * (Pc_in + Pc_o1)
+    Th_o2, Tc_o2, Ph_o2, Pc_o2 = _0d_model(
+        Th_in,
+        Ph_in,
+        Tc_in,
+        Pc_in,
+        Th_mean,
+        Ph_mean,
+        Tc_mean,
+        Pc_mean,
+    )
+    logger.debug(
+        "0D guess 2: Th_out=%.2f K, Tc_out=%.2f K, Ph_out=%.2e Pa, Pc_out=%.2e Pa",
+        Th_o2,
+        Tc_o2,
+        Ph_o2,
+        Pc_o2,
+    )
+    # Hot inner boundary (inboard shoot) guess equals the 0D outlet
+    return float(Th_o2), float(Ph_o2)
+
+
+def main(case: str = "viper") -> None:
+    # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
+    configure_logging(logging.INFO)
+
+    params = load_case(case)
+
+    geom = RadialInvoluteGeometry(
+        tube_outer_diam=params["tube_outer_diam"],
+        tube_thick=params["tube_thick"],
+        tube_spacing_trv=params["tube_spacing_trv"],
+        tube_spacing_long=params["tube_spacing_long"],
+        staggered=params["staggered"],
+        n_headers=params["n_headers"],
+        n_rows_per_header=params["n_rows_per_header"],
+        n_rows_axial=params["n_rows_axial"],
+        radius_outer_whole_hex=params["radius_outer_whole_hex"],
+        inv_angle_deg=params["inv_angle_deg"],
+        rectangular=params["rectangular"],
+    )
+
+    fluid_hot = params["fluid_hot"]
+    fluid_cold = params["fluid_cold"]
+
+    # 0D two-step initial guess assuming counterflow epsilon-NTU relationship
+    # (first using inlet properties as average, then using average of first guess
+    # outlet and known inlet to get a better average properties guess)
+    Th0, Ph0 = _zero_d_two_step_guess(
+        geom,
+        fluid_hot,
+        fluid_cold,
+        params["mflow_h_total"],
+        params["mflow_c_total"],
+        params["Th_in"],
+        params["Ph_in"],
+        params["Tc_in"],
+        params["Pc_in"],
+        wall_k=params["wall_conductivity"],
+    )
+    logger.info(
+        "Hot inlet parameters: Th_in=%.2f K, Ph_in=%.2e Pa", params["Th_in"], params["Ph_in"]
+    )
+    logger.info(
+        "Case %s: 0D guess for inner boundary Th_out=%.2f K, Ph_out=%.2e Pa",
+        params["case_name"],
+        Th0,
+        Ph0,
+    )
+
+    eval_state = {"count": 0}
+    tol_root = 1.0e-2
+    tol_P = 1.0e-3 * params["Ph_in"]  # absolute Pa tolerance desired on pressure residual
+
+    def residuals(x: np.ndarray) -> np.ndarray:
+        eval_state["count"] += 1
+        raw = F_inboard(
+            Th_out_guess=x[0],
+            Ph_out_guess=x[1],
+            geometry=geom,
+            fluid_hot=fluid_hot,
+            fluid_cold=fluid_cold,
+            Th_in=params["Th_in"],
+            Ph_in=params["Ph_in"],
+            Tc_in=params["Tc_in"],
+            Pc_in=params["Pc_in"],
+            mdot_h_total=params["mflow_h_total"],
+            mdot_c_total=params["mflow_c_total"],
+            wall_conductivity=params["wall_conductivity"],
+            options=MarchingOptions(),
+        )
+        # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
+        # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
+        scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
+        logger.debug(
+            (
+                "Residual eval %d: Th_guess=%.3f K, Ph_guess=%.3e Pa -> "
+                "ΔT=%.3e K (target %.1e), ΔP=%.3e Pa (target %.1e)"
+            ),
+            eval_state["count"],
+            x[0],
+            x[1],
+            raw[0],
+            tol_root,
+            raw[1],
+            tol_P / tol_root,
+        )
+        return scaled
+
+    x0 = np.array([Th0, Ph0], dtype=float)
+    sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 40})
+
+    final_diag: dict[str, float] = {}
+    final_raw = F_inboard(
+        Th_out_guess=sol.x[0],
+        Ph_out_guess=sol.x[1],
+        geometry=geom,
+        fluid_hot=fluid_hot,
+        fluid_cold=fluid_cold,
+        Th_in=params["Th_in"],
+        Ph_in=params["Ph_in"],
+        Tc_in=params["Tc_in"],
+        Pc_in=params["Pc_in"],
+        mdot_h_total=params["mflow_h_total"],
+        mdot_c_total=params["mflow_c_total"],
+        wall_conductivity=params["wall_conductivity"],
+        options=MarchingOptions(),
+        diagnostics=final_diag,
+    )
+
+    logger.debug(
+        "SciPy root success=%s, nfev=%s, message=%s",
+        sol.success,
+        getattr(sol, "nfev", None),
+        sol.message,
+    )
+    logger.info(
+        "Solution: Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        sol.x[0],
+        (1 - sol.x[1] / params["Ph_in"]) * 100.0,
+    )
+    logger.info(
+        "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e)",
+        final_raw[0],
+        tol_root,
+        final_raw[1],
+        tol_P / tol_root,
+    )
+    if final_diag:
+        logger.debug(
+            "1D effective area ratios: hot=%5.2f, cold=%5.2f across %.0f layers",
+            final_diag.get("area_ratio_hot_total", float("nan")),
+            final_diag.get("area_ratio_cold_total", float("nan")),
+            final_diag.get("n_layers", float("nan")),
+        )
+
+
+if __name__ == "__main__":
+    main()
