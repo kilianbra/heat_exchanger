@@ -1,8 +1,12 @@
+import logging
 import sys
 from abc import ABC, abstractmethod
 
 import CoolProp.CoolProp as CP
 import numpy as np
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 # Set up REFPROP path at module level
 try:
@@ -152,8 +156,8 @@ class CoolPropProperties(FluidPropertiesStrategy):
         try:
             self.CP = CP
             self.AS = CP.AbstractState("HEOS", fluid_name)
-        except ImportError:
-            raise ImportError("CoolProp library is required for CoolPropProperties")
+        except ImportError as err:
+            raise ImportError("CoolProp library is required for CoolPropProperties") from err
 
     def get_transport_properties(self, T: float, P: float) -> tuple:
         self.AS.update(self.CP.PT_INPUTS, P, T)
@@ -196,7 +200,7 @@ class CoolPropProperties(FluidPropertiesStrategy):
     def get_isentropic_exit_h_and_temp_from_s(self, s: float, pd: float, Td: float) -> float:
         # get isentropic exit temperature from isobaric entropy increase
         self.AS.update(self.CP.PT_INPUTS, pd, Td)
-        sd = self.AS.smass()
+        _sd = self.AS.smass()
         self.AS.update(self.CP.PSmass_INPUTS, pd, s)
         return self.AS.hmass(), self.AS.T()
 
@@ -358,7 +362,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                     self._init_correlation_states()
 
             except Exception as e:
-                print(f"REFPROP mixture initialization failed: {e}")
+                logging.debug(f"REFPROP mixture initialization failed: {e}")
                 self.refprop_available = False
 
         # CoolProp fallback initialization
@@ -388,7 +392,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             self.wet_state = self.CP.AbstractState("REFPROP", "WATER")
 
         except Exception as e:
-            print(f"Warning: Could not initialize correlation states: {e}")
+            logging.debug(f"Warning: Could not initialize correlation states: {e}")
             self.dry_state = None
             self.wet_state = None
 
@@ -397,7 +401,8 @@ class MixtureProperties(FluidPropertiesStrategy):
         # Calculate mass fraction of water for HAPropsSI
         if self.x_H2O > 0:
             total_mass = sum(
-                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97) for i, comp in enumerate(self.components)
+                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97)
+                for i, comp in enumerate(self.components)
             )
             h2o_mass = self.x_H2O * self.molar_masses["H2O"]
             self.w_H2O = h2o_mass / total_mass
@@ -413,7 +418,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             # Update mixture state at reference water content (4.5%)
             x_H2O_ref = 0.045
             ref_fractions = self.mole_fractions.copy()
-            h2o_idx = self.components.index("H2O")
+            # h2o_idx = self.components.index("H2O")
 
             # Adjust fractions for reference case
             scale_factor = (1 - x_H2O_ref) / (1 - self.x_H2O)
@@ -444,7 +449,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             return correlation_vectors
 
         except Exception as e:
-            print(f"Warning: Correlation calculation failed: {e}")
+            logging.debug(f"Warning: Correlation calculation failed: {e}")
             return np.array([3.5, 3.5])  # Default fallback
 
     def get_transport_properties(self, T: float, P: float) -> tuple:
@@ -560,7 +565,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                 self.mixture_state.update(self.CP.PT_INPUTS, P, T)
                 return self.mixture_state.smass()
             except Exception as e:
-                print(f"REFPROP entropy calculation failed: {e}")
+                logging.debug(f"REFPROP entropy calculation failed: {e}")
                 # Fall through to CoolProp
 
         # CoolProp fallback
@@ -570,7 +575,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                 s_ha = self.CP.HAPropsSI("Sha", "T", T, "P", P, "W", self.w_H2O)
                 return s_ha / (1 + self.w_H2O)  # Convert to per kg mixture
             except Exception as e:
-                print(f"HAPropsSI entropy calculation failed: {e}")
+                logging.debug(f"HAPropsSI entropy calculation failed: {e}")
 
         # Final fallback to dry air
         air = self.CP.AbstractState("HEOS", "Air")

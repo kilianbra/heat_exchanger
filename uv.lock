@@ -236,6 +236,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "coolprop" },
+    { name = "logging" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "scipy" },
@@ -256,6 +257,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "coolprop", specifier = ">=7.1.0" },
+    { name = "logging", specifier = ">=0.4.9.6" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "scipy", specifier = ">=1.16.0" },
@@ -371,6 +373,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/27/dd/4270b2c5e2ee49316
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b5/40/23569737873cc9637fd488606347e9dd92b9fa37ba4fcda1f98ee5219a97/latexcodec-3.0.1-py3-none-any.whl", hash = "sha256:a9eb8200bff693f0437a69581f7579eb6bca25c4193515c09900ce76451e452e", size = 18532 },
 ]
+
+[[package]]
+name = "logging"
+version = "0.4.9.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/93/4b/979db9e44be09f71e85c9c8cfc42f258adfb7d93ce01deed2788b2948919/logging-0.4.9.6.tar.gz", hash = "sha256:26f6b50773f085042d301085bd1bf5d9f3735704db9f37c1ce6d8b85c38f2417", size = 96029 }
 
 [[package]]
 name = "markdown"

@@ -128,19 +128,21 @@ def update_static_properties(
         # Build local variables for both sides to avoid scoping issues
         # Pressures
         if b_is_in:
-            p_in_loc = p_b
+            p_in_loc = p_in
             p_out_loc = p_guess
         else:
             p_in_loc = p_guess
-            p_out_loc = p_b
+            p_out_loc = p_out
 
         # Temperatures
         if a_is_in:
             T_in_loc = T_a
             T_out_loc = T_guess
+            rho_in_loc = rho_in
         else:
             T_in_loc = T_guess
             T_out_loc = T_a
+            rho_out_loc = rho_out
 
         # Densities
         rho_in_loc = fluid_props.get_density(T_in_loc, p_in_loc)
@@ -164,7 +166,7 @@ def update_static_properties(
     # 3) Newton Iteration (using finite-diff partial derivatives)
     # ------------------------------------------------------------
     converged = False
-    for iteration in range(max_iter):
+    for _iteration in range(max_iter):
         # Compute R1, R2 at current guesses
         R1, R2 = compute_residuals(T_guess, p_guess)
 

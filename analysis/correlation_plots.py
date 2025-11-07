@@ -130,8 +130,8 @@ f_exp_k_and_l_inline = [
 Re_cfd_inline = [380, 508, 658, 848, 1100, 1515, 1945, 2461, 2752, 3015]
 f_cfd_inline = [0.041, 0.034, 0.028, 0.025, 0.022, 0.0196, 0.0174, 0.0163, 0.016, 0.01702]
 
-Re_cfd_inline_3D = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
-f_cfd_inline_3D = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
+Re_cfd_inline_3d = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
+f_cfd_inline_3d = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
 j_exp_knl_inline = [
     0.00752,
     0.00820,
@@ -810,8 +810,8 @@ def _plot_tube_bank_interactive():
             cfd_scatter.set_visible(True)
 
             # 3D CFD data
-            cfd_3d_y = f_cfd_inline_3D
-            cfd_3d_scatter.set_offsets(np.column_stack((Re_cfd_inline_3D, cfd_3d_y)))
+            cfd_3d_y = f_cfd_inline_3d
+            cfd_3d_scatter.set_offsets(np.column_stack((Re_cfd_inline_3d, cfd_3d_y)))
             cfd_3d_scatter.set_visible(True)
         else:
             cfd_scatter.set_visible(False)
