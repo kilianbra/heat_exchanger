@@ -1,6 +1,8 @@
+from contextlib import suppress
+
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.widgets import RadioButtons, Slider
+import numpy as np
 from tabulate import tabulate
 
 from heat_exchanger.correlations import (
@@ -129,9 +131,21 @@ f_exp_k_and_l_inline = [
 # 2D CFD results for inline Xl*=1.25 Xt*=1.5 configuration
 Re_cfd_inline = [380, 508, 658, 848, 1100, 1515, 1945, 2461, 2752, 3015]
 f_cfd_inline = [0.041, 0.034, 0.028, 0.025, 0.022, 0.0196, 0.0174, 0.0163, 0.016, 0.01702]
+# 39k cells 3D CFD - probs not mesh independent
+# Re_cfd_inline_3D = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
+# f_cfd_inline_3D = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
 
-Re_cfd_inline_3d = [880, 1094, 1433, 1884, 2456, 2497, 4332, 4089]
-f_cfd_inline_3d = [0.0352, 0.0327, 0.0306, 0.0286, 0.0272, 0.0271, 0.0250, 0.0252]
+re_cfd_inline_3d = [2494, 3000, 4989, 5997, 8980] + [1164, 1013, 750, 470, 241, 78]
+f_cfd_inline_3d = [0.0181, 0.0170, 0.017936, 0.017934, 0.0183] + [
+    0.0254,
+    0.0269,
+    0.0308,
+    0.0396,
+    0.0609,
+    0.1482,
+]
+
+
 j_exp_knl_inline = [
     0.00752,
     0.00820,
@@ -618,19 +632,28 @@ def _plot_tube_bank_interactive():
     layout_radio = RadioButtons(rax_layout, ("Inline", "Staggered"), active=0)
 
     # Sliders - will be updated based on layout selection
-    xt_slider = Slider(sax_xt, "Xt*", 1.25, 3.0, valinit=default_xt, valstep=0.01)
+    xt_slider = Slider(sax_xt, "Xt*", 1.25, 6.0, valinit=default_xt, valstep=0.01)
     xl_slider = Slider(sax_xl, "Xl*", 1.2, 3.0, valinit=default_xl, valstep=0.01)
 
     # Lines
     (line_gg,) = ax.plot([], [], label="Gaddis and Gnielinski", color="#1f77b4", linestyle="-")
     (line_gs,) = ax.plot([], [], label="Gunter and Shaw", color="#9467bd", linestyle="--")
-    (line_mr,) = ax.plot([], [], label="Murray (REL)", color="#2ca02c", linestyle=":")
+    (line_mr,) = ax.plot([], [], label="Murray (REL)", color="#2ca02c", linestyle=":", marker="o")
     (line_gn,) = ax.plot([], [], label="Gnielinski VDI", color="#ff7f0e", linestyle="-.")
+    (line_zk,) = ax.plot([], [], label="Zukauskas (1972)", color="#8c564b", linestyle="-.")
 
     # Experimental scatters (created upfront, toggled visible)
     exp_scatter = ax.scatter([], [], label="Kays & London (exp)", color="black", marker="x")
     cfd_scatter = ax.scatter([], [], label="2D CFD", color="red", marker="o", s=50)
-    cfd_3d_scatter = ax.scatter([], [], label="3D CFD", color="orange", marker="s", s=50)
+    cfd_3d_scatter = ax.scatter(
+        [], [], label="3D CFD (249k cells)", color="orange", marker="s", s=50
+    )
+
+    # Brewer point (only shown for specific Xt*, Xl*)
+    brewer_scatter = ax.scatter([], [], label="Brewer", color="black", marker="+", s=70)
+
+    # Handle for shaded CFD agreement band (managed to avoid duplicates)
+    cfd_band = None
 
     ax.set_xscale("log")
     ax.set_xlabel("Re (based on tube diameter)")
@@ -646,7 +669,7 @@ def _plot_tube_bank_interactive():
 
         if is_inline:
             # Inline bounds: Xt* [1.25, 3.0], Xl* [1.2, 3.0]
-            xt_min, xt_max = 1.25, 3.0
+            xt_min, xt_max = 1.25, 6.0
             xl_min, xl_max = 1.2, 3.0
         else:
             # Staggered bounds: Xt* [1.25, 3.0], Xl* [0.6, 3.0]
@@ -670,7 +693,7 @@ def _plot_tube_bank_interactive():
         values: list[float], xl_val: float, xt_val: float, is_inline: bool
     ) -> list[float]:
         if is_inline:
-            valid = (xt_val >= 1.25) and (xt_val <= 3.0) and (xl_val >= 1.2) and (xl_val <= 3.0)
+            valid = (xt_val >= 1.25) and (xt_val <= 6.0) and (xl_val >= 1.2) and (xl_val <= 3.0)
         else:
             valid = (xt_val >= 1.25) and (xt_val <= 3.0) and (xl_val >= 0.6) and (xl_val <= 3.0)
         if not valid:
@@ -685,6 +708,7 @@ def _plot_tube_bank_interactive():
         gs_y = []
         mr_y = []
         gn_y = []
+        zk_y = []
 
         for Re in reynolds:  # based on tube diameter
             try:
@@ -716,11 +740,52 @@ def _plot_tube_bank_interactive():
                 else:
                     St_mr, f_mr = np.nan, np.nan
 
+                # Zukauskas (1972) correlation for tube banks (external crossflow)
+                # NOTE: Ignore the row correction (C2 = 1). Valid for 1e3 <= Re <= 2e5.
+                # Velocity for Re in Zukauskas is based on the mean velocity in the minimum free cross-section,
+                # i.e. G_max = G_inf * Xt / (Xt - 1); Re uses the tube diameter (Eq. 7 in Zukauskas 1972; nomenclature there).
+                if 1e3 <= Re <= 2e5:
+                    if is_inline:
+                        # Inline default: C1 = 0.27, m = 0.63 (Zukauskas)
+                        zuk_C1 = 0.27
+                        zuk_m = 0.63
+                        # Override m for specific (Xt*, Xl*) pairs (Fig. 51 guided values)
+                        # NOTE: would need to also get values of C1 but not shown in Zuk 1972
+                        overrides = {
+                            (1.30, 2.60): 0.60,
+                            (1.30, 2.00): 0.60,
+                            (1.30, 1.30): 0.63,
+                            (2.50, 2.00): 0.63,
+                            (2.50, 1.30): 0.65,
+                            (2.50, 1.10): 0.73,
+                            (1.65, 2.00): 0.62,
+                            (2.00, 2.00): 0.635,
+                            (1.95, 1.30): 0.645,
+                        }
+                        for (xt_o, xl_o), m_o in overrides.items():
+                            if np.isclose(xt_val, xt_o, rtol=0, atol=1e-3) and np.isclose(
+                                xl_val, xl_o, rtol=0, atol=1e-3
+                            ):
+                                zuk_m = m_o
+                                break
+                    else:
+                        # Staggered: spacing dependence per Zukauskas
+                        if xt_val / xl_val < 2:
+                            zuk_C1 = 0.35 * (xt_val / xl_val) ** 0.2
+                            zuk_m = 0.6
+                        else:
+                            zuk_C1 = 0.4
+                            zuk_m = 0.6
+                    nu_zk = zuk_C1 * (Re**zuk_m) * (pr_local**0.36)
+                else:
+                    nu_zk = np.nan
+
                 if metric_name == "Friction coeff.":
                     gg_y.append(f_gg)
                     gs_y.append(f_gs)
                     mr_y.append(f_mr)
                     gn_y.append(np.nan)  # Gnielinski VDI doesn't provide friction
+                    zk_y.append(np.nan)  # Zukauskas shown only for Stanton number
                 elif metric_name == "Stanton number":
                     St_gg = nu / (Re * pr_local)
                     St_gn = nu_gn / (Re * pr_local)
@@ -729,6 +794,7 @@ def _plot_tube_bank_interactive():
                     gs_y.append(np.nan)
                     mr_y.append(St_mr)
                     gn_y.append(St_gn)
+                    zk_y.append(nu_zk / (Re * pr_local) if np.isfinite(nu_zk) else np.nan)
                 else:  # j/f
                     j_gg = nu / (Re * pr_local ** (1 / 3))
                     gg_y.append(j_gg / f_gg if f_gg else np.nan)
@@ -739,33 +805,43 @@ def _plot_tube_bank_interactive():
                     gs_y.append(np.nan)
                     # Gnielinski VDI doesn't provide friction, so j/f not available
                     gn_y.append(np.nan)
+                    zk_y.append(np.nan)  # Zukauskas shown only for Stanton number
             except (AssertionError, Exception):
                 gg_y.append(np.nan)
                 gs_y.append(np.nan)
                 mr_y.append(np.nan)
                 gn_y.append(np.nan)
+                zk_y.append(np.nan)
 
         gg_y = mask_bounds(gg_y, xl_val, xt_val, is_inline)
         gs_y = mask_bounds(gs_y, xl_val, xt_val, is_inline)
         mr_y = mask_bounds(mr_y, xl_val, xt_val, is_inline)
         gn_y = mask_bounds(gn_y, xl_val, xt_val, is_inline)
-        return gg_y, gs_y, mr_y, gn_y, is_inline
+        zk_y = mask_bounds(zk_y, xl_val, xt_val, is_inline)
+        return gg_y, gs_y, mr_y, gn_y, zk_y, is_inline
 
     def update_plot(_=None):
+        nonlocal cfd_band
         metric = metric_radio.value_selected
         layout_name = layout_radio.value_selected
         xl_val = xl_slider.val
         xt_val = xt_slider.val
 
-        gg_y, gs_y, mr_y, gn_y, is_inline = compute_series(metric, layout_name, xl_val, xt_val)
+        gg_y, gs_y, mr_y, gn_y, zk_y, is_inline = compute_series(
+            metric, layout_name, xl_val, xt_val
+        )
         line_gg.set_data(reynolds, gg_y)
         line_gs.set_data(reynolds, gs_y)
         line_mr.set_data(reynolds, mr_y)
         line_gn.set_data(reynolds, gn_y)
+        line_zk.set_data(reynolds, zk_y)
 
         # Show/hide lines based on layout and metric
         line_mr.set_visible(not is_inline)  # Murray only for staggered
-        line_gn.set_visible(metric == "Stanton number")  # Gnielinski VDI only for Stanton number
+        # Gnielinski VDI only for Stanton number
+        line_gn.set_visible(metric == "Stanton number")
+        # Zukauskas only for Stanton number
+        line_zk.set_visible(metric == "Stanton number")
 
         # Y-axis scaling
         ax.set_yscale("log" if metric != "j/f" else "linear")
@@ -811,11 +887,53 @@ def _plot_tube_bank_interactive():
 
             # 3D CFD data
             cfd_3d_y = f_cfd_inline_3d
-            cfd_3d_scatter.set_offsets(np.column_stack((Re_cfd_inline_3d, cfd_3d_y)))
+            cfd_3d_scatter.set_offsets(np.column_stack((re_cfd_inline_3d, cfd_3d_y)))
             cfd_3d_scatter.set_visible(True)
+
+            # Manage shaded agreement band between f_GG and 0.6 * f_GG without accumulating artists
+            lower_band = [0.6 * fv if np.isfinite(fv) else np.nan for fv in gg_y]
+            if cfd_band is None:
+                cfd_band = ax.fill_between(
+                    reynolds,
+                    lower_band,
+                    gg_y,
+                    color="blue",
+                    alpha=0.1,
+                    label="G&G -40%",
+                    zorder=0,
+                )
+            else:
+                # Replace existing band with updated data
+                with suppress(Exception):
+                    cfd_band.remove()
+                cfd_band = ax.fill_between(
+                    reynolds,
+                    lower_band,
+                    gg_y,
+                    color="blue",
+                    alpha=0.1,
+                    label="G&G -40%",
+                    zorder=0,
+                )
+            cfd_band.set_visible(True)
         else:
             cfd_scatter.set_visible(False)
             cfd_3d_scatter.set_visible(False)
+            if cfd_band is not None:
+                cfd_band.set_visible(False)
+
+        # Brewer point overlay when Inline, Friction coeff., Xt*=6.0 and Xl*=1.25
+        show_brewer = (
+            is_inline
+            and metric == "Friction coeff."
+            and abs(xl_val - 1.25) < 1e-6
+            and abs(xt_val - 6.0) < 1e-6
+        )
+        if show_brewer:
+            brewer_scatter.set_offsets(np.array([[3000.0, 0.05]]))
+            brewer_scatter.set_visible(True)
+        else:
+            brewer_scatter.set_visible(False)
 
         ax.relim()
         if metric == "j/f":
@@ -824,7 +942,29 @@ def _plot_tube_bank_interactive():
             ax.set_ylim(0.01, 2e0)  # Include CFD data down to ~0.016
         else:
             ax.autoscale(axis="y")
-        ax.legend(loc="best")
+        # Dynamic legend: include only visible artists
+        legend_artists = [
+            art
+            for art in [
+                line_gg,
+                line_gs,
+                line_mr,
+                line_gn,
+                line_zk,
+                exp_scatter,
+                cfd_scatter,
+                cfd_3d_scatter,
+                brewer_scatter,
+            ]
+            if art.get_visible()
+        ]
+        if cfd_band is not None and cfd_band.get_visible():
+            legend_artists.append(cfd_band)
+        if legend_artists:
+            ax.legend(handles=legend_artists, loc="best")
+        else:
+            # Fallback to default legend behavior if everything is hidden (unlikely)
+            ax.legend(loc="best")
         plt.draw()
 
     def on_layout_change(_):
