@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from abc import ABC, abstractmethod
 
@@ -8,19 +9,44 @@ import numpy as np
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Set up REFPROP path at module level
+# Configure REFPROP path from environment or common defaults (non-fatal if absent)
 try:
-    if sys.platform == "darwin":
-        CP.set_config_string(
-            CP.ALTERNATIVE_REFPROP_PATH,
-            r"/Users/kilianbartsch/Library/CloudStorage/OneDrive-UniversityofCambridge/Documents/PhD/Codebases/REFPROP",
-        )
+    # 1) Environment variables take priority
+    refprop_path = os.environ.get("REFPROP_PATH") or os.environ.get("RPPREFIX")
+    candidate_paths = []
+
+    # 2) If not provided, try platform-specific common install locations
+    if not refprop_path:
+        if sys.platform.startswith("win"):
+            candidate_paths = [
+                r"C:\\Program Files\\REFPROP",
+                r"C:\\Program Files (x86)\\REFPROP",
+            ]
+        elif sys.platform == "darwin":
+            candidate_paths = [
+                "/Applications/REFPROP",
+                "/usr/local/REFPROP",
+            ]
+        elif sys.platform.startswith("linux"):
+            candidate_paths = [
+                "/usr/local/share/REFPROP",
+                "/opt/REFPROP",
+            ]
+        for p in candidate_paths:
+            if os.path.isdir(p):
+                refprop_path = p
+                break
+
+    if refprop_path:
+        CP.set_config_string(CP.ALTERNATIVE_REFPROP_PATH, refprop_path)
+        logging.info(f"REFPROP path set to: {CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}")
     else:
-        CP.set_config_string(CP.ALTERNATIVE_REFPROP_PATH, r"C:\Program Files (x86)\REFPROP")
+        logging.debug("REFPROP path not set; using CoolProp defaults.")
 except Exception as e:
-    raise ImportError(
-        f"Error setting up REFPROP: {str(e)} with search path: {CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}"
-    ) from e
+    logging.warning(
+        f"Failed to configure REFPROP path: {e}. Using CoolProp defaults. Current path: "
+        f"{CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}"
+    )
 
 
 class FluidPropertiesStrategy(ABC):
