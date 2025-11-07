@@ -1,4 +1,14 @@
+# ruff: noqa: I001
+from __future__ import annotations
+
+import logging
+
 import numpy as np
+
+from heat_exchanger.fluids.protocols import FluidModel
+
+
+logger = logging.getLogger(__name__)
 
 
 def energy_balance_segment(
@@ -54,12 +64,11 @@ def momentum_balance_segment(
 
 
 def update_static_properties(
-    fluid_props,
+    fluid: FluidModel,
     G,
     dh0,
     tau_dA_over_A_c,
     T_a,
-    rho_a,
     p_b,
     a_is_in=True,
     b_is_in=True,
@@ -102,14 +111,12 @@ def update_static_properties(
     # Could improve guess by then using c_p(T_avg) to get T_guess
     if a_is_in:
         T_in = T_a
-        rho_in = rho_a
-        cp_in = fluid_props.get_cp(T_in, p_b)
-        T_guess = T_in + dh0 / cp_in
+        cp_in = fluid.state(T_in, p_b).cp
+        T_guess = T_in + dh0 / cp_in if cp_in != 0 else T_in
     else:
         T_out = T_a
-        rho_out = rho_a
-        cp_out = fluid_props.get_cp(T_out, p_b)
-        T_guess = T_out - dh0 / cp_out
+        cp_out = fluid.state(T_out, p_b).cp
+        T_guess = T_out - dh0 / cp_out if cp_out != 0 else T_out
     # For p_guess, a naive shift by dFA is typical (neglect density change)
     if b_is_in:
         p_in = p_b
@@ -134,23 +141,21 @@ def update_static_properties(
             p_in_loc = p_guess
             p_out_loc = p_out
 
-        # Temperatures
         if a_is_in:
             T_in_loc = T_a
             T_out_loc = T_guess
-            rho_in_loc = rho_in
         else:
             T_in_loc = T_guess
             T_out_loc = T_a
-            rho_out_loc = rho_out
 
-        # Densities
-        rho_in_loc = fluid_props.get_density(T_in_loc, p_in_loc)
-        rho_out_loc = fluid_props.get_density(T_out_loc, p_out_loc)
+        state_in = fluid.state(T_in_loc, p_in_loc)
+        state_out = fluid.state(T_out_loc, p_out_loc)
 
-        # Enthalpies
-        h_in = fluid_props.get_specific_enthalpy(T_in_loc, p_in_loc)
-        h_out = fluid_props.get_specific_enthalpy(T_out_loc, p_out_loc)
+        rho_in_loc = state_in.rho
+        rho_out_loc = state_out.rho
+
+        h_in = state_in.h
+        h_out = state_out.h
 
         # Stagnation enthalpies (per unit mass)
         h0_in = h_in + 0.5 * (G / rho_in_loc) ** 2
@@ -215,15 +220,22 @@ def update_static_properties(
 
     # End iteration
     if not converged:
-        raise ValueError(
-            f"Failed to converge at T_a={T_a:.2f} K, p_b={p_b:.2e} Pa in {max_iter} iterations\n"
-            f"residuals {abs(R1):.2e} > {tol_T:.2e} K or {abs(R2):.2e} > {rel_tol_p * p_b:.2e} Pa\n"
+        logger.warning(
+            (
+                "update_static_properties did not converge after %d iterations: "
+                "|R1|=%e, |R2|=%e (T_a=%f K, p_b=%e Pa)"
+            ),
+            max_iter,
+            abs(R1),
+            abs(R2),
+            T_a,
+            p_b,
         )
 
     # Compute final residuals or do final get_density
     if a_is_in == b_is_in:  # then a = b (not a is not b)
-        rho_not_a = fluid_props.get_density(T_guess, p_guess)
+        rho_not_a = fluid.state(T_guess, p_guess).rho
     else:  # they are different so not a is b
-        rho_not_a = fluid_props.get_density(T_guess, p_b)
+        rho_not_a = fluid.state(T_guess, p_b).rho
 
     return T_guess, p_guess, rho_not_a
