@@ -656,7 +656,7 @@ def calculate_Hg_dont_use(Red, Xl, Xt, inline=False, Nr=11):
         if not (0.6 <= Xl <= 3):
             raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
         if not (Nr >= 5):
-            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+            raise ValueError(f"Nr value {Nr:} is not greater than 5")
         if Xd is None or Xd < 1.25:
             raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
 
@@ -695,7 +695,7 @@ def calculate_Hg(Red, Xl, Xt, inline=False, Nr=11):
         if not (0.6 <= Xl <= 3):
             raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
         if not (Nr >= 5):
-            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+            raise ValueError(f"Nr value {Nr:} is not greater than 5")
         if Xd is None or Xd < 1.25:
             raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
 
