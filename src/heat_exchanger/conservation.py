@@ -118,12 +118,7 @@ def update_static_properties(
         cp_out = fluid.state(T_out, p_b).cp
         T_guess = T_out - dh0 / cp_out if cp_out != 0 else T_out
     # For p_guess, a naive shift by dFA is typical (neglect density change)
-    if b_is_in:
-        p_in = p_b
-        p_guess = p_b - tau_dA_over_A_c
-    else:
-        p_out = p_b
-        p_guess = p_b + tau_dA_over_A_c
+    p_guess = p_b - tau_dA_over_A_c if b_is_in else p_b + tau_dA_over_A_c
 
     # ------------------------------------------------------------
     # 2) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
@@ -135,11 +130,11 @@ def update_static_properties(
         # Build local variables for both sides to avoid scoping issues
         # Pressures
         if b_is_in:
-            p_in_loc = p_in
+            p_in_loc = p_b
             p_out_loc = p_guess
         else:
             p_in_loc = p_guess
-            p_out_loc = p_out
+            p_out_loc = p_b
 
         if a_is_in:
             T_in_loc = T_a
@@ -232,10 +227,4 @@ def update_static_properties(
             p_b,
         )
 
-    # Compute final residuals or do final get_density
-    if a_is_in == b_is_in:  # then a = b (not a is not b)
-        rho_not_a = fluid.state(T_guess, p_guess).rho
-    else:  # they are different so not a is b
-        rho_not_a = fluid.state(T_guess, p_b).rho
-
-    return T_guess, p_guess, rho_not_a
+    return T_guess, p_guess
