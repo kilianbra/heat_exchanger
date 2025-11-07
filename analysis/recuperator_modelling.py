@@ -7,9 +7,9 @@ from heat_exchanger.correlations import (
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 from heat_exchanger.fluid_properties import (
+    CombustionProductsProperties,
     CoolPropProperties,
     PerfectGasProperties,
-    CombustionProductsProperties,
     RefPropProperties,
 )
 from heat_exchanger.geometry_tube_bank import (

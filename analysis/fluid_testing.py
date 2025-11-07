@@ -1,13 +1,14 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import PercentFormatter
 from tabulate import tabulate
+
 from heat_exchanger.fluid_properties import (
+    CombustionProductsProperties,
     CoolPropProperties,
     PerfectGasProperties,
     RefPropProperties,
 )
-from heat_exchanger.fluid_properties import CombustionProductsProperties
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
 
 BAR_TO_PA = 1e5
 
@@ -123,7 +124,7 @@ def plot_cp_kerosene_products_three_FAR_as_function_of_temperature():
 
     """
     FARs = [0.0, 0.0135, 0.027]
-    H2_FARs = [0.0, 0.0036, 0.0072]
+    # H2_FARs = [0.0, 0.0036, 0.0072]
     T_vals = np.linspace(300.0, 1800.0, 50)
     P = 1.0 * BAR_TO_PA
 

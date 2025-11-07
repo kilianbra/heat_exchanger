@@ -1,8 +1,8 @@
 from contextlib import suppress
 
 import matplotlib.pyplot as plt
-from matplotlib.widgets import RadioButtons, Slider
 import numpy as np
+from matplotlib.widgets import RadioButtons, Slider
 from tabulate import tabulate
 
 from heat_exchanger.correlations import (
