@@ -1,3 +1,5 @@
+import logging
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
@@ -8,9 +10,14 @@ from heat_exchanger.fluid_properties import (
     CoolPropProperties,
     PerfectGasProperties,
     RefPropProperties,
+    configure_refprop,
 )
+from heat_exchanger.logging_utils import configure_logging
 
 BAR_TO_PA = 1e5
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_strategies():
@@ -271,17 +278,29 @@ def main_table():
 
 
 if __name__ == "__main__":
+    # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
+    configure_logging(logging.INFO)
+    configure_refprop()  # Annoying to have this here but if I want to have logging from
+    # refprop configuration and path then I need to either configure logging before I import
+    # the fluid_properties module or I need to configure refprop after configuring logging
+
     FAR = 0.0135
     P = 1.0e5
     model = CombustionProductsProperties(fuel_type="C092H2", FAR_mass=FAR, prefer_refprop=True)
     for T in np.linspace(630.0, 1000.0, 5):
-        # cps = model.get_cp(T, P)
-        cps = model.mixture_state.cpmass()
-        print(f"T={T:.1f} K, cp={cps:.3e} J/kg-K")
+        if model.mixture_state is not None:
+            model.mixture_state.update(model.mixture.CP.PT_INPUTS, P, T)
+            cps = model.mixture_state.cpmass()
+        else:
+            cps = model.get_cp(T, P)
+        # For digit alignment even if negative, add a space for positives via {cps: +10.3e}
+        logger.info(f"T={T:6.1f} K, cp={cps:+8.3e} J/kg-K")
+        # TODO: dig deeper into why returning -inf cp
+
     # main_table()
     # Kerosene products cp(T) plots
-    plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
-    plt.show()
+    # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
+    # plt.show()
 
     # plot_mu_combustion_products_one_temp_as_function_of_FAR(T=750.0, P=0.4 * BAR_TO_PA, FAR_H2=None, FAR_kero=None, prefer_refprop=True)
     # plt.show()
