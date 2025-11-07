@@ -5,6 +5,8 @@ description = "Heat exchanger model for first order evaluating and designing."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "coolprop>=7.1.0",
+    "logging>=0.4.9.6",
     "matplotlib>=3.10.3",
     "numpy>=2.3.1",
     "scipy>=1.16.0",
@@ -41,6 +43,7 @@ ignore = [
     "N802",  # Allow function names with capital letters
     "N803",  # Allow argument names with capital letters
     "N806",  # Allow variable names in functions with capital letters
+    "N817",  # Allow import CoolProp as CP
     "UP038", # allow isinstance(var, (int, float)) rather than requiring isinstance(var, int | float)
 ]
 

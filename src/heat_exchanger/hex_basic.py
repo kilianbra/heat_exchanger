@@ -1,42 +1,6 @@
 import numpy as np
 
 
-def dp_friction_only(
-    area_friction_over_minimum_flow, mass_velocity, one_over_rho_mean, friction_factor
-):
-    return (
-        1
-        / 2
-        * mass_velocity**2
-        * friction_factor
-        * area_friction_over_minimum_flow
-        * one_over_rho_mean
-    )
-
-
-def dp_tube_bank(
-    area_friction_over_minimum_flow,
-    mass_velocity,
-    rho_in,
-    rho_out,
-    sigma,
-    friction_factor,
-    one_over_rho_mean=None,
-):
-    if one_over_rho_mean is None:
-        one_over_rho_mean = (1 / rho_in + 1 / rho_out) / 2
-    dp_momentum = 1 / 2 * mass_velocity**2 * (1 + sigma**2) * (1 / rho_out - 1 / rho_in)
-    dp_friction = (
-        1
-        / 2
-        * mass_velocity**2
-        * friction_factor
-        * area_friction_over_minimum_flow
-        * one_over_rho_mean
-    )
-    return dp_momentum + dp_friction
-
-
 def epsilon(ntu, c_ratio):
     """Calculate effectiveness of counterflow heat_exchanger.
 
@@ -96,3 +60,101 @@ def ntu(
         + 1 / stanton_2 / area_ratio_2_q_over_o * c_min / heat_capacity_flux_2
     )
     return 1 / inv_ntu
+
+
+def dp_friction_only(
+    area_friction_over_minimum_flow, mass_velocity, one_over_rho_mean, friction_factor
+):
+    return (
+        1
+        / 2
+        * mass_velocity**2
+        * friction_factor
+        * area_friction_over_minimum_flow
+        * one_over_rho_mean
+    )
+
+
+def dp_tube_bank(
+    area_friction_over_minimum_flow,
+    mass_velocity,
+    rho_in,
+    rho_out,
+    sigma,
+    friction_factor,
+    one_over_rho_mean=None,
+):
+    if one_over_rho_mean is None:
+        one_over_rho_mean = (1 / rho_in + 1 / rho_out) / 2
+    dp_momentum = 1 / 2 * mass_velocity**2 * 2 * (1 / rho_out - 1 / rho_in)
+    dp_friction = (
+        1
+        / 2
+        * mass_velocity**2
+        * friction_factor
+        * area_friction_over_minimum_flow
+        * one_over_rho_mean
+    )
+    return dp_momentum + dp_friction
+
+
+def dp_general(
+    area_friction_over_minimum_flow,
+    mass_velocity,
+    rho_in,
+    rho_out,
+    sigma,
+    friction_factor,
+    K_contraction=0,
+    K_expansion=0,
+    one_over_rho_mean=None,
+):
+    """
+    General pressure drop equation for a heat exchanger. See Shah and Sekulic 2003 eqn 6.28
+
+    Parameters
+    ----------
+    area_friction_over_minimum_flow : float
+        Ratio of friction area to minimum flow area.
+    mass_velocity : float
+        Mass velocity.
+    rho_in : float
+        Density at inlet.
+    rho_out : float
+        Density at outlet.
+    sigma : float
+        Expansion ratio.
+    friction_factor : float
+        Friction factor.
+    K_contraction : float
+        Contraction coefficient.
+    K_expansion : float
+        Expansion coefficient.
+    one_over_rho_mean : float
+        Mean of one over density.
+
+    Returns
+    -------
+    dp : float
+        Pressure drop.
+    """
+
+    if one_over_rho_mean is None:
+        one_over_rho_mean = (1 / rho_in + 1 / rho_out) / 2
+    dp_momentum = 1 / 2 * mass_velocity**2 * 2 * (1 / rho_out - 1 / rho_in)
+    dp_entry_exit = (
+        1
+        / 2
+        * mass_velocity**2
+        * 2
+        * (1 / rho_in * (1 - sigma**2 + K_contraction) - 1 / rho_out * (1 - sigma**2 + K_expansion))
+    )
+    dp_friction = (
+        1
+        / 2
+        * mass_velocity**2
+        * friction_factor
+        * area_friction_over_minimum_flow
+        * one_over_rho_mean
+    )
+    return dp_momentum + dp_friction + dp_entry_exit

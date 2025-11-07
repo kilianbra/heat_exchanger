@@ -141,6 +141,32 @@ wheels = [
 ]
 
 [[package]]
+name = "coolprop"
+version = "7.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a0/1f/c2fbb0bd6aaa4593730889ed993409283d46ece4b0d1311046ea52f053f4/coolprop-7.1.0.tar.gz", hash = "sha256:c7b50f368e31a7c4589a8e05e54d90d66c94488d7d62ae03ec6f13425c621a44", size = 26007425 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/12/63e8862d31f4297013f552bfe12f8e891402faaaca6d97db7dfdfa554cae/coolprop-7.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:409219f50dc15d8be4313d5cc63f3eac947ddcc6c244977e140b2744f5b7f678", size = 5832259 },
+    { url = "https://files.pythonhosted.org/packages/19/aa/2368dc6c29e50f9baf99451cb1f98b4b696075965e3d09c7ad6d33767245/coolprop-7.1.0-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:2cb71b904da087820376775a975c7e8505fb2f815cbb553359683b9b6a2d0621", size = 5944421 },
+    { url = "https://files.pythonhosted.org/packages/ce/39/8d466e45a976cfb0c0382ae089484f742eefaf1df8c3567834c0cbf56751/coolprop-7.1.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f87ee277a0ce4622abd436213c3b0d6e460b91041e2abe3570a59b569379f81c", size = 14187055 },
+    { url = "https://files.pythonhosted.org/packages/c8/ea/4fbe63c9e48bf349f26635686be521d6c7ee90379d6c304859ca46a2631e/coolprop-7.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b4d9b370b47d30d56be564b4b96746cf995ecb50d2071b4b4b4725a8a6e4f031", size = 14761216 },
+    { url = "https://files.pythonhosted.org/packages/a2/c2/fb3bd4c915bb081862e2712369f8bdc0886e6c151fd55d52b6ccbfaeaf5e/coolprop-7.1.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:4b4e38f745c88237a7b859442e951a92f7e6162d3ecd3e2340cfef0fc8327d2e", size = 15020242 },
+    { url = "https://files.pythonhosted.org/packages/f4/47/f8d65695ef9566d5209168df4834aea934db9c07964d339df69b127faf1e/coolprop-7.1.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:c7528412e96990fc14d75a9f23336f2f12807940c742bb3036d9d2445afc63d9", size = 15825092 },
+    { url = "https://files.pythonhosted.org/packages/e8/b5/e359f68e103873f9abce7a02140388354463e64049b31d6fac6d544b0459/coolprop-7.1.0-cp312-cp312-win32.whl", hash = "sha256:3a907d51e867fa4a029aeaae7f6b26ba37af351662cddb7487a9a7ac291b9821", size = 5204982 },
+    { url = "https://files.pythonhosted.org/packages/17/50/77312780cfc11b6f5648b89107b50065f47656e6f184ff6cb0f779351e79/coolprop-7.1.0-cp312-cp312-win_amd64.whl", hash = "sha256:a6fa505f01593bc5a8deb2753bcba180be83f20cb399bc18f72ae72f49d6e5d6", size = 5368167 },
+    { url = "https://files.pythonhosted.org/packages/07/6d/5cfe87fa1742301dd5b84627c5522143b1e813385a6daa2056138fba004f/coolprop-7.1.0-cp312-cp312-win_arm64.whl", hash = "sha256:843ee4011cee3b03d69091806ea59856d177a5814c2f0db79d119d2e61799b96", size = 5263218 },
+    { url = "https://files.pythonhosted.org/packages/4c/92/46f6324c1ae3302eeeae9ca6793446fb4fe7be3ce8bfa61b943d6d2641c5/coolprop-7.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:e4593275d76664500abfbd2aef107386ca7fd18d08dbf4ccdc2b8237dce9882c", size = 5830736 },
+    { url = "https://files.pythonhosted.org/packages/72/4d/9adc59a29c2f86e4e5fd929225c09cd9d28c083e23e7bdc420f300290b73/coolprop-7.1.0-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:2784945298f9aba6ce5c1dbbd99056dcdba8603348b8fe914198c8a207029c29", size = 5943302 },
+    { url = "https://files.pythonhosted.org/packages/fa/92/cebfcacac1a54a9fd9956e9b45833c3a701ab2a7586ae403bfaa03996e49/coolprop-7.1.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:304bf1cf09e51da64fbc39f1c7a60fceb5afa72870435d2afc901452eef90e6e", size = 14166926 },
+    { url = "https://files.pythonhosted.org/packages/51/ae/df52dd9bbe43f070f65f217fa4de89927430961aa4c58bed0f26fbfc30d9/coolprop-7.1.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:052e40c79f643b2fb159dc85c8fb0940320080e399a19f2a3450bf63cb18bf47", size = 14746846 },
+    { url = "https://files.pythonhosted.org/packages/5e/9f/c0fb7a58f0bf8ad06ab252c1b56a8f204c4186d0d23ee16bd7771c9e9460/coolprop-7.1.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:b1c250f6121b0a2b7c997506007f4e58ccc78689c9bb7c6526359352f18d4365", size = 15003109 },
+    { url = "https://files.pythonhosted.org/packages/7e/b4/fc0d138735b790fac99602827cda811a45b975b06b5d8c62413c00019d98/coolprop-7.1.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:3186d12d05c4569e92ad9c9edd9a43a119d0be5bffcc276e7045882203e055f3", size = 15802760 },
+    { url = "https://files.pythonhosted.org/packages/4e/4d/6272bb064bc9cf2ffb74da56113f7ed712ff11a91747030fb5ff1d9ed3f5/coolprop-7.1.0-cp313-cp313-win32.whl", hash = "sha256:44f54fe5d5a2a7da9539be6cd7c9ccc697f22f8f20f70f780ab826ab7c15b890", size = 5204993 },
+    { url = "https://files.pythonhosted.org/packages/0c/8d/fd5779a762b0a506cb05adc734ec5c7cd47108848d7ec6ec114c33215039/coolprop-7.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:9846aabfcc7c72d8fb8f1bd02f6c58125640b6e8e4321487c4746ede7a4590da", size = 5367939 },
+    { url = "https://files.pythonhosted.org/packages/ac/59/6048ec334b86f869c0e348a20ee11d080a6528b5365d112305dc62de89b1/coolprop-7.1.0-cp313-cp313-win_arm64.whl", hash = "sha256:ef4535b4301a0bfa85b9766011a26c261081689175a5056be875c55ffa731659", size = 5263188 },
+]
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
@@ -209,6 +235,8 @@ name = "heat-exchanger"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "coolprop" },
+    { name = "logging" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "scipy" },
@@ -228,6 +256,8 @@ docs = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coolprop", specifier = ">=7.1.0" },
+    { name = "logging", specifier = ">=0.4.9.6" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "scipy", specifier = ">=1.16.0" },
@@ -343,6 +373,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/27/dd/4270b2c5e2ee49316
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b5/40/23569737873cc9637fd488606347e9dd92b9fa37ba4fcda1f98ee5219a97/latexcodec-3.0.1-py3-none-any.whl", hash = "sha256:a9eb8200bff693f0437a69581f7579eb6bca25c4193515c09900ce76451e452e", size = 18532 },
 ]
+
+[[package]]
+name = "logging"
+version = "0.4.9.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/93/4b/979db9e44be09f71e85c9c8cfc42f258adfb7d93ce01deed2788b2948919/logging-0.4.9.6.tar.gz", hash = "sha256:26f6b50773f085042d301085bd1bf5d9f3735704db9f37c1ce6d8b85c38f2417", size = 96029 }
 
 [[package]]
 name = "markdown"
