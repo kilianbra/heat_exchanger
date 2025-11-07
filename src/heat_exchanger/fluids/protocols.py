@@ -66,6 +66,7 @@ class FluidModel(Protocol):
 
 
 class PerfectGasFluid:
+    # region Docstring
     """
     Perfect gas model with constant specific heat and Sutherland viscosity.
     Default values are for Air.
@@ -107,7 +108,10 @@ class PerfectGasFluid:
     Gamma from CUED Engineering Databook
     """
 
+    # endregion
+
     R_UNIVERSAL = 8314.462618  # J/(kmol·K)
+    # region Presets
     _PRESET_LIBRARY: ClassVar[dict[str, dict[str, float]]] = {
         "air": {
             "M": 28.97,
@@ -170,6 +174,7 @@ class PerfectGasFluid:
         for _alias in _aliases:
             _PRESET_ALIASES[_alias.lower()] = _canonical
 
+    # endregion
     def __init__(
         self,
         M: float = 28.97,
@@ -193,6 +198,7 @@ class PerfectGasFluid:
     def state(self, T: float, P: float) -> FluidState:
         return _PerfectGasState(T=T, P=P, _model=self)
 
+    # region Preset properties / methods
     @property
     def preset_name(self) -> str | None:
         """Return the preset identifier if constructed via :meth:`from_name`."""
@@ -227,6 +233,8 @@ class PerfectGasFluid:
         params = dict(cls._PRESET_LIBRARY[canonical])
         label = cls._PRESET_DISPLAY_NAMES.get(canonical, canonical.title())
         return cls(label=label, **params)
+
+    # endregion
 
 
 @dataclass(frozen=True)
