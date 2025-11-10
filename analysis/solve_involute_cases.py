@@ -22,7 +22,7 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid
+from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid, CoolPropFluid
 from heat_exchanger.involute_inboard import (
     F_inboard,
     MarchingOptions,
@@ -39,12 +39,7 @@ WALL_DENSITY_304_SS = 7930.0
 WALL_MATERIAL_304_SS = "304 Stainless Steel"
 
 
-def _n_rows_axial_from_length(axial_length: float, spacing_trv: float, tube_od: float) -> int:
-    """Return integer axial tube-row count from axial length and spacing."""
-    return int(round(axial_length / (spacing_trv * tube_od)))
-
-
-def load_case(case: str) -> dict[str, object]:
+def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
     """Return configuration for a named case.
 
     Supported case identifiers (case-insensitive):
@@ -55,6 +50,14 @@ def load_case(case: str) -> dict[str, object]:
       - ``ahjeb_toc_outb`` (Outboard ToC Variant)
       - ``chinese`` (preset_chinese == 1, K. He et al. 2024)
     """
+    if fluid_model == "PerfectGas":
+        air = PerfectGasFluid.from_name("Air")
+        helium = PerfectGasFluid.from_name("Helium")
+        h2 = PerfectGasFluid.from_name("H2")  # should be parahydrogen
+    elif fluid_model == "CoolProp":
+        air = CoolPropFluid("Air")
+        helium = CoolPropFluid("Helium")
+        h2 = CoolPropFluid("ParaHydrogen")
 
     case_key = case.strip().lower()
     for sep in (" ", "-", "/"):
@@ -75,8 +78,8 @@ def load_case(case: str) -> dict[str, object]:
     cases: dict[str, dict[str, object]] = {
         "viper": {
             "case_name": "VIPER (REL)",
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("Helium"),
+            "fluid_hot": air,
+            "fluid_cold": helium,
             "Th_in": 298.0,
             "Ph_in": 1.02e5,
             "Tc_in": 96.0,
@@ -97,8 +100,8 @@ def load_case(case: str) -> dict[str, object]:
         },
         "custom": {
             "case_name": "Custom Design",
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "fluid_hot": air,
+            "fluid_cold": h2,
             "Th_in": 500.0,
             "Ph_in": 1.02e5,
             "Tc_in": 40.0,
@@ -119,8 +122,8 @@ def load_case(case: str) -> dict[str, object]:
         },
         "ahjeb": {
             "case_name": "AHJE",  # version B
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "fluid_hot": air,
+            "fluid_cold": h2,
             "Th_in": 500.0,
             "Ph_in": 1.02e5,
             "Tc_in": 40.0,
@@ -141,8 +144,8 @@ def load_case(case: str) -> dict[str, object]:
         },
         "ahjeb_toc": {
             "case_name": "AHJE ToC",  # version B - H2TOCv2 ExPHT
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "fluid_hot": air,
+            "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
             "Tc_in": 287.0,
@@ -163,8 +166,8 @@ def load_case(case: str) -> dict[str, object]:
         },
         "ahjeb_toc_outb": {
             "case_name": "AHJE ToC Outb",  # version B - H2TOCv2 ExPHT (Outboard)
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "fluid_hot": air,
+            "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
             "Tc_in": 287.0,
@@ -185,8 +188,8 @@ def load_case(case: str) -> dict[str, object]:
         },
         "chinese": {
             "case_name": "K. He 2024",
-            "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "fluid_hot": air,
+            "fluid_cold": h2,
             "Th_in": 734.0,
             "Ph_in": 2.62e5,
             "Tc_in": 90.0,
@@ -417,11 +420,11 @@ def _zero_d_two_step_guess(
     return float(Th_o2), float(Ph_o2)
 
 
-def main(case: str = "viper") -> None:
+def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
     configure_logging(logging.INFO)
 
-    params = load_case(case)
+    params = load_case(case, fluid_model)
 
     geom = RadialInvoluteGeometry(
         tube_outer_diam=params["tube_outer_diam"],
@@ -572,8 +575,8 @@ def main(case: str = "viper") -> None:
 
 
 if __name__ == "__main__":
-    main(case="chinese")
-    main(case="ahjeb")
-    main(case="ahjeb_toc")
+    main(case="chinese", fluid_model="CoolProp")
+    main(case="ahjeb", fluid_model="CoolProp")
+    main(case="ahjeb_toc", fluid_model="CoolProp")
     # main(case="ahjeb_toc_outb")
-    main(case="viper")
+    main(case="viper", fluid_model="CoolProp")

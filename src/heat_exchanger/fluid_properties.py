@@ -191,7 +191,6 @@ class CoolPropProperties(FluidPropertiesStrategy):
     """
 
     def __init__(self, fluid_name: str):
-        configure_refprop()
         self.fluid = fluid_name
         try:
             self.CP = CP

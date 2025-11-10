@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import ClassVar, Protocol
 
+import CoolProp.CoolProp as CP
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -293,8 +294,119 @@ class _PerfectGasState:
         return np.sqrt(m.gamma * m.R_specific * self.T)
 
 
+class CoolPropFluid:
+    """
+    Real fluid model using CoolProp's high-accuracy equations of state (HEOS backend).
+
+    Parameters
+    ----------
+    fluid_name : str
+        CoolProp fluid identifier (e.g., "Air", "Water", "Nitrogen", "CO2").
+        See http://www.coolprop.org/fluid_properties/PurePseudoPure.html for available fluids.
+    backend : str, default "HEOS"
+        CoolProp backend to use. Options include:
+        - "HEOS": Helmholtz Energy Equation of State (high accuracy) --> default
+        - "INCOMP": Incompressible fluids
+
+    Notes
+    -----
+    - Uses CoolProp's low-level AbstractState interface for efficient property calculations.
+    - All thermodynamic properties are calculated on-demand using cached properties.
+    - Entropy reference is defined by CoolProp's internal reference state for each fluid.
+
+    Examples
+    --------
+    >>> air = CoolPropFluid("Air")
+    >>> state = air.state(T=300.0, P=101325.0)
+    >>> state.rho
+    1.1769...
+    """
+
+    def __init__(self, fluid_name: str, backend: str = "HEOS") -> None:
+        self.fluid_name = fluid_name
+        self.backend = backend
+        try:
+            # Test that we can create an AbstractState with this fluid
+            test_state = CP.AbstractState(backend, fluid_name)
+            del test_state
+        except Exception as e:
+            logger.error(
+                "Failed to initialize CoolProp fluid '%s' with backend '%s': %s",
+                fluid_name,
+                backend,
+                e,
+            )
+            raise ValueError(
+                f"Cannot create CoolProp fluid '{fluid_name}' with backend '{backend}': {e}"
+            ) from e
+
+    def state(self, T: float, P: float) -> FluidState:
+        return _CoolPropState(T=T, P=P, _model=self)
+
+
+@dataclass(frozen=True)
+class _CoolPropState:
+    """
+    CoolProp thermodynamic state at (T, P) (temperature in Kelvin and pressure in Pascals).
+
+    Properties are provided as cached properties and use CoolProp's low-level
+    AbstractState interface for efficient calculations.
+    """
+
+    T: float  # K
+    P: float  # Pa
+    _model: CoolPropFluid
+
+    def _get_abstract_state(self) -> CP.AbstractState:
+        """Create and update an AbstractState for this T, P."""
+        AS = CP.AbstractState(self._model.backend, self._model.fluid_name)
+        AS.update(CP.PT_INPUTS, self.P, self.T)
+        return AS
+
+    @cached_property
+    def _AS(self) -> CP.AbstractState:
+        """Cached AbstractState for this thermodynamic point."""
+        return self._get_abstract_state()
+
+    @cached_property
+    def rho(self) -> float:
+        """Density [kg/m^3] from CoolProp."""
+        return self._AS.rhomass()
+
+    @cached_property
+    def cp(self) -> float:
+        """Specific heat at constant pressure cp [J/(kg·K)] from CoolProp."""
+        return self._AS.cpmass()
+
+    @cached_property
+    def mu(self) -> float:
+        """Dynamic viscosity mu [Pa·s] from CoolProp."""
+        return self._AS.viscosity()
+
+    @cached_property
+    def k(self) -> float:
+        """Thermal conductivity k [W/(m·K)] from CoolProp."""
+        return self._AS.conductivity()
+
+    @cached_property
+    def h(self) -> float:
+        """Specific enthalpy h [J/kg] from CoolProp."""
+        return self._AS.hmass()
+
+    @cached_property
+    def s(self) -> float:
+        """Specific entropy s [J/(kg·K)] from CoolProp (reference defined by CoolProp)."""
+        return self._AS.smass()
+
+    @cached_property
+    def a(self) -> float:
+        """Speed of sound a [m/s] from CoolProp."""
+        return self._AS.speed_sound()
+
+
 __all__ = [
     "FluidState",
     "FluidModel",
     "PerfectGasFluid",
+    "CoolPropFluid",
 ]

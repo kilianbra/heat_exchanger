@@ -73,7 +73,7 @@ def update_static_properties(
     p_b,
     a_is_in=True,
     b_is_in=True,
-    max_iter=10,
+    max_iter=50,
     tol_T=1e-4,  # K tolerance for stagnation temperature change
     rel_tol_p=1e-3,  # % tolerance for pressure drop (strictly speaking of p + G^2/rho)
 ):
@@ -167,6 +167,12 @@ def update_static_properties(
 
         return np.array([R1, R2_scaled], dtype=float)
 
+    # Note: Different methods have different convergence criteria:
+    # - "hybr": checks if ||x_new - x_old|| < tol * (||x|| + tol) (NOT if ||F|| < tol directly!)
+    # - "df-sane": minimizes max(|F_i|) (infinity norm) - better for mixed scales
+    # - "lm": Levenberg-Marquardt - minimizes ||F||^2 with better convergence control
+    #
+    # Using hybr with increased iterations and tighter tolerance to handle scaling
     sol = root(
         fluid_residuals,
         np.array([T_initial_guess, p_initial_guess], dtype=float),
@@ -177,18 +183,22 @@ def update_static_properties(
 
     x_sol = sol.x
 
-    R1_final, R2_final_scaled = fluid_residuals(x_sol)
+    # Recompute residuals at solution to verify convergence
+    # R1_final, R2_final_scaled = fluid_residuals(x_sol)
+    R1_final, R2_final_scaled = sol.fun
     converged = sol.success and abs(R1_final) < tol_dh0 and abs(R2_final_scaled) < tol_dh0
 
     if not converged:
         logger.warning(
             (
-                "update_static_properties did not converge: "
-                "solver_success=%s, |R1|=%e, |R2|=%e (T_a=%f K, p_b=%e Pa)"
+                "Fluid step is not within desired tolerances: "
+                "Individual residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "
+                "State: (T_a=%.1f K, p_b=%.2e Pa) | "
             ),
-            sol.success,
             abs(R1_final),
+            tol_dh0,
             abs(R2_final_scaled * tol_dFA / tol_dh0),
+            tol_dFA,
             T_a,
             p_b,
         )
