@@ -22,7 +22,7 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid, CoolPropFluid
+from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid, CoolPropFluid, RefPropFluid
 from heat_exchanger.involute_inboard import (
     F_inboard,
     MarchingOptions,
@@ -58,6 +58,10 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
         air = CoolPropFluid("Air")
         helium = CoolPropFluid("Helium")
         h2 = CoolPropFluid("ParaHydrogen")
+    elif fluid_model == "RefProp":
+        air = RefPropFluid("Air")
+        helium = RefPropFluid("Helium")
+        h2 = RefPropFluid("ParaHydrogen")
 
     case_key = case.strip().lower()
     for sep in (" ", "-", "/"):
@@ -575,8 +579,9 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
 
 
 if __name__ == "__main__":
-    main(case="chinese", fluid_model="CoolProp")
-    main(case="ahjeb", fluid_model="CoolProp")
-    main(case="ahjeb_toc", fluid_model="CoolProp")
-    # main(case="ahjeb_toc_outb")
-    main(case="viper", fluid_model="CoolProp")
+    # main(case="chinese", fluid_model="CoolProp")
+    # main(case="ahjeb", fluid_model="CoolProp")
+    # main(case="ahjeb_toc", fluid_model="CoolProp")
+    # main(case="ahjeb_toc_outb") # Outboard not implemented yet
+    main(case="viper", fluid_model="RefProp")
+    # main(case="viper", fluid_model="CoolProp")

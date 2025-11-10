@@ -1,6 +1,6 @@
 import logging
 
-from heat_exchanger.fluids.protocols import PerfectGasFluid, CoolPropFluid
+from heat_exchanger.fluids.protocols import CoolPropFluid, PerfectGasFluid, RefPropFluid
 from heat_exchanger.logging_utils import configure_logging
 
 if __name__ == "__main__":
@@ -42,3 +42,9 @@ if __name__ == "__main__":
     print(f"ParaHydrogen cp(T=200 K, P=5e5 Pa) = {parahydrogen_coolprop_state.cp:.1f} J/(kg·K)")
     print(f"ParaHydrogen mu(T=200 K, P=5e5 Pa) = {parahydrogen_coolprop_state.mu:.2e} Pa·s")
     print(f"ParaHydrogen rho(T=200 K, P=5e5 Pa) = {parahydrogen_coolprop_state.rho:.2f} kg/m^3")
+
+    parahydrogen_refprop = RefPropFluid("ParaHydrogen")
+    parahydrogen_refprop_state = parahydrogen_refprop.state(T=200.0, P=5e5)
+    print(f"ParaHydrogen cp(T=200 K, P=5e5 Pa) = {parahydrogen_refprop_state.cp:.1f} J/(kg·K)")
+    print(f"ParaHydrogen mu(T=200 K, P=5e5 Pa) = {parahydrogen_refprop_state.mu:.2e} Pa·s")
+    print(f"ParaHydrogen rho(T=200 K, P=5e5 Pa) = {parahydrogen_refprop_state.rho:.2f} kg/m^3")

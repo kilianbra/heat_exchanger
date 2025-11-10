@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from dataclasses import dataclass
 from functools import cached_property
 from typing import ClassVar, Protocol
@@ -9,6 +11,58 @@ import CoolProp.CoolProp as CP
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+_REFPROP_CONFIGURED = False
+
+
+def configure_refprop() -> None:
+    """Configure REFPROP path once; safe to call multiple times."""
+    global _REFPROP_CONFIGURED
+    if _REFPROP_CONFIGURED:
+        return
+
+    try:
+        refprop_path = os.environ.get("REFPROP_PATH") or os.environ.get("RPPREFIX")
+        candidate_paths: list[str] = []
+
+        if not refprop_path:
+            if sys.platform.startswith("win"):
+                candidate_paths = [
+                    r"C:\Program Files\REFPROP",
+                    r"C:\Program Files (x86)\REFPROP",
+                ]
+            elif sys.platform == "darwin":
+                candidate_paths = [
+                    "/Applications/REFPROP",
+                    "/usr/local/REFPROP",
+                ]
+            elif sys.platform.startswith("linux"):
+                candidate_paths = [
+                    "/usr/local/share/REFPROP",
+                    "/opt/REFPROP",
+                ]
+            for candidate in candidate_paths:
+                if os.path.isdir(candidate):
+                    refprop_path = candidate
+                    break
+
+        if refprop_path:
+            CP.set_config_string(CP.ALTERNATIVE_REFPROP_PATH, refprop_path)
+            logger.info(
+                "REFPROP path set to: %s",
+                CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH),
+            )
+        else:
+            logger.debug("REFPROP path not set; using CoolProp defaults.")
+
+    except Exception as exc:  # pragma: no cover - defensive path setup
+        logger.warning(
+            "Failed to configure REFPROP path: %s. Using CoolProp defaults. Current path: %s",
+            exc,
+            CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH),
+        )
+
+    _REFPROP_CONFIGURED = True
 
 
 class FluidState(Protocol):
@@ -404,9 +458,152 @@ class _CoolPropState:
         return self._AS.speed_sound()
 
 
+class RefPropFluid:
+    """
+    Real fluid model using REFPROP's high-accuracy equations of state via CoolProp's REFPROP backend.
+
+    Parameters
+    ----------
+    fluid_name : str
+        REFPROP fluid identifier (e.g., "WATER", "NITROGEN", "HYDROGEN", "CO2").
+        Can also use short forms like "H2O", "N2", "H2" which will be mapped to REFPROP names.
+        See REFPROP documentation for available fluids.
+
+    Notes
+    -----
+    - Requires REFPROP to be installed on the system.
+    - Uses CoolProp's low-level AbstractState interface with REFPROP backend.
+    - All thermodynamic properties are calculated on-demand using cached properties.
+    - Entropy reference is defined by REFPROP's internal reference state for each fluid.
+    - REFPROP path is automatically configured from environment variables or default locations.
+
+    Examples
+    --------
+    >>> water = RefPropFluid("WATER")
+    >>> state = water.state(T=400.0, P=101325.0)
+    >>> state.rho
+    0.5977...
+    """
+
+    # Mapping from common names to REFPROP standard names
+    _FLUID_NAME_MAP: ClassVar[dict[str, str]] = {
+        "H2O": "WATER",
+        "N2": "NITROGEN",
+        "O2": "OXYGEN",
+        "H2": "HYDROGEN",
+        "CO2": "CO2",
+        "He": "HELIUM",
+        "Ar": "ARGON",
+        "Air": "AIR",
+    }
+
+    def __init__(self, fluid_name: str) -> None:
+        configure_refprop()
+        self.fluid_name = fluid_name
+
+        # Try to map common names to REFPROP names
+        refprop_name = self._FLUID_NAME_MAP.get(fluid_name, fluid_name)
+
+        try:
+            # Try to create REFPROP AbstractState
+            test_state = CP.AbstractState("REFPROP", refprop_name)
+            del test_state
+            self._refprop_name = refprop_name
+        except Exception as e:
+            # If mapping failed and we used a mapped name, try the original
+            if refprop_name != fluid_name:
+                try:
+                    test_state = CP.AbstractState("REFPROP", fluid_name)
+                    del test_state
+                    self._refprop_name = fluid_name
+                except Exception:
+                    # Both failed, raise informative error
+                    error_msg = [
+                        f"Error initializing REFPROP for fluid '{fluid_name}':",
+                        f"Original error: {str(e)}",
+                        f"Current REFPROP path: {CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}",
+                        "Check that REFPROP is installed and the fluid name is correct.",
+                    ]
+                    logger.error(" ".join(error_msg))
+                    raise ValueError(f"Cannot create REFPROP fluid '{fluid_name}': {e}") from e
+            else:
+                error_msg = [
+                    f"Error initializing REFPROP for fluid '{fluid_name}':",
+                    f"Original error: {str(e)}",
+                    f"Current REFPROP path: {CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}",
+                    "Check that REFPROP is installed and the fluid name is correct.",
+                ]
+                logger.error(" ".join(error_msg))
+                raise ValueError(f"Cannot create REFPROP fluid '{fluid_name}': {e}") from e
+
+    def state(self, T: float, P: float) -> FluidState:
+        return _RefPropState(T=T, P=P, _model=self)
+
+
+@dataclass(frozen=True)
+class _RefPropState:
+    """
+    REFPROP thermodynamic state at (T, P) (temperature in Kelvin and pressure in Pascals).
+
+    Properties are provided as cached properties and use CoolProp's REFPROP backend
+    low-level AbstractState interface for efficient calculations.
+    """
+
+    T: float  # K
+    P: float  # Pa
+    _model: RefPropFluid
+
+    def _get_abstract_state(self) -> CP.AbstractState:
+        """Create and update an AbstractState for this T, P."""
+        AS = CP.AbstractState("REFPROP", self._model._refprop_name)
+        AS.update(CP.PT_INPUTS, self.P, self.T)
+        return AS
+
+    @cached_property
+    def _AS(self) -> CP.AbstractState:
+        """Cached AbstractState for this thermodynamic point."""
+        return self._get_abstract_state()
+
+    @cached_property
+    def rho(self) -> float:
+        """Density [kg/m^3] from REFPROP."""
+        return self._AS.rhomass()
+
+    @cached_property
+    def cp(self) -> float:
+        """Specific heat at constant pressure cp [J/(kg·K)] from REFPROP."""
+        return self._AS.cpmass()
+
+    @cached_property
+    def mu(self) -> float:
+        """Dynamic viscosity mu [Pa·s] from REFPROP."""
+        return self._AS.viscosity()
+
+    @cached_property
+    def k(self) -> float:
+        """Thermal conductivity k [W/(m·K)] from REFPROP."""
+        return self._AS.conductivity()
+
+    @cached_property
+    def h(self) -> float:
+        """Specific enthalpy h [J/kg] from REFPROP."""
+        return self._AS.hmass()
+
+    @cached_property
+    def s(self) -> float:
+        """Specific entropy s [J/(kg·K)] from REFPROP (reference defined by REFPROP)."""
+        return self._AS.smass()
+
+    @cached_property
+    def a(self) -> float:
+        """Speed of sound a [m/s] from REFPROP."""
+        return self._AS.speed_sound()
+
+
 __all__ = [
     "FluidState",
     "FluidModel",
     "PerfectGasFluid",
     "CoolPropFluid",
+    "RefPropFluid",
 ]
