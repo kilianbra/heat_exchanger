@@ -39,8 +39,8 @@ class RadialInvoluteGeometry:
 
     tube_outer_diam: float
     tube_thick: float
-    tube_spacing_trv: float  # non-dimensional spacing ratio (pitch / diameter)
-    tube_spacing_long: float  # non-dimensional spacing ratio (pitch / diameter)
+    tube_spacing_trv: float  # non-dimensional spacing ratio (Xt*)
+    tube_spacing_long: float  # non-dimensional spacing ratio (Xl*)
     staggered: bool
     n_headers: int
     n_rows_per_header: int
