@@ -309,10 +309,10 @@ def main(case: str = "viper") -> None:
         "Hot inlet parameters: Th_in=%.2f K, Ph_in=%.2e Pa", params["Th_in"], params["Ph_in"]
     )
     logger.info(
-        "Case %s: 0D guess for inner boundary Th_out=%.2f K, Ph_out=%.2e Pa",
+        "Case %s: 0D guess for inner boundary \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         params["case_name"],
         Th0,
-        Ph0,
+        (1 - Ph0 / params["Ph_in"]) * 100.0,
     )
 
     eval_state = {"count": 0}
@@ -320,6 +320,22 @@ def main(case: str = "viper") -> None:
     tol_P = 1.0e-3 * params["Ph_in"]  # absolute Pa tolerance desired on pressure residual
 
     def residuals(x: np.ndarray) -> np.ndarray:
+        """Residuals for the hot-side shooting problem.
+
+        Inputs
+        -------
+        x[0] : float
+            Guess for the hot inner-boundary temperature ``Th_out``.
+        x[1] : float
+            Guess for the hot inner-boundary pressure ``Ph_out``.
+
+        Returns
+        --------
+        scaled : np.ndarray shape (2,)
+            ``scaled[0]`` is the temperature residual ``Th_in_calc - Th_in`` (left unscaled).
+            ``scaled[1]`` is the pressure residual scaled so that a physical tolerance of
+            ``tol_P`` (1% Ph_in≈100 Pa) maps to the solver tolerance ``tol_root`` (1e-2).
+        """
         eval_state["count"] += 1
         raw = F_inboard(
             Th_out_guess=x[0],
@@ -342,7 +358,7 @@ def main(case: str = "viper") -> None:
         logger.debug(
             (
                 "Residual eval %d: Th_guess=%.3f K, Ph_guess=%.3e Pa -> "
-                "ΔT=%.3e K (target %.1e), ΔP=%.3e Pa (target %.1e)"
+                "Th_in_calc-Th_in=%+.1e K (target %.1e), Ph_in_calc-Ph_in=%+.1e Pa (target %.1e Pa)"
             ),
             eval_state["count"],
             x[0],
@@ -350,7 +366,7 @@ def main(case: str = "viper") -> None:
             raw[0],
             tol_root,
             raw[1],
-            tol_P / tol_root,
+            tol_P,
         )
         return scaled
 
@@ -382,16 +398,17 @@ def main(case: str = "viper") -> None:
         sol.message,
     )
     logger.info(
-        "Solution: Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        eval_state["count"],
         sol.x[0],
         (1 - sol.x[1] / params["Ph_in"]) * 100.0,
     )
     logger.info(
-        "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e)",
+        "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e K), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e Pa)",
         final_raw[0],
         tol_root,
         final_raw[1],
-        tol_P / tol_root,
+        tol_P,
     )
     if final_diag:
         logger.debug(

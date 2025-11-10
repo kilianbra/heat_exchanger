@@ -47,7 +47,7 @@ class RadialInvoluteGeometry:
     n_rows_axial: int
     radius_outer_whole_hex: float
     inv_angle_deg: float = 360.0
-    rectangular: bool = False
+    rectangular: bool = False  # Relic of when this was for a general tube bank HEx
 
     def tube_inner_diam(self) -> float:
         return self.tube_outer_diam - 2.0 * self.tube_thick
@@ -84,7 +84,7 @@ class MarchingOptions:
 
 
 @dataclass(frozen=True)
-class _GeometryCache:
+class _GeometryCache:  # For now this is involute specific, later make it more general
     """Pre-computed geometry arrays for the involute layout."""
 
     radii: np.ndarray
@@ -101,6 +101,9 @@ class _GeometryCache:
 
 
 def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
+    """Compute the geometry arrays for the involute layout.
+    Each array calculates the heat transfer area (area_ht) or free flow area (area_free)
+    for one sector of the hot and cold fluids."""
     tube_inner_diam = geom.tube_inner_diam()
     radius_inner = geom.radius_inner_whole_hex()
     radius_outer = geom.radius_outer_whole_hex
