@@ -297,7 +297,7 @@ if __name__ == "__main__":
         logger.info(f"T={T:6.1f} K, cp={cps:+8.3e} J/kg-K")
         # TODO: dig deeper into why returning -inf cp
 
-    # main_table()
+    main_table()
     # Kerosene products cp(T) plots
     # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
     # plt.show()

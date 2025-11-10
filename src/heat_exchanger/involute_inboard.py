@@ -94,7 +94,7 @@ class _GeometryCache:  # For now this is involute specific, later make it more g
     area_frontal_hot: np.ndarray
     area_free_hot: np.ndarray
     area_free_cold: np.ndarray
-    dh_hot: np.ndarray
+    d_h_hot: np.ndarray
     # ruff: noqa: N815 (allow mixed case variables)
     dR: float
 
@@ -130,7 +130,7 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
     area_free_hot = np.zeros(n_layers)
     area_free_cold = np.zeros(n_layers)
     tube_length = np.zeros(n_layers)
-    dh_hot = np.zeros(n_layers)
+    d_h_hot = np.zeros(n_layers)
 
     # Free-area ratios (global) depend only on spacing
     sigma_hot = (spacing_trv - geom.tube_outer_diam) / spacing_trv
@@ -154,7 +154,7 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
         area_free_hot[j] = area_frontal_hot[j] * sigma_hot
         # The equation below is only valid for this segmentation of the HEx
         area_free_cold[j] = np.pi * tube_inner_diam**2 / 4.0 * n_tubes_total / geom.n_headers
-        dh_hot[j] = (4.0 * area_free_hot[j] * Lf) / area_ht_hot[j]
+        d_h_hot[j] = (4.0 * area_free_hot[j] * Lf) / area_ht_hot[j]
 
     return _GeometryCache(
         radii=radii,
@@ -165,7 +165,7 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
         area_frontal_hot=area_frontal_hot,
         area_free_hot=area_free_hot,
         area_free_cold=area_free_cold,
-        dh_hot=dh_hot,
+        d_h_hot=d_h_hot,
         dR=dR,
     )
 
@@ -269,7 +269,7 @@ def F_inboard(
         G_h = m_dot_hot / area_free_hot
         G_c = m_dot_cold / area_free_cold
 
-        # Re_h = G_h * geom_cache.dh_hot[j] / max(mu_h, 1e-16)
+        # Re_h = G_h * geom_cache.d_h_hot[j] / max(mu_h, 1e-16)
         Re_h_od = G_h * geometry.tube_outer_diam / mu_h
         Re_c = G_c * tube_inner_diam / mu_c
 
