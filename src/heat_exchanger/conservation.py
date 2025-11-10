@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+from scipy.optimize import root
 
 from heat_exchanger.fluids.protocols import FluidModel
 
@@ -73,10 +74,8 @@ def update_static_properties(
     a_is_in=True,
     b_is_in=True,
     max_iter=10,
-    tol_T=1e-2,
-    rel_tol_p=1e-3,  # Pa tolerance
-    fd_eps_T=1e-3,
-    fd_eps_p=50.0,
+    tol_T=1e-4,  # K tolerance for stagnation temperature change
+    rel_tol_p=1e-3,  # % tolerance for pressure drop (strictly speaking of p + G^2/rho)
 ):
     r"""
     Solve simultaneously for T_not_a and p_not_b so that:
@@ -88,21 +87,14 @@ def update_static_properties(
 
     Tolerances and finite-difference steps:
       - tol_T: Absolute convergence tolerance on the energy residual R1 (units of J/kg).
-               When |R1| < tol_T, the energy equation is considered converged.
+               When |R1| < cp_in * tol_T, the energy equation is considered converged.
       - rel_tol_p: Relative convergence tolerance on the momentum residual R2, scaled by p_b.
-                   Converged when |R2| < rel_tol_p * p_b (units of Pa).
-      - fd_eps_T: Finite-difference perturbation on temperature used to estimate dR/dT (units of K).
-                  This should be small enough to linearize but large enough to avoid numerical noise.
-      - fd_eps_p: Finite-difference perturbation on pressure used to estimate dR/dp (units of Pa).
-                  Since pressure convergence uses a relative tolerance, an absolute FD step of ~O(\(10^2\) Pa)
-                  is typically adequate near 1 bar. Internally, an effective step is used:
-                      fd_eps_p_eff = max(fd_eps_p, 0.5 * rel_tol_p * p_b)
-                  so that the derivative remains well-scaled when p_b changes.
+                   Converged when |R2| < rel_tol_p / 100 * p_b (units of Pa).
 
     Note:  tau_eff dA_friction / A_cross_section > 0.
 
     Returns:
-        (T_not_a, p_not_b, rho_not_a)
+        (T_not_a, p_not_b)
     """
 
     # ------------------------------------------------------------
@@ -112,21 +104,32 @@ def update_static_properties(
     if a_is_in:
         T_in = T_a
         cp_in = fluid.state(T_in, p_b).cp
-        T_guess = T_in + dh0 / cp_in if cp_in != 0 else T_in
+        T_initial_guess = T_in + dh0 / cp_in if cp_in != 0 else T_in
+        tol_dh0 = cp_in * tol_T
     else:
         T_out = T_a
         cp_out = fluid.state(T_out, p_b).cp
-        T_guess = T_out - dh0 / cp_out if cp_out != 0 else T_out
+        T_initial_guess = T_out - dh0 / cp_out if cp_out != 0 else T_out
+        tol_dh0 = cp_out * tol_T
+
     # For p_guess, a naive shift by dFA is typical (neglect density change)
-    p_guess = p_b - tau_dA_over_A_c if b_is_in else p_b + tau_dA_over_A_c
+    p_initial_guess = p_b - tau_dA_over_A_c if b_is_in else p_b + tau_dA_over_A_c
+
+    tol_dFA = rel_tol_p / 100 * p_b
 
     # ------------------------------------------------------------
     # 2) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
     # ------------------------------------------------------------
-    def compute_residuals(T_guess, p_guess):
+    def fluid_residuals(x: np.ndarray) -> np.ndarray:
         """
         Returns R1, R2 given the current guess of T, p
         """
+        T_guess, p_guess = x
+        # Guard against non-physical states that would break the fluid model.
+        if T_guess <= 0 or p_guess <= 0:
+            large_residual = 1e12
+            return np.array([large_residual, large_residual], dtype=float)
+
         # Build local variables for both sides to avoid scoping issues
         # Pressures
         if b_is_in:
@@ -160,71 +163,37 @@ def update_static_properties(
         R1 = (h0_out - h0_in) - dh0
         R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + tau_dA_over_A_c
 
-        return R1, R2
+        R2_scaled = R2 / tol_dFA * tol_dh0
 
-    # ------------------------------------------------------------
-    # 3) Newton Iteration (using finite-diff partial derivatives)
-    # ------------------------------------------------------------
-    converged = False
-    for _iteration in range(max_iter):
-        # Compute R1, R2 at current guesses
-        R1, R2 = compute_residuals(T_guess, p_guess)
+        return np.array([R1, R2_scaled], dtype=float)
 
-        # Check if close enough
-        if abs(R1) < tol_T and abs(R2) < rel_tol_p * p_b:
-            converged = True
-            break
+    sol = root(
+        fluid_residuals,
+        np.array([T_initial_guess, p_initial_guess], dtype=float),
+        method="hybr",
+        tol=tol_dh0,
+        options={"maxfev": max_iter},
+    )
 
-        # ~~~~~~~~ Finite-difference to get partial derivatives dR/dT, dR/dp ~~~~~~~~
-        # We'll do a small shift in T:
-        R1p, R2p = compute_residuals(T_guess + fd_eps_T, p_guess)
-        dR1_dT = (R1p - R1) / fd_eps_T
-        dR2_dT = (R2p - R2) / fd_eps_T
+    x_sol = sol.x
 
-        # We'll do a small shift in p (scale step to relative tolerance):
-        fd_eps_p_eff = max(fd_eps_p, 0.5 * rel_tol_p * p_b)
-        R1p, R2p = compute_residuals(T_guess, p_guess + fd_eps_p_eff)
-        dR1_dp = (R1p - R1) / fd_eps_p_eff
-        dR2_dp = (R2p - R2) / fd_eps_p_eff
+    R1_final, R2_final_scaled = fluid_residuals(x_sol)
+    converged = sol.success and abs(R1_final) < tol_dh0 and abs(R2_final_scaled) < tol_dh0
 
-        # Build the Jacobian and the residual vector
-        #    [ R1 ]   and   J = [ dR1/dT   dR1/dp ]
-        #    [ R2 ]             [ dR2/dT   dR2/dp ]
-        #
-        # Newton step:  [ dT ] = - J^-1 [ R1 ]
-        #               [ dp ]         [ R2 ]
-
-        J = np.array([[dR1_dT, dR1_dp], [dR2_dT, dR2_dp]], dtype=float)
-        R_vec = np.array([R1, R2], dtype=float)
-
-        try:
-            # Solve the linear system
-            dX = np.linalg.solve(J, -R_vec)
-        except np.linalg.LinAlgError:
-            # If singular, just do an under-relaxed step
-            dX = -0.5 * R_vec  # fallback
-
-        # Update T_guess, p_guess
-        T_guess_new = T_guess + dX[0]
-        p_guess_new = p_guess + dX[1]
-
-        # Optional: add some mild damping if needed
-        alpha = 0.8
-        T_guess = T_guess + alpha * (T_guess_new - T_guess)
-        p_guess = p_guess + alpha * (p_guess_new - p_guess)
-
-    # End iteration
     if not converged:
         logger.warning(
             (
-                "update_static_properties did not converge after %d iterations: "
-                "|R1|=%e, |R2|=%e (T_a=%f K, p_b=%e Pa)"
+                "update_static_properties did not converge: "
+                "solver_success=%s, |R1|=%e, |R2|=%e (T_a=%f K, p_b=%e Pa)"
             ),
-            max_iter,
-            abs(R1),
-            abs(R2),
+            sol.success,
+            abs(R1_final),
+            abs(R2_final_scaled * tol_dFA / tol_dh0),
             T_a,
             p_b,
         )
 
-    return T_guess, p_guess
+    T_solution = x_sol[0]
+    p_solution = x_sol[1]
+
+    return T_solution, p_solution

@@ -67,10 +67,10 @@ def load_case(case: str) -> dict[str, object]:
 
 
 def _compute_involute_length(
-    radius_inner: float, radius_outer: float, inv_angle_deg: float
+    radius_inner: float, radius_outer: float, inv_angle_deg: float, n_points: int = 64
 ) -> float:
-    theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), 64)
-    b = (radius_outer - radius_inner) / max(np.deg2rad(inv_angle_deg), 1e-12)
+    theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), n_points)
+    b = (radius_outer - radius_inner) / np.deg2rad(inv_angle_deg)
     r_vals = radius_inner + b * theta_vals
     return float(np.trapezoid(np.sqrt(r_vals**2 + b**2), theta_vals))
 
@@ -317,7 +317,8 @@ def main(case: str = "viper") -> None:
 
     eval_state = {"count": 0}
     tol_root = 1.0e-2
-    tol_P = 1.0e-3 * params["Ph_in"]  # absolute Pa tolerance desired on pressure residual
+    tol_P_pct_of_Ph_in = 0.1
+    tol_P = tol_P_pct_of_Ph_in / 100 * params["Ph_in"]  # absolute Pa tolerance
 
     def residuals(x: np.ndarray) -> np.ndarray:
         """Residuals for the hot-side shooting problem.
