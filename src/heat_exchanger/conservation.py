@@ -189,7 +189,7 @@ def update_static_properties(
     converged = sol.success and abs(R1_final) < tol_dh0 and abs(R2_final_scaled) < tol_dh0
 
     if not converged:
-        logger.warning(
+        logger.debug(
             (
                 "Fluid step is not within desired tolerances: "
                 "Individual residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "

@@ -170,6 +170,111 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
     )
 
 
+def _compute_overall_performance(
+    diagnostics: dict[str, float],
+    Th: np.ndarray,
+    Ph: np.ndarray,
+    Tc: np.ndarray,
+    Pc: np.ndarray,
+    Th_in: float,
+    Ph_in: float,
+    Tc_in: float,
+    Pc_in: float,
+    fluid_hot: FluidModel,
+    fluid_cold: FluidModel,
+    mdot_h_total: float,
+    mdot_c_total: float,
+    geom_cache: _GeometryCache,
+    n_headers: int,
+) -> None:
+    """Calculate overall heat exchanger performance metrics.
+
+    Adds the following keys to diagnostics:
+    - Q_total: Total heat transfer rate (W)
+    - epsilon: Overall effectiveness (-)
+    - NTU: Overall number of transfer units (-)
+    - dP_hot: Hot side pressure drop (Pa)
+    - dP_hot_pct: Hot side pressure drop as % of inlet
+    - dP_cold: Cold side pressure drop (Pa)
+    - dP_cold_pct: Cold side pressure drop as % of inlet
+    - Th_out: Hot side outlet temperature (K)
+    - Tc_out: Cold side outlet temperature (K)
+    """
+    # Hot side: flows from outer (index -1) to inner (index 0)
+    # Cold side: flows from inner (index 0) to outer (index -1)
+    Th_out = Th[0]
+    Ph_out = Ph[0]
+    Tc_out = Tc[-1]
+    Pc_out = Pc[-1]
+
+    # Get states at inlet and outlet for both fluids
+    state_h_in = fluid_hot.state(Th_in, Ph_in)
+    state_h_out = fluid_hot.state(Th_out, Ph_out)
+    state_c_in = fluid_cold.state(Tc_in, Pc_in)
+    state_c_out = fluid_cold.state(Tc_out, Pc_out)
+
+    area_free_hot_in = geom_cache.area_free_hot[-1] * n_headers
+    area_free_hot_out = geom_cache.area_free_hot[0] * n_headers
+    area_free_cold = geom_cache.area_free_cold[0] * n_headers
+
+    G_h_in = mdot_h_total / area_free_hot_in
+    G_h_out = mdot_h_total / area_free_hot_out
+    G_c = mdot_c_total / area_free_cold
+
+    h_stag_in_hot = state_h_in.h + 0.5 * (G_h_in / state_h_in.rho) ** 2
+    h_stag_out_hot = state_h_out.h + 0.5 * (G_h_out / state_h_out.rho) ** 2
+    h_stag_in_cold = state_c_in.h + 0.5 * (G_c / state_c_in.rho) ** 2
+    h_stag_out_cold = state_c_out.h + 0.5 * (G_c / state_c_out.rho) ** 2
+
+    # Calculate heat transfer rates from enthalpy changes
+    Q_hot = mdot_h_total * (h_stag_in_hot - h_stag_out_hot)
+    Q_cold = mdot_c_total * (h_stag_out_cold - h_stag_in_cold)
+
+    # Check if Q_hot and Q_cold are similar
+    if abs(Q_hot - Q_cold) / max(abs(Q_hot), abs(Q_cold)) > 0.01 * 1e6:
+        logger.warning(
+            "Q_hot and Q_cold are not similar: Q_hot=%.2f MW, Q_cold=%.2f MW",
+            Q_hot / 1e6,
+            Q_cold / 1e6,
+        )
+
+    # Calculate overall effectiveness using mean cp
+    cp_h_avg = (h_stag_in_hot - h_stag_out_hot) / (Th_in - Th_out)
+    cp_c_avg = (h_stag_out_cold - h_stag_in_cold) / (Tc_out - Tc_in)
+    C_h = mdot_h_total * cp_h_avg
+    C_c = mdot_c_total * cp_c_avg
+    C_min = min(C_h, C_c)
+    Q_max = C_min * (Th_in - Tc_in)
+    epsilon = Q_hot / Q_max if Q_max > 0 else 0.0
+
+    # Calculate NTU from epsilon using inverse relationship
+    # For counterflow: NTU = ln((1-epsilon*Cr)/(1-epsilon)) / (1-Cr)
+    Cr = C_min / max(C_h, C_c)
+    NTU = diagnostics["total_UA"] / C_min
+
+    # Pressure drops
+    dP_hot = Ph_in - Ph_out
+    dP_cold = Pc_out - Pc_in
+    dP_hot_pct = 100.0 * dP_hot / Ph_in if Ph_in > 0 else 0.0
+    dP_cold_pct = 100.0 * dP_cold / Pc_in if Pc_in > 0 else 0.0
+
+    # Store in diagnostics
+    diagnostics["Q_total"] = float(Q_hot)
+    diagnostics["Q_hot"] = float(Q_hot)
+    diagnostics["Q_cold"] = float(Q_cold)
+    diagnostics["epsilon"] = float(epsilon)
+    diagnostics["NTU"] = float(NTU)
+    diagnostics["Cr"] = float(Cr)
+    diagnostics["dP_hot"] = float(dP_hot)
+    diagnostics["dP_hot_pct"] = float(dP_hot_pct)
+    diagnostics["dP_cold"] = float(dP_cold)
+    diagnostics["dP_cold_pct"] = float(dP_cold_pct)
+    diagnostics["Th_out"] = float(Th_out)
+    diagnostics["Tc_out"] = float(Tc_out)
+    diagnostics["Ph_out"] = float(Ph_out)
+    diagnostics["Pc_out"] = float(Pc_out)
+
+
 def F_inboard(
     Th_out_guess: float,
     Ph_out_guess: float,
@@ -223,6 +328,7 @@ def F_inboard(
     Ph = np.zeros(n_nodes)
     Tc = np.zeros(n_nodes)
     Pc = np.zeros(n_nodes)
+    UA_sum = 0.0
     # Boundary conditions at the inner radius (start of march)
     Th[0] = Th_out_guess
     Ph[0] = Ph_out_guess
@@ -301,6 +407,7 @@ def F_inboard(
         # U_cold = 1.0 / (
         #    h_c_inv + h_h_inv * (tube_inner_diam / max(geometry.tube_outer_diam, 1e-16)) + wall_term
         # )
+        UA_sum += U_hot * geom_cache.area_ht_hot[j]
 
         C_h = m_dot_hot * cp_h
         C_c = m_dot_cold * cp_c
@@ -395,6 +502,10 @@ def F_inboard(
     residual_P = Ph_in_calc - Ph_in
 
     if diagnostics is not None:
+        total_area_ht_hot = np.sum(geom_cache.area_ht_hot)
+        total_UA = UA_sum
+        diagnostics["total_UA"] = float(total_UA)
+        diagnostics["total_area_ht_hot"] = float(total_area_ht_hot)
         mid_index = n_nodes // 2
         total_aff_hot = geom_cache.area_free_hot[mid_index]
         total_aff_cold = geom_cache.area_free_cold[mid_index]
@@ -409,6 +520,25 @@ def F_inboard(
             else float("nan")
         )
         diagnostics["n_layers"] = float(n_nodes - 1)
+
+        # Calculate overall performance metrics
+        _compute_overall_performance(
+            diagnostics,
+            Th,
+            Ph,
+            Tc,
+            Pc,
+            Th_in,
+            Ph_in,
+            Tc_in,
+            Pc_in,
+            fluid_hot,
+            fluid_cold,
+            mdot_h_total,
+            mdot_c_total,
+            geom_cache,
+            geometry.n_headers,
+        )
 
     return np.array([residual_T, residual_P])
 

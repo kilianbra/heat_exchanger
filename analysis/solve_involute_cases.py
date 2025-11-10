@@ -361,6 +361,9 @@ def _zero_d_two_step_guess(
             p_b=_Ph_in,
             a_is_in=True,
             b_is_in=True,
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
         )
         Tc_out, Pc_out = update_static_properties(
             fluid_cold,
@@ -371,6 +374,9 @@ def _zero_d_two_step_guess(
             p_b=_Pc_in,
             a_is_in=True,
             b_is_in=True,
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
         )
 
         return Th_out, Tc_out, Ph_out, Pc_out
@@ -427,6 +433,13 @@ def _zero_d_two_step_guess(
 def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
     configure_logging(logging.INFO)
+
+    # Control logging levels for different modules
+    logging.getLogger("heat_exchanger.conservation").setLevel(
+        logging.WARNING
+    )  # Suppress debug from conservation.py
+    logging.getLogger("heat_exchanger.involute_inboard").setLevel(logging.INFO)
+    logging.getLogger("__main__").setLevel(logging.INFO)  # Main loop stays at INFO
 
     params = load_case(case, fluid_model)
 
@@ -570,6 +583,34 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         tol_P,
     )
     if final_diag:
+        eps_counterflow = epsilon_ntu(
+            final_diag.get("NTU", float("nan")),
+            final_diag.get("Cr", float("nan")),
+            exchanger_type="aligned_flow",
+            flow_type="counterflow",
+            n_passes=1,
+        )
+        logger.info(
+            "Performance: ε=%.3f (vs xflow ε=%.3f), NTU=%.2f, Cr=%.3f, Q_hot=%.2f MW, Q_cold=%.2f MW",
+            final_diag.get("epsilon", float("nan")),
+            eps_counterflow,
+            final_diag.get("NTU", float("nan")),
+            final_diag.get("Cr", float("nan")),
+            final_diag.get("Q_total", float("nan")) / 1e6,
+            final_diag.get("Q_cold", float("nan")) / 1e6,
+        )
+        logger.info(
+            "Pressure drops: ΔPh=%.1f%% (%.1f Pa), ΔPc=%.1f%% (%.1f Pa)",
+            final_diag.get("dP_hot_pct", float("nan")),
+            final_diag.get("dP_hot", float("nan")),
+            final_diag.get("dP_cold_pct", float("nan")),
+            final_diag.get("dP_cold", float("nan")),
+        )
+        logger.info(
+            "Outlet conditions: Th_out=%.2f K, Tc_out=%.2f K",
+            final_diag.get("Th_out", float("nan")),
+            final_diag.get("Tc_out", float("nan")),
+        )
         logger.debug(
             "1D effective area ratios: hot=%5.2f, cold=%5.2f across %.0f layers",
             final_diag.get("area_ratio_hot_total", float("nan")),
@@ -579,9 +620,10 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
 
 
 if __name__ == "__main__":
-    # main(case="chinese", fluid_model="CoolProp")
-    # main(case="ahjeb", fluid_model="CoolProp")
-    # main(case="ahjeb_toc", fluid_model="CoolProp")
+    """main(case="chinese", fluid_model="CoolProp")
+    main(case="ahjeb", fluid_model="CoolProp")
+    main(case="ahjeb_toc", fluid_model="CoolProp")
     # main(case="ahjeb_toc_outb") # Outboard not implemented yet
-    main(case="viper", fluid_model="RefProp")
-    # main(case="viper", fluid_model="CoolProp")
+    # main(case="viper", fluid_model="RefProp")
+    main(case="viper", fluid_model="CoolProp")"""
+    main(case="custom", fluid_model="CoolProp")
