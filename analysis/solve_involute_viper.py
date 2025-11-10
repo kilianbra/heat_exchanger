@@ -34,13 +34,49 @@ from heat_exchanger.logging_utils import configure_logging
 logger = logging.getLogger(__name__)
 
 
+WALL_CONDUCTIVITY_304_SS = 14.0
+WALL_DENSITY_304_SS = 7930.0
+WALL_MATERIAL_304_SS = "304 Stainless Steel"
+
+
+def _n_rows_axial_from_length(axial_length: float, spacing_trv: float, tube_od: float) -> int:
+    """Return integer axial tube-row count from axial length and spacing."""
+    return int(round(axial_length / (spacing_trv * tube_od)))
+
+
 def load_case(case: str) -> dict[str, object]:
-    """Return configuration for a named case (currently only ``viper``)."""
+    """Return configuration for a named case.
+
+    Supported case identifiers (case-insensitive):
+      - ``viper``
+      - ``custom`` ()
+      - ``ahjeb`` (Base Adv H2 Jet Engine Design)
+      - ``ahjeb_toc`` (Top of Climb Variant)
+      - ``ahjeb_toc_outb`` (Outboard ToC Variant)
+      - ``chinese`` (preset_chinese == 1, K. He et al. 2024)
+    """
 
     case_key = case.strip().lower()
-    if case_key == "viper":
-        return {
-            "case_name": "VIPER",
+    for sep in (" ", "-", "/"):
+        case_key = case_key.replace(sep, "_")
+    aliases = {
+        "preset_custom": "custom",
+        "custom_design": "custom",
+        "preset_ahjeb": "ahjeb",
+        "ahje_version_b": "ahjeb",
+        "preset_ahjeb_toc": "ahjeb_toc",
+        "preset_ahjeb_toc_outb": "ahjeb_toc_outb",
+        "preset_chinese": "chinese",
+        "k._he_et_al._2024": "chinese",
+        "k._he_et_al._2024_case": "chinese",
+    }
+    canonical = aliases.get(case_key, case_key)
+
+    cases: dict[str, dict[str, object]] = {
+        "viper": {
+            "case_name": "VIPER (REL)",
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("Helium"),
             "Th_in": 298.0,
             "Ph_in": 1.02e5,
             "Tc_in": 96.0,
@@ -55,15 +91,129 @@ def load_case(case: str) -> dict[str, object]:
             "n_rows_axial": 200,
             "radius_outer_whole_hex": 478e-3,
             "inv_angle_deg": 360.0,
-            "rectangular": False,
             "mflow_h_total": 12.26,
             "mflow_c_total": 1.945,
-            "wall_conductivity": 14.0,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "custom": {
+            "case_name": "Custom Design",
             "fluid_hot": PerfectGasFluid.from_name("Air"),
-            "fluid_cold": PerfectGasFluid.from_name("Helium"),
-        }
+            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "Th_in": 500.0,
+            "Ph_in": 1.02e5,
+            "Tc_in": 40.0,
+            "Pc_in": 50e5,
+            "tube_outer_diam": 0.98e-3,
+            "tube_thick": 0.04e-3,
+            "tube_spacing_trv": 2.5,
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 21,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(540e-3 / (2.5 * 0.98e-3))),  # 220 from axial length
+            "radius_outer_whole_hex": 325e-3 + 21 * 4 * 1.5 * 0.98e-3,  # 448.5e-3
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 12.0,  # 60 * 0.2
+            "mflow_c_total": 0.3,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "ahjeb": {
+            "case_name": "AHJE",  # version B
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "Th_in": 500.0,
+            "Ph_in": 1.02e5,
+            "Tc_in": 40.0,
+            "Pc_in": 50e5,
+            "tube_outer_diam": 1.067e-3,  # based on 19gT/W from needleworks
+            "tube_thick": 0.129e-3,  # based on 19gT/W from needleworks
+            "tube_spacing_trv": 2.5,
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 21,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(690e-3 / (2.5 * 1.067e-3))),  # 259 from axial length
+            "radius_outer_whole_hex": 460e-3,
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 12.0,
+            "mflow_c_total": 0.3,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "ahjeb_toc": {
+            "case_name": "AHJE ToC",  # version B - H2TOCv2 ExPHT
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "Th_in": 574.0,
+            "Ph_in": 0.368e5,
+            "Tc_in": 287.0,
+            "Pc_in": 150e5,
+            "tube_outer_diam": 1.067e-3,
+            "tube_thick": 0.129e-3,
+            "tube_spacing_trv": 3.0,  # Why higher than for ahje?
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 21,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "radius_outer_whole_hex": 460e-3,
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 12.0,
+            "mflow_c_total": 0.76,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "ahjeb_toc_outb": {
+            "case_name": "AHJE ToC Outb",  # version B - H2TOCv2 ExPHT (Outboard)
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "Th_in": 574.0,
+            "Ph_in": 0.368e5,
+            "Tc_in": 287.0,
+            "Pc_in": 150e5,
+            "tube_outer_diam": 1.067e-3,
+            "tube_thick": 0.129e-3,
+            "tube_spacing_trv": 3.0,  # Why higher than for ahje?
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 21,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "radius_outer_whole_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # From inner radius
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 12.0,
+            "mflow_c_total": 0.76,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "chinese": {
+            "case_name": "K. He 2024",
+            "fluid_hot": PerfectGasFluid.from_name("Air"),
+            "fluid_cold": PerfectGasFluid.from_name("H2"),  # should be parahydrogen
+            "Th_in": 734.0,
+            "Ph_in": 2.62e5,
+            "Tc_in": 90.0,
+            "Pc_in": 150e5,
+            "tube_outer_diam": 1.0e-3,
+            "tube_thick": 0.07e-3,
+            "tube_spacing_trv": 2.0,
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 8,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(2.08 / (2.0 * 1.0e-3))),
+            "radius_outer_whole_hex": 0.112 + 8 * 4 * 1.5 * 1.0e-3,
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 24.0,
+            "mflow_c_total": 2.0,
+            "wall_conductivity": 11.4,  # Inconel 718
+        },
+    }
 
-    raise ValueError(f"Unknown case '{case}'. Currently supported: 'viper'.")
+    if canonical not in cases:
+        available = ", ".join(sorted(cases))
+        raise ValueError(f"Unknown case '{case}'. Currently supported: {available}.")
+
+    params = dict(cases[canonical])
+
+    return params
 
 
 def _compute_involute_length(
@@ -284,7 +434,6 @@ def main(case: str = "viper") -> None:
         n_rows_axial=params["n_rows_axial"],
         radius_outer_whole_hex=params["radius_outer_whole_hex"],
         inv_angle_deg=params["inv_angle_deg"],
-        rectangular=params["rectangular"],
     )
 
     fluid_hot = params["fluid_hot"]
@@ -306,10 +455,12 @@ def main(case: str = "viper") -> None:
         wall_k=params["wall_conductivity"],
     )
     logger.info(
-        "Hot inlet parameters: Th_in=%.2f K, Ph_in=%.2e Pa", params["Th_in"], params["Ph_in"]
+        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_in =%.2e Pa",
+        params["Th_in"],
+        params["Ph_in"],
     )
     logger.info(
-        "Case %s: 0D guess for inner boundary \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        "Case %10s: 0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         params["case_name"],
         Th0,
         (1 - Ph0 / params["Ph_in"]) * 100.0,
@@ -421,4 +572,8 @@ def main(case: str = "viper") -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(case="chinese")
+    main(case="ahjeb")
+    main(case="ahjeb_toc")
+    # main(case="ahjeb_toc_outb")
+    main(case="viper")

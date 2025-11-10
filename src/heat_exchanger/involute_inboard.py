@@ -47,7 +47,6 @@ class RadialInvoluteGeometry:
     n_rows_axial: int
     radius_outer_whole_hex: float
     inv_angle_deg: float = 360.0
-    rectangular: bool = False  # Relic of when this was for a general tube bank HEx
 
     def tube_inner_diam(self) -> float:
         return self.tube_outer_diam - 2.0 * self.tube_thick
@@ -133,9 +132,6 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
     tube_length = np.zeros(n_layers)
     dh_hot = np.zeros(n_layers)
 
-    if geom.rectangular:
-        frontal_scale = geom.frontal_area_outer() / geom.n_headers
-
     # Free-area ratios (global) depend only on spacing
     sigma_hot = (spacing_trv - geom.tube_outer_diam) / spacing_trv
     if geom.staggered:
@@ -146,15 +142,11 @@ def _compute_geometry_arrays(geom: RadialInvoluteGeometry) -> _GeometryCache:
     Lf = geom.n_rows_per_header * spacing_long
 
     for j in range(n_layers):
-        if geom.rectangular:
-            tube_length[j] = axial_length
-            area_frontal_hot[j] = frontal_scale
-        else:
-            tube_length[j] = np.trapezoid(
-                np.sqrt(radii[j : j + 2] ** 2 + inv_b**2),
-                theta[j : j + 2],
-            )
-            area_frontal_hot[j] = axial_length * 2.0 * np.pi * radii[j] / geom.n_headers
+        tube_length[j] = np.trapezoid(
+            np.sqrt(radii[j : j + 2] ** 2 + inv_b**2),
+            theta[j : j + 2],
+        )
+        area_frontal_hot[j] = axial_length * 2.0 * np.pi * radii[j] / geom.n_headers
 
         area_ht_hot[j] = np.pi * geom.tube_outer_diam * tube_length[j] * tubes_per_layer
         area_ht_cold[j] = np.pi * tube_inner_diam * tube_length[j] * tubes_per_layer
@@ -222,8 +214,6 @@ def F_inboard(
     # axial_length = geometry.axial_length()
     # radius_inner = geometry.radius_inner_whole_hex()
     # hx_area = np.pi * (geometry.radius_outer_whole_hex**2 - radius_inner**2)
-    # if geometry.rectangular:
-    #    hx_area = geom_cache.dR * geometry.radius_outer_whole_hex
 
     m_dot_hot = mdot_h_total / geometry.n_headers
     m_dot_cold = mdot_c_total / geometry.n_headers
