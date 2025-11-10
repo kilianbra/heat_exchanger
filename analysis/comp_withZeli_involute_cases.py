@@ -1,12 +1,6 @@
-"""Solve the inboard involute HX shooting problem for the VIPER case.
-
-This analysis script:
-  1) Builds the VIPER inputs (legacy notation mapped to new geometry API)
-  2) Computes a fast 0D two-step initial guess for the hot inner boundary
-  3) Solves the shooting residuals with SciPy's root-finder using ``F_inboard``
+"""Solve the inboard involute HX shooting problem for Radial Involute HEx.
+Compare the results with Zeli's analysis.
 """
-
-# ruff: noqa: I001
 
 from __future__ import annotations
 
@@ -22,14 +16,13 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluids.protocols import FluidModel, PerfectGasFluid, CoolPropFluid, RefPropFluid
+from heat_exchanger.fluids.protocols import CoolPropFluid, FluidModel, PerfectGasFluid, RefPropFluid
 from heat_exchanger.involute_inboard import (
     F_inboard,
     MarchingOptions,
     RadialInvoluteGeometry,
 )
 from heat_exchanger.logging_utils import configure_logging
-
 
 logger = logging.getLogger(__name__)
 
