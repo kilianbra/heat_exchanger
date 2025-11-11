@@ -177,7 +177,7 @@ def _compute_overall_performance(
     Tc: np.ndarray,
     Pc: np.ndarray,
     Th_in: float,
-    Ph_in: float,
+    Ph_known: float,
     Tc_in: float,
     Pc_in: float,
     fluid_hot: FluidModel,
@@ -186,6 +186,7 @@ def _compute_overall_performance(
     mdot_c_total: float,
     geom_cache: _GeometryCache,
     n_headers: int,
+    outlet_pressure_known: bool = False,
 ) -> None:
     """Calculate overall heat exchanger performance metrics.
 
@@ -203,9 +204,15 @@ def _compute_overall_performance(
     # Hot side: flows from outer (index -1) to inner (index 0)
     # Cold side: flows from inner (index 0) to outer (index -1)
     Th_out = Th[0]
-    Ph_out = Ph[0]
     Tc_out = Tc[-1]
     Pc_out = Pc[-1]
+
+    if outlet_pressure_known:
+        Ph_out = Ph_known
+        Ph_in = Ph[-1]
+    else:
+        Ph_in = Ph_known
+        Ph_out = Ph[0]
 
     # Get states at inlet and outlet for both fluids
     state_h_in = fluid_hot.state(Th_in, Ph_in)
@@ -283,7 +290,7 @@ def F_inboard(
     fluid_hot: FluidModel,
     fluid_cold: FluidModel,
     Th_in: float,
-    Ph_in: float,
+    Ph_known: float,
     Tc_in: float,
     Pc_in: float,
     mdot_h_total: float,
@@ -291,6 +298,7 @@ def F_inboard(
     wall_conductivity: float,
     options: MarchingOptions | None = None,
     diagnostics: dict[str, float] | None = None,
+    outlet_pressure_known: bool = False,
 ) -> np.ndarray:
     """Return residuals at the hot outer boundary for an inboard shoot.
 
@@ -309,7 +317,7 @@ def F_inboard(
 
     Returns:
     - [0] = temperature residual Th_in_calc - Th_in
-    - [1] = pressure residual Ph_in_calc - Ph_in
+    - [1] = pressure residual Ph_in_calc - Ph_in (or 0 if outlet pressure is known)
     """
 
     opts = options or MarchingOptions()
@@ -331,7 +339,10 @@ def F_inboard(
     UA_sum = 0.0
     # Boundary conditions at the inner radius (start of march)
     Th[0] = Th_out_guess
-    Ph[0] = Ph_out_guess
+    if not outlet_pressure_known:
+        Ph[0] = Ph_out_guess
+    else:
+        Ph[0] = Ph_known
 
     Tc[0] = Tc_in
     Pc[0] = Pc_in
@@ -499,7 +510,7 @@ def F_inboard(
     Ph_in_calc = Ph[-1]
 
     residual_T = Th_in_calc - Th_in
-    residual_P = Ph_in_calc - Ph_in
+    residual_P = Ph_in_calc - Ph_known if not outlet_pressure_known else 0.0
 
     if diagnostics is not None:
         total_area_ht_hot = np.sum(geom_cache.area_ht_hot)
@@ -529,7 +540,7 @@ def F_inboard(
             Tc,
             Pc,
             Th_in,
-            Ph_in,
+            Ph_known,
             Tc_in,
             Pc_in,
             fluid_hot,
@@ -538,6 +549,7 @@ def F_inboard(
             mdot_c_total,
             geom_cache,
             geometry.n_headers,
+            outlet_pressure_known,
         )
 
     return np.array([residual_T, residual_P])

@@ -205,6 +205,29 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "mflow_c_total": 2.0,
             "wall_conductivity": 11.4,  # Inconel 718
         },
+        "ahjeb_MTO_k1": { # Uses conditions from 28/10 ppt
+            "case_name": "AHJE MTO k",  # version B - H2TOCv2 ExPHT
+            "fluid_hot": air,
+            "fluid_cold": h2,
+            "Th_in": 574.0,
+            "Ph_out": 1.01e5,
+            "Tc_in": 287.0,
+            "Pc_in": 150e5,
+            "tube_outer_diam": 1.067e-3,
+            "tube_thick": 0.129e-3,
+            "tube_spacing_trv": 3.0,  # Why higher than for ahje?
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 21,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "radius_outer_whole_hex": 460e-3,
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 162.04 * 0.2,
+            "mflow_c_total": 1.316,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        
     }
 
     if canonical not in cases:
@@ -236,7 +259,8 @@ def _zero_d_two_step_guess(
     Tc_in: float,
     Pc_in: float,
     *,
-    wall_k: float,
+    wall_k: float = WALL_CONDUCTIVITY_304_SS,
+    Ph_out: float | None = None,
 ) -> tuple[float, float]:
     """Return (Th_inner_guess, Ph_inner_guess) using a two-step 0D estimate.
 
@@ -285,8 +309,13 @@ def _zero_d_two_step_guess(
         Ph_eval: float,
         Tc_eval: float,
         Pc_eval: float,
+        _Ph_out: float | None = None,
     ) -> tuple[float, float, float, float]:
-        """Single 0D estimate using property evaluation at (eval) and inlets (b)."""
+        """Single 0D estimate using property evaluation at (eval) and inlets (b).
+        If _Ph_out is specified, then any input at _Ph_in is ignored. The inlet pressure
+        is then calculated and returned as Ph_not_b.
+        If no _Ph_out is specified, then like with the other three, _Ph_in is used
+        and the exit pressure is returned as Ph_not_b."""
         sh = fluid_hot.state(Th_eval, Ph_eval)
         sc = fluid_cold.state(Tc_eval, Pc_eval)
         Pr_h = sh.mu * sh.cp / sh.k
@@ -345,19 +374,20 @@ def _zero_d_two_step_guess(
 
         dh0_h = -Q / mflow_h_total
         dh0_c = Q / mflow_c_total
-        Th_out, Ph_out = update_static_properties(
+        Th_out, Ph_not_b = update_static_properties(
             fluid_hot,
             G_h0,
             dh0_h,
             tau_h,
             T_a=_Th_in,
-            p_b=_Ph_in,
+            p_b=_Ph_out if _Ph_out is not None else _Ph_in,
             a_is_in=True,
-            b_is_in=True,
+            b_is_in=False if _Ph_out is not None else True,
             max_iter=100,
             tol_T=1e-2,
             rel_tol_p=1e-2,
         )
+        
         Tc_out, Pc_out = update_static_properties(
             fluid_cold,
             G_c0,
@@ -372,16 +402,17 @@ def _zero_d_two_step_guess(
             rel_tol_p=1e-2,
         )
 
-        return Th_out, Tc_out, Ph_out, Pc_out
+        return Th_out, Tc_out, Ph_not_b, Pc_out
 
     logger.debug(
-        "0D guess 0: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%5.2e Pa, Pc_in =%5.2e Pa",
+        "0D guess 0: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%5.2e Pa, Pc_in =%5.2e Pa (Ph_out=%s)",
         Th_in,
         Tc_in,
         Ph_in,
         Pc_in,
+        f"{Ph_out:.2f}" if Ph_out is not None else "N/A",
     )
-    Th_o1, Tc_o1, Ph_o1, Pc_o1 = _0d_model(
+    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_model(
         Th_in,
         Ph_in,
         Tc_in,
@@ -390,19 +421,30 @@ def _zero_d_two_step_guess(
         Ph_in,
         Tc_in,
         Pc_in,
+        _Ph_out=Ph_out,
     )
-    logger.debug(
-        "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
-        Th_o1,
-        Tc_o1,
-        Ph_o1,
-        Pc_o1,
-    )
+    if Ph_out is not None:
+        logger.debug(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o1,
+            Tc_o1,
+            Ph_out,
+            Pc_o1,
+            Ph_not_b1,
+        )
+    else:
+        logger.debug(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o1,
+            Tc_o1,
+            Ph_not_b1,
+            Pc_o1,
+        )
     Th_mean = 0.5 * (Th_in + Th_o1)
     Tc_mean = 0.5 * (Tc_in + Tc_o1)
-    Ph_mean = 0.5 * (Ph_in + Ph_o1)
+    Ph_mean = 0.5 * (Ph_in + Ph_not_b1) if Ph_out is not None else 0.5 * (Ph_out + Ph_not_b1)
     Pc_mean = 0.5 * (Pc_in + Pc_o1)
-    Th_o2, Tc_o2, Ph_o2, Pc_o2 = _0d_model(
+    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_model(
         Th_in,
         Ph_in,
         Tc_in,
@@ -411,16 +453,27 @@ def _zero_d_two_step_guess(
         Ph_mean,
         Tc_mean,
         Pc_mean,
+        _Ph_out=Ph_out,
     )
-    logger.debug(
-        "0D guess 2: Th_out=%.2f K, Tc_out=%.2f K, Ph_out=%.2e Pa, Pc_out=%.2e Pa",
-        Th_o2,
-        Tc_o2,
-        Ph_o2,
-        Pc_o2,
-    )
+    if Ph_out is not None:
+        logger.debug(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o2,
+            Tc_o2,
+            Ph_out,
+            Pc_o2,
+            Ph_not_b2,
+        )
+    else:
+        logger.debug(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o2,
+            Tc_o2,
+            Ph_not_b2,
+            Pc_o2,
+        )
     # Hot inner boundary (inboard shoot) guess equals the 0D outlet
-    return float(Th_o2), float(Ph_o2)
+    return float(Th_o2), float(Ph_not_b2)
 
 
 def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
@@ -455,6 +508,12 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # 0D two-step initial guess assuming counterflow epsilon-NTU relationship
     # (first using inlet properties as average, then using average of first guess
     # outlet and known inlet to get a better average properties guess)
+    if "Ph_out" in params:
+        Ph_out_known = params["Ph_out"]
+        Ph_in_known = None
+    else:
+        Ph_in_known = params["Ph_in"]
+        Ph_out_known = None
     Th0, Ph0 = _zero_d_two_step_guess(
         geom,
         fluid_hot,
@@ -462,21 +521,24 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         params["mflow_h_total"],
         params["mflow_c_total"],
         params["Th_in"],
-        params["Ph_in"],
+        Ph_in_known,
         params["Tc_in"],
         params["Pc_in"],
         wall_k=params["wall_conductivity"],
+        Ph_out=Ph_out_known,
     )
     logger.info(
-        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_in =%.2e Pa",
+        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
         params["Th_in"],
-        params["Ph_in"],
+        Ph_in_known if Ph_in_known is not None else Ph_out_known,
+        "inlet" if Ph_in_known is not None else "outlet",
     )
+    dP_P_in = (1-Ph0/Ph_in_known) * 100.0 if Ph_in_known is not None else (1-Ph_out_known/Ph0) * 100.0
     logger.info(
         "Case %10s: 0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         params["case_name"],
         Th0,
-        (1 - Ph0 / params["Ph_in"]) * 100.0,
+        dP_P_in,
     )
 
     eval_state = {"count": 0}
@@ -504,18 +566,19 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         eval_state["count"] += 1
         raw = F_inboard(
             Th_out_guess=x[0],
-            Ph_out_guess=x[1],
+            Ph_not_known_guess=x[1], # disregarded if outlet pressure is known
             geometry=geom,
             fluid_hot=fluid_hot,
             fluid_cold=fluid_cold,
             Th_in=params["Th_in"],
-            Ph_in=params["Ph_in"],
+            Ph_known=Ph_in_known if Ph_in_known is not None else Ph_out_known,
             Tc_in=params["Tc_in"],
             Pc_in=params["Pc_in"],
             mdot_h_total=params["mflow_h_total"],
             mdot_c_total=params["mflow_c_total"],
             wall_conductivity=params["wall_conductivity"],
             options=MarchingOptions(),
+            oulet_pressure_known = True if Ph_out_known is not None else False,
         )
         # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
         # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
