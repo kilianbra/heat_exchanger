@@ -120,6 +120,7 @@ class FluidModel(Protocol):
     def state(self, T: float, P: float) -> FluidState: ...
 
 
+@dataclass(frozen=True)
 class FluidInputs(Protocol):
     """
     Inputs container for a two-stream heat exchanger.
