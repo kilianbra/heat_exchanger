@@ -8,10 +8,11 @@ from __future__ import annotations
 import logging
 from functools import cached_property
 from typing import Protocol
+from dataclasses import dataclass
 
 import numpy as np
 
-from heat_exchanger.conservation import update_static_properties as _update_static_properties
+from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
 from heat_exchanger.correlations import (
     circular_pipe_friction_factor as _circ_fric,
 )
@@ -22,7 +23,7 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor as _bank_corr,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
-from heat_exchanger.fluids.protocols import FluidInputs as _FluidInputs
+from heat_exchanger.fluids.protocols import FluidInputsProtocol as _FluidInputs
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ WALL_CONDUCTIVITY_304_SS = 14.0
 WALL_DENSITY_304_SS = 7930.0
 
 
-class RadialSpiralGeometry(Protocol):
+class RadialSpiralProtocol(Protocol):
     """Protocol describing a heat-exchanger geometry where a tube bank is wrapped in a spiral
     and the flow outside the tubes is flowing radially. This produces a local crossflow
     but overall counterflow configuration.
@@ -39,7 +40,7 @@ class RadialSpiralGeometry(Protocol):
       - tube_outer_diam, tube_thick
       - tube_spacing_trv, tube_spacing_long (non-dimensional spacing ratios)
       - staggered (True for staggered, False for inline)
-      - n_headers, n_rows_per_header, n_rows_axial
+      - n_headers, n_rows_per_header, n_tubes_per_row
       - radius_outer_whole_hex
       - inv_angle_deg (involute sweep angle in degrees)
 
@@ -55,7 +56,7 @@ class RadialSpiralGeometry(Protocol):
     staggered: bool
     n_headers: int
     n_rows_per_header: int
-    n_rows_axial: int
+    n_tubes_per_row: int
     radius_outer_whole_hex: float
     inv_angle_deg: float = 360.0
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
@@ -86,7 +87,7 @@ class RadialSpiralGeometry(Protocol):
 
     @cached_property
     def axial_length(self) -> float:
-        return self.n_rows_axial * self.tube_spacing_trv * self.tube_outer_diam
+        return self.n_tubes_per_row * self.tube_spacing_trv * self.tube_outer_diam
 
     @cached_property
     def frontal_area_outer(self) -> float:
@@ -94,18 +95,22 @@ class RadialSpiralGeometry(Protocol):
             2.0
             * np.pi
             * self.radius_outer_whole_hex
-            * self.n_rows_axial
+            * self.n_tubes_per_row
             * self.tube_outer_diam
             * self.tube_spacing_trv
         )
 
     @cached_property
-    def n_tubes_total(self) -> int:
-        return self.n_rows_axial * self.n_headers * self.n_rows_per_header
+    def n_rows(self) -> int:
+        return self.n_rows_per_header * self.n_headers
 
     @cached_property
-    def tubes_per_layer(self) -> int:
-        return self.n_rows_per_header * self.n_rows_axial
+    def n_tubes_total(self) -> int:
+        return self.n_tubes_per_row * self.n_rows
+
+    @cached_property
+    def n_tubes_per_header(self) -> int:
+        return self.n_rows_per_header * self.n_tubes_per_row
 
     @cached_property
     def tube_spacing_diag(self) -> float:
@@ -158,8 +163,10 @@ class RadialSpiralGeometry(Protocol):
             )
             area_frontal_hot[j] = self.axial_length * 2.0 * np.pi * radii[j] / self.n_headers
 
-            area_ht_hot[j] = np.pi * self.tube_outer_diam * tube_length[j] * self.tubes_per_layer
-            area_ht_cold[j] = np.pi * self.tube_inner_diam * tube_length[j] * self.tubes_per_layer
+            area_ht_hot[j] = np.pi * self.tube_outer_diam * tube_length[j] * self.n_tubes_per_header
+            area_ht_cold[j] = (
+                np.pi * self.tube_inner_diam * tube_length[j] * self.n_tubes_per_header
+            )
 
             area_free_hot[j] = area_frontal_hot[j] * self.sigma_outer
             # Valid for this segmentation of the HEx
@@ -182,10 +189,27 @@ class RadialSpiralGeometry(Protocol):
         }
 
 
+@dataclass(frozen=True)
+class RadialSpiralSpec(RadialSpiralProtocol):
+    """Concrete container implementing the RadialSpiralGeometry protocol."""
+
+    tube_outer_diam: float
+    tube_thick: float
+    tube_spacing_trv: float
+    tube_spacing_long: float
+    staggered: bool
+    n_headers: int
+    n_rows_per_header: int
+    n_tubes_per_row: int
+    radius_outer_whole_hex: float
+    inv_angle_deg: float = 360.0
+    wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
+
+
 # ---------- Marching solver (inboard) ----------
 def calc_eps_local_and_tau(
     *,
-    geometry: RadialSpiralGeometry,
+    geometry: RadialSpiralProtocol,
     sh,
     sc,
     G_h: float,
@@ -265,7 +289,7 @@ def calc_eps_local_and_tau(
 
 def rad_spiral_shoot(
     boundary_guess: np.ndarray | list[float],
-    geometry: RadialSpiralGeometry,
+    geometry: RadialSpiralProtocol,
     fluids: _FluidInputs,
     *,
     property_solver_it_max: int = 20,
@@ -354,7 +378,7 @@ def rad_spiral_shoot(
         dh0_hot = -q / mdot_hot_per_header
         dh0_cold = q / mdot_cold_per_header
 
-        Th[j + 1], Ph[j + 1] = _update_static_properties(
+        Th[j + 1], Ph[j + 1] = _upd_stat_prop(
             fluids.hot,
             G_h,
             dh0_hot,
@@ -368,7 +392,7 @@ def rad_spiral_shoot(
             rel_tol_p=rel_tol_p,
         )
 
-        Tc[j + 1], Pc[j + 1] = _update_static_properties(
+        Tc[j + 1], Pc[j + 1] = _upd_stat_prop(
             fluids.cold,
             G_c,
             dh0_cold,
@@ -399,7 +423,7 @@ def rad_spiral_shoot(
 # ---------- Overall performance (diagnostics) ----------
 def compute_overall_performance(
     boundary_converged: np.ndarray | list[float],
-    geometry: RadialSpiralGeometry,
+    geometry: RadialSpiralProtocol,
     fluids: _FluidInputs,
     *,
     property_solver_it_max: int = 20,
@@ -490,7 +514,7 @@ def compute_overall_performance(
         )
         UA_sum += U_hot * area_ht_hot[j] * geometry.n_headers
 
-        Th[j + 1], Ph[j + 1] = _update_static_properties(
+        Th[j + 1], Ph[j + 1] = _upd_stat_prop(
             fluids.hot,
             G_h,
             -q / mdot_h,
@@ -503,7 +527,7 @@ def compute_overall_performance(
             tol_T=property_solver_tol_T,
             rel_tol_p=rel_tol_p,
         )
-        Tc[j + 1], Pc[j + 1] = _update_static_properties(
+        Tc[j + 1], Pc[j + 1] = _upd_stat_prop(
             fluids.cold,
             G_c,
             q / mdot_c,
@@ -572,6 +596,143 @@ def compute_overall_performance(
     dP_hot_pct = 100.0 * dP_hot / Ph_in if Ph_in > 0 else 0.0
     dP_cold_pct = 100.0 * dP_cold / float(fluids.Pc_in) if float(fluids.Pc_in) > 0 else 0.0
 
+    # Inlet/exit transport properties for non-dimensional groups (hot side)
+    mu_h_in = state_h_in.mu
+    mu_h_out = state_h_out.mu
+    k_h_in = state_h_in.k
+    k_h_out = state_h_out.k
+    cp_h_in = state_h_in.cp
+    cp_h_out = state_h_out.cp
+    rho_h_in = state_h_in.rho
+    rho_h_out = state_h_out.rho
+
+    # Cold states "paired" with hot ends: use inner (c_in) at hot_out; outer (c_out) at hot_in
+    state_c_at_hot_out = state_c_in
+    state_c_at_hot_in = state_c_out
+    mu_c_in = state_c_at_hot_in.mu
+    mu_c_out = state_c_at_hot_out.mu
+    k_c_in = state_c_at_hot_in.k
+    k_c_out = state_c_at_hot_out.k
+    cp_c_in = state_c_at_hot_in.cp
+    cp_c_out = state_c_at_hot_out.cp
+
+    Do_eff = geometry.tube_outer_diam
+    Di_eff = geometry.tube_inner_diam
+
+    # Velocities and mass flux relations
+    V_h_in = G_h_in / rho_h_in if rho_h_in > 0 else float("nan")
+    V_h_out = G_h_out / rho_h_out if rho_h_out > 0 else float("nan")
+
+    # Reynolds (OD based) and Prandtl
+    Re_h_in = G_h_in * Do_eff / mu_h_in if mu_h_in > 0 else float("nan")
+    Re_h_out = G_h_out * Do_eff / mu_h_out if mu_h_out > 0 else float("nan")
+    Pr_h_in = mu_h_in * cp_h_in / k_h_in if k_h_in > 0 else float("nan")
+    Pr_h_out = mu_h_out * cp_h_out / k_h_out if k_h_out > 0 else float("nan")
+
+    # Tube bank Nu and f at inlet and outlet
+    n_rows_total = geometry.n_rows_per_header * geometry.n_headers
+    Nu_h_in, f_h_in = (
+        _bank_corr(
+            Re_h_in,
+            geometry.tube_spacing_long,
+            geometry.tube_spacing_trv,
+            Pr_h_in,
+            inline=(not geometry.staggered),
+            n_rows=n_rows_total,
+        )
+        if np.isfinite(Re_h_in) and np.isfinite(Pr_h_in)
+        else (float("nan"), float("nan"))
+    )
+    Nu_h_out, f_h_out = (
+        _bank_corr(
+            Re_h_out,
+            geometry.tube_spacing_long,
+            geometry.tube_spacing_trv,
+            Pr_h_out,
+            inline=(not geometry.staggered),
+            n_rows=n_rows_total,
+        )
+        if np.isfinite(Re_h_out) and np.isfinite(Pr_h_out)
+        else (float("nan"), float("nan"))
+    )
+
+    # Stanton numbers
+    St_h_in = (
+        Nu_h_in / (Re_h_in * Pr_h_in)
+        if np.isfinite(Nu_h_in) and Re_h_in > 0 and Pr_h_in > 0
+        else float("nan")
+    )
+    St_h_out = (
+        Nu_h_out / (Re_h_out * Pr_h_out)
+        if np.isfinite(Nu_h_out) and Re_h_out > 0 and Pr_h_out > 0
+        else float("nan")
+    )
+
+    # Local h_h and h_c at inlet and outlet (use OD for hot, ID for cold)
+    h_h_in = Nu_h_in * k_h_in / Do_eff if np.isfinite(Nu_h_in) and Do_eff > 0 else float("nan")
+    h_h_out = Nu_h_out * k_h_out / Do_eff if np.isfinite(Nu_h_out) and Do_eff > 0 else float("nan")
+
+    # Cold-side Re, Pr, Nu at corresponding ends
+    Re_c_in = G_c_total * Di_eff / mu_c_in if mu_c_in > 0 and Di_eff > 0 else float("nan")
+    Re_c_out = G_c_total * Di_eff / mu_c_out if mu_c_out > 0 and Di_eff > 0 else float("nan")
+    Pr_c_in = mu_c_in * cp_c_in / k_c_in if k_c_in > 0 else float("nan")
+    Pr_c_out = mu_c_out * cp_c_out / k_c_out if k_c_out > 0 else float("nan")
+    Nu_c_in = (
+        _circ_nu(Re_c_in, 0, prandtl=Pr_c_in)
+        if np.isfinite(Re_c_in) and np.isfinite(Pr_c_in)
+        else float("nan")
+    )
+    Nu_c_out = (
+        _circ_nu(Re_c_out, 0, prandtl=Pr_c_out)
+        if np.isfinite(Re_c_out) and np.isfinite(Pr_c_out)
+        else float("nan")
+    )
+    h_c_in = Nu_c_in * k_c_in / Di_eff if np.isfinite(Nu_c_in) and Di_eff > 0 else float("nan")
+    h_c_out = Nu_c_out * k_c_out / Di_eff if np.isfinite(Nu_c_out) and Di_eff > 0 else float("nan")
+
+    # Wall conduction term and overall U at ends
+    wall_term = (
+        Do_eff / (2.0 * geometry.wall_conductivity) * np.log(Do_eff / Di_eff)
+        if Do_eff > 0 and Di_eff > 0 and geometry.wall_conductivity > 0
+        else float("nan")
+    )
+
+    def _U_local(hh: float, hc: float) -> float:
+        if not (np.isfinite(hh) and np.isfinite(hc) and np.isfinite(wall_term)):
+            return float("nan")
+        return 1.0 / (1.0 / hh + (1.0 / hc) * (Do_eff / Di_eff) + wall_term)
+
+    U_in = _U_local(h_h_in, h_c_in)
+    U_out = _U_local(h_h_out, h_c_out)
+
+    # Wall temperatures on hot side: Tw_hot = Th - q''/h_h, q'' = U*(Th-Tc)
+    deltaT_in = float(fluids.Th_in) - Tc_out
+    deltaT_out = Th_out - float(fluids.Tc_in)
+    qpp_in = U_in * deltaT_in if np.isfinite(U_in) else float("nan")
+    qpp_out = U_out * deltaT_out if np.isfinite(U_out) else float("nan")
+    Tw_h_in = (
+        float(fluids.Th_in) - (qpp_in / h_h_in)
+        if np.isfinite(qpp_in) and np.isfinite(h_h_in) and h_h_in > 0
+        else float("nan")
+    )
+    Tw_h_out = (
+        Th_out - (qpp_out / h_h_out)
+        if np.isfinite(qpp_out) and np.isfinite(h_h_out) and h_h_out > 0
+        else float("nan")
+    )
+
+    # Eckert numbers
+    Ec_h_in = (
+        (V_h_in**2) / (cp_h_in * max(float(fluids.Th_in) - Tw_h_in, 1e-16))
+        if np.isfinite(V_h_in) and np.isfinite(Tw_h_in)
+        else float("nan")
+    )
+    Ec_h_out = (
+        (V_h_out**2) / (cp_h_out * max(Th_out - Tw_h_out, 1e-16))
+        if np.isfinite(V_h_out) and np.isfinite(Tw_h_out)
+        else float("nan")
+    )
+
     diagnostics: dict[str, float] = {
         "total_UA": float(UA_sum),
         "Q_total": float(Q_hot),
@@ -590,6 +751,26 @@ def compute_overall_performance(
         "Pc_out": float(Pc_out),
     }
 
+    # Store non-dimensional groups and supporting quantities
+    diagnostics["Re_h_in"] = float(Re_h_in)
+    diagnostics["Re_h_out"] = float(Re_h_out)
+    diagnostics["St_h_in"] = float(St_h_in)
+    diagnostics["St_h_out"] = float(St_h_out)
+    diagnostics["f_h_in"] = float(f_h_in)
+    diagnostics["f_h_out"] = float(f_h_out)
+    diagnostics["Ec_h_in"] = float(Ec_h_in)
+    diagnostics["Ec_h_out"] = float(Ec_h_out)
+    diagnostics["V_h_in"] = float(V_h_in)
+    diagnostics["V_h_out"] = float(V_h_out)
+    diagnostics["V2_h_in"] = float(V_h_in**2) if np.isfinite(V_h_in) else float("nan")
+    diagnostics["V2_h_out"] = float(V_h_out**2) if np.isfinite(V_h_out) else float("nan")
+    diagnostics["cp_h_in"] = float(cp_h_in)
+    diagnostics["cp_h_out"] = float(cp_h_out)
+    diagnostics["dT_hw_in"] = (
+        float(float(fluids.Th_in) - Tw_h_in) if np.isfinite(Tw_h_in) else float("nan")
+    )
+    diagnostics["dT_hw_out"] = float(Th_out - Tw_h_out) if np.isfinite(Tw_h_out) else float("nan")
+
     return {
         "residuals": residuals,
         "Th": Th,
@@ -600,4 +781,9 @@ def compute_overall_performance(
     }
 
 
-__all__ = ["RadialSpiralGeometry", "rad_spiral_shoot", "compute_overall_performance"]
+__all__ = [
+    "RadialSpiralProtocol",
+    "RadialSpiralSpec",
+    "rad_spiral_shoot",
+    "compute_overall_performance",
+]

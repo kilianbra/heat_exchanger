@@ -1,7 +1,5 @@
 __all__ = [  # adding to namespace means functions can be accessed directly from the package namespace
     "epsilon_ntu",
-    "momentum_balance_segment",
-    "energy_balance_segment",
     "update_static_properties",
     "dp_friction_only",
     "dp_tube_bank",
@@ -22,8 +20,6 @@ __all__ = [  # adding to namespace means functions can be accessed directly from
 ]  # Makes these functions imported when import * but also allows changing structure of package without breaking code
 
 from heat_exchanger.conservation import (
-    energy_balance_segment,
-    momentum_balance_segment,
     update_static_properties,
 )
 from heat_exchanger.correlations import (

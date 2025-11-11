@@ -120,8 +120,7 @@ class FluidModel(Protocol):
     def state(self, T: float, P: float) -> FluidState: ...
 
 
-@dataclass(frozen=True)
-class FluidInputs(Protocol):
+class FluidInputsProtocol(Protocol):
     """
     Inputs container for a two-stream heat exchanger.
 
@@ -152,6 +151,19 @@ class FluidInputs(Protocol):
     # Hot-side pressure: provide either inlet or outlet
     Ph_in: float | None
     Ph_out: float | None
+
+
+@dataclass(frozen=True)
+class FluidInputs(FluidInputsProtocol):
+    hot: FluidModel
+    cold: FluidModel
+    m_dot_hot: float
+    m_dot_cold: float
+    Tc_in: float
+    Pc_in: float
+    Th_in: float
+    Ph_in: float | None = None
+    Ph_out: float | None = None
 
 
 class PerfectGasFluid:
@@ -637,6 +649,7 @@ class _RefPropState:
 __all__ = [
     "FluidState",
     "FluidModel",
+    "FluidInputsProtocol",
     "FluidInputs",
     "PerfectGasFluid",
     "CoolPropFluid",

@@ -9,18 +9,28 @@ import logging
 import numpy as np
 from scipy.optimize import root
 
-from heat_exchanger.conservation import update_static_properties
+from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
 from heat_exchanger.correlations import (
-    circular_pipe_friction_factor,
-    circular_pipe_nusselt,
-    tube_bank_nusselt_number_and_friction_factor,
+    circular_pipe_friction_factor as _circ_fric,
 )
-from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluids.protocols import CoolPropFluid, FluidModel, PerfectGasFluid, RefPropFluid
-from heat_exchanger.involute_inboard import (
-    F_inboard,
-    MarchingOptions,
-    RadialInvoluteGeometry,
+from heat_exchanger.correlations import (
+    circular_pipe_nusselt as _circ_nu,
+)
+from heat_exchanger.correlations import (
+    tube_bank_nusselt_number_and_friction_factor as _bank_corr,
+)
+from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.protocols import (
+    CoolPropFluid,
+    FluidInputs,
+    PerfectGasFluid,
+    RefPropFluid,
+)
+from heat_exchanger.geometries.radial_spiral import (
+    RadialSpiralProtocol,
+    RadialSpiralSpec,
+    compute_overall_performance,
+    rad_spiral_shoot,
 )
 from heat_exchanger.logging_utils import configure_logging
 
@@ -32,8 +42,10 @@ WALL_DENSITY_304_SS = 7930.0
 WALL_MATERIAL_304_SS = "304 Stainless Steel"
 
 
-def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
-    """Return configuration for a named case.
+def load_case(
+    case: str, fluid_model: str = "PerfectGas"
+) -> tuple[RadialSpiralProtocol, FluidInputs, str]:
+    """Return (geometry, inputs, case_name) for a named case.
 
     Supported case identifiers (case-insensitive):
       - ``viper``
@@ -89,7 +101,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 31,
             "n_rows_per_header": 4,
-            "n_rows_axial": 200,
+            "n_tubes_per_row": 200,
             "radius_outer_whole_hex": 478e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.26,
@@ -111,7 +123,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(540e-3 / (2.5 * 0.98e-3))),  # 220 from axial length
+            "n_tubes_per_row": int(round(540e-3 / (2.5 * 0.98e-3))),  # 220 from axial length
             "radius_outer_whole_hex": 325e-3 + 21 * 4 * 1.5 * 0.98e-3,  # 448.5e-3
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,  # 60 * 0.2
@@ -133,7 +145,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(690e-3 / (2.5 * 1.067e-3))),  # 259 from axial length
+            "n_tubes_per_row": int(round(690e-3 / (2.5 * 1.067e-3))),  # 259 from axial length
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
@@ -155,7 +167,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
@@ -177,7 +189,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
             "radius_outer_whole_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # From inner radius
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
@@ -199,7 +211,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 8,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(2.08 / (2.0 * 1.0e-3))),
+            "n_tubes_per_row": int(round(2.08 / (2.0 * 1.0e-3))),
             "radius_outer_whole_hex": 0.112 + 8 * 4 * 1.5 * 1.0e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 24.0,
@@ -221,7 +233,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 11,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 162.04 * 0.2,
@@ -243,7 +255,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 64.3 * 0.2,
@@ -258,10 +270,38 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
 
     params = dict(cases[canonical])
 
-    return params
+    # Build geometry
+    geom = RadialSpiralSpec(
+        tube_outer_diam=params["tube_outer_diam"],
+        tube_thick=params["tube_thick"],
+        tube_spacing_trv=params["tube_spacing_trv"],
+        tube_spacing_long=params["tube_spacing_long"],
+        staggered=params["staggered"],
+        n_headers=params["n_headers"],
+        n_rows_per_header=params["n_rows_per_header"],
+        n_tubes_per_row=params["n_tubes_per_row"],
+        radius_outer_whole_hex=params["radius_outer_whole_hex"],
+        inv_angle_deg=params["inv_angle_deg"],
+        wall_conductivity=params["wall_conductivity"],
+    )
+
+    # Build inputs
+    inputs = FluidInputs(
+        hot=params["fluid_hot"],
+        cold=params["fluid_cold"],
+        m_dot_hot=params["mflow_h_total"],
+        m_dot_cold=params["mflow_c_total"],
+        Tc_in=params["Tc_in"],
+        Pc_in=params["Pc_in"],
+        Th_in=params["Th_in"],
+        Ph_in=params.get("Ph_in"),
+        Ph_out=params.get("Ph_out"),
+    )
+
+    return geom, inputs, params["case_name"]
 
 
-def _compute_involute_length(
+def _compute_spiral_length(
     radius_inner: float, radius_outer: float, inv_angle_deg: float, n_points: int = 64
 ) -> float:
     theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), n_points)
@@ -270,59 +310,59 @@ def _compute_involute_length(
     return float(np.trapezoid(np.sqrt(r_vals**2 + b**2), theta_vals))
 
 
-def _zero_d_two_step_guess(
-    geom: RadialInvoluteGeometry,
-    fluid_hot: FluidModel,
-    fluid_cold: FluidModel,
-    mflow_h_total: float,
-    mflow_c_total: float,
-    Th_in: float,
-    Ph_in: float,
-    Tc_in: float,
-    Pc_in: float,
-    *,
-    wall_k: float = WALL_CONDUCTIVITY_304_SS,
-    Ph_out: float | None = None,
+def _initial_guess_two_step_xflow(
+    geom: RadialSpiralProtocol,
+    inputs: FluidInputs,
 ) -> tuple[float, float]:
-    """Return (Th_inner_guess, Ph_inner_guess) using a two-step 0D estimate.
+    """Return (Th_inner_guess, Ph_other_guess) using a two-step 0D estimate.
 
     The first step evaluates properties at the inlet conditions; the second step
     re-evaluates at the mean of the inlet and the first-step outlet to refine the
     guess.
     """
 
-    tube_ID = geom.tube_outer_diam - 2.0 * geom.tube_thick
-    r_in = geom.radius_inner_whole_hex()
+    # Unpack inputs
+    # Convenience aliases (optional)
+    fluid_hot = inputs.hot  # noqa: F841
+    fluid_cold = inputs.cold  # noqa: F841
+    mflow_h_total = inputs.m_dot_hot
+    mflow_c_total = inputs.m_dot_cold
+    Th_in = inputs.Th_in
+    Tc_in = inputs.Tc_in
+    Pc_in = inputs.Pc_in
+    Ph_in = inputs.Ph_in
+    Ph_out = inputs.Ph_out
+
+    # Validate boundary pressure specification
+    if (Ph_in is None and Ph_out is None) or (Ph_in is not None and Ph_out is not None):
+        raise ValueError("Specify exactly one of Ph_in or Ph_out in FluidInputs.")
+
+    tube_ID = geom.tube_inner_diam
+    r_in = geom.radius_inner_whole_hex
     r_out = geom.radius_outer_whole_hex
-    Lx = geom.n_rows_axial * geom.tube_spacing_trv * geom.tube_outer_diam
+    Lx = geom.axial_length
 
     # Global single-tube areas using total involute length
-    inv_len = _compute_involute_length(r_in, r_out, geom.inv_angle_deg)
+    inv_len = _compute_spiral_length(r_in, r_out, geom.inv_angle_deg)
     A_ht_hot_one = np.pi * geom.tube_outer_diam * inv_len
     A_ht_cold_one = np.pi * tube_ID * inv_len
 
     n_rows_radial = geom.n_rows_per_header * geom.n_headers
-    n_tubes_total = geom.n_rows_axial * n_rows_radial
+    n_tubes_total = geom.n_tubes_total
     A_total_hot0 = A_ht_hot_one * n_tubes_total
     A_total_cold0 = A_ht_cold_one * n_tubes_total
 
     # Frontal/free areas at mid-radius and total cold frontal area (per sector/header)
     r_mid = 0.5 * (r_in + r_out)
     Afr_hot_mid = Lx * 2.0 * np.pi * r_mid
-    spacing_trv = geom.tube_spacing_trv * geom.tube_outer_diam
-    spacing_long = geom.tube_spacing_long * geom.tube_outer_diam
-    sigma_hot = (spacing_trv - geom.tube_outer_diam) / spacing_trv
-    if geom.staggered:
-        diag_spacing = np.sqrt(spacing_long**2 + (0.5 * spacing_trv) ** 2)
-        sigma_hot = min(sigma_hot, 2.0 * (diag_spacing - geom.tube_outer_diam) / spacing_trv)
-    Aff_hot_mid = Afr_hot_mid * sigma_hot
+    Aff_hot_mid = Afr_hot_mid * geom.sigma_outer
 
     Aff_cold_total = n_tubes_total * np.pi * tube_ID**2 / 4.0
 
     G_h0 = mflow_h_total / Aff_hot_mid
     G_c0 = mflow_c_total / Aff_cold_total
 
-    def _0d_model(
+    def _0d_counterflow_approx(
         _Th_in: float,
         _Ph_in: float,
         _Tc_in: float,
@@ -334,6 +374,7 @@ def _zero_d_two_step_guess(
         _Ph_out: float | None = None,
     ) -> tuple[float, float, float, float]:
         """Single 0D estimate using property evaluation at (eval) and inlets (b).
+        Approximates the heat exchanger as counterflow
         If _Ph_out is specified, then any input at _Ph_in is ignored. The inlet pressure
         is then calculated and returned as Ph_not_b.
         If no _Ph_out is specified, then like with the other three, _Ph_in is used
@@ -347,7 +388,7 @@ def _zero_d_two_step_guess(
         Re_h_OD = G_h0 * geom.tube_outer_diam / sh.mu
         Re_c = G_c0 * tube_ID / sc.mu
 
-        Nu_h, f_h = tube_bank_nusselt_number_and_friction_factor(
+        Nu_h, f_h = _bank_corr(
             Re_h_OD,
             geom.tube_spacing_long,
             geom.tube_spacing_trv,
@@ -361,13 +402,17 @@ def _zero_d_two_step_guess(
             Nu_h / Re_h_OD / Pr_h,
             f_h,
         )
-        Nu_c = circular_pipe_nusselt(Re_c, 0, prandtl=Pr_c)
-        f_c = circular_pipe_friction_factor(Re_c, 0)
+        Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+        f_c = _circ_fric(Re_c, 0)
 
         h_h = Nu_h * sh.k / geom.tube_outer_diam
         h_c = Nu_c * sc.k / tube_ID
 
-        wall_term = geom.tube_outer_diam / (2.0 * wall_k) * np.log(geom.tube_outer_diam / tube_ID)
+        wall_term = (
+            geom.tube_outer_diam
+            / (2.0 * geom.wall_conductivity)
+            * np.log(geom.tube_outer_diam / tube_ID)
+        )
         U = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / tube_ID) + wall_term)
 
         if logger.isEnabledFor(logging.DEBUG):
@@ -385,9 +430,7 @@ def _zero_d_two_step_guess(
         Cr = C_min / C_max
 
         NTU = U * A_total_hot0 / C_min
-        eps = epsilon_ntu(
-            NTU, Cr, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1
-        )
+        eps = _eps_ntu(NTU, Cr, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1)
         logger.debug("0D guess epsilon-NTU: NTU=%5.2f, eps=%5.2f", NTU, eps)
         Q = eps * C_min * (_Th_in - _Tc_in)
 
@@ -396,7 +439,7 @@ def _zero_d_two_step_guess(
 
         dh0_h = -Q / mflow_h_total
         dh0_c = Q / mflow_c_total
-        Th_out, Ph_not_b = update_static_properties(
+        Th_out, Ph_not_b = _upd_stat_prop(
             fluid_hot,
             G_h0,
             dh0_h,
@@ -410,7 +453,7 @@ def _zero_d_two_step_guess(
             rel_tol_p=1e-2,
         )
 
-        Tc_out, Pc_out = update_static_properties(
+        Tc_out, Pc_out = _upd_stat_prop(
             fluid_cold,
             G_c0,
             dh0_c,
@@ -434,9 +477,9 @@ def _zero_d_two_step_guess(
         Pc_in,
         f"{Ph_out:.2f}" if Ph_out is not None else "N/A",
     )
-    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_model(
+    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_counterflow_approx(
         Th_in,
-        Ph_in,
+        Ph_in if Ph_in is not None else float("nan"),
         Tc_in,
         Pc_in,
         Th_in,
@@ -469,9 +512,9 @@ def _zero_d_two_step_guess(
         raise ValueError("Either Ph_in or Ph_out must be provided for the 0D guess.")
     Ph_mean = 0.5 * (Ph_known + Ph_not_b1)
     Pc_mean = 0.5 * (Pc_in + Pc_o1)
-    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_model(
+    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_counterflow_approx(
         Th_in,
-        Ph_in,
+        Ph_in if Ph_in is not None else float("nan"),
         Tc_in,
         Pc_in,
         Th_mean,
@@ -503,58 +546,26 @@ def _zero_d_two_step_guess(
 
 def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
-    configure_logging(logging.INFO)
+    configure_logging(logging.DEBUG)
 
     # Control logging levels for different modules
     logging.getLogger("heat_exchanger.conservation").setLevel(
         logging.WARNING
     )  # Suppress debug from conservation.py
-    logging.getLogger("heat_exchanger.involute_inboard").setLevel(logging.INFO)
-    logging.getLogger("__main__").setLevel(logging.INFO)  # Main loop stays at INFO
+    logging.getLogger("heat_exchanger.geometries.radial_spiral").setLevel(logging.INFO)
+    logging.getLogger("__main__").setLevel(logging.DEBUG)  # Main loop stays at INFO
 
-    params = load_case(case, fluid_model)
-
-    geom = RadialInvoluteGeometry(
-        tube_outer_diam=params["tube_outer_diam"],
-        tube_thick=params["tube_thick"],
-        tube_spacing_trv=params["tube_spacing_trv"],
-        tube_spacing_long=params["tube_spacing_long"],
-        staggered=params["staggered"],
-        n_headers=params["n_headers"],
-        n_rows_per_header=params["n_rows_per_header"],
-        n_rows_axial=params["n_rows_axial"],
-        radius_outer_whole_hex=params["radius_outer_whole_hex"],
-        inv_angle_deg=params["inv_angle_deg"],
-    )
-
-    fluid_hot = params["fluid_hot"]
-    fluid_cold = params["fluid_cold"]
+    geom, inputs, case_name = load_case(case, fluid_model)
 
     # 0D two-step initial guess assuming counterflow epsilon-NTU relationship
     # (first using inlet properties as average, then using average of first guess
     # outlet and known inlet to get a better average properties guess)
-    if "Ph_out" in params:
-        Ph_out_known = params["Ph_out"]
-        Ph_in_known = None
-    else:
-        Ph_in_known = params["Ph_in"]
-        Ph_out_known = None
-    Th0, Ph0 = _zero_d_two_step_guess(
-        geom,
-        fluid_hot,
-        fluid_cold,
-        params["mflow_h_total"],
-        params["mflow_c_total"],
-        params["Th_in"],
-        Ph_in_known,
-        params["Tc_in"],
-        params["Pc_in"],
-        wall_k=params["wall_conductivity"],
-        Ph_out=Ph_out_known,
-    )
+    Ph_in_known = inputs.Ph_in
+    Ph_out_known = inputs.Ph_out
+    Th0, Ph0 = _initial_guess_two_step_xflow(geom, inputs)
     logger.info(
         "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
-        params["Th_in"],
+        inputs.Th_in,
         Ph_in_known if Ph_in_known is not None else Ph_out_known,
         "inlet" if Ph_in_known is not None else "outlet",
     )
@@ -565,7 +576,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     )
     logger.info(
         "Case %10s: 0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
-        params["case_name"],
+        case_name,
         Th0,
         dP_P_in,
     )
@@ -582,74 +593,47 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
 
         Inputs
         -------
-        x[0] : float
-            Guess for the hot inner-boundary temperature ``Th_out``.
-        x[1] : float
-            Guess for the hot inner-boundary pressure ``Ph_out``.
+        x : ndarray
+            boundary guess vector; [Th_out, Ph_out] if Ph_in known; [Th_out] if Ph_out known.
 
         Returns
         --------
-        scaled : np.ndarray shape (2,)
-            ``scaled[0]`` is the temperature residual ``Th_in_calc - Th_in`` (left unscaled).
-            ``scaled[1]`` is the pressure residual scaled so that a physical tolerance of
-            ``tol_P`` (1% Ph_in≈100 Pa) maps to the solver tolerance ``tol_root`` (1e-2).
+        scaled : np.ndarray shape (1 or 2,)
+            Temperature residual ``Th_in_calc - Th_in`` unscaled;
+            pressure residual scaled so that |ΔP| == tol_P maps to tol_root (when present).
         """
         eval_state["count"] += 1
-        raw = F_inboard(
-            Th_out_guess=x[0],
-            Ph_out_guess=x[1],  # disregarded if outlet pressure is known
-            geometry=geom,
-            fluid_hot=fluid_hot,
-            fluid_cold=fluid_cold,
-            Th_in=params["Th_in"],
-            Ph_known=Ph_in_known if Ph_in_known is not None else Ph_out_known,
-            Tc_in=params["Tc_in"],
-            Pc_in=params["Pc_in"],
-            mdot_h_total=params["mflow_h_total"],
-            mdot_c_total=params["mflow_c_total"],
-            wall_conductivity=params["wall_conductivity"],
-            options=MarchingOptions(),
-            outlet_pressure_known=(Ph_out_known is not None),
+        raw = rad_spiral_shoot(
+            x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
         )
         # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
         # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
-        scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
+        if raw.size == 2:
+            scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
+        else:
+            scaled = np.array([raw[0]], dtype=float)
         logger.debug(
-            (
-                "Residual eval %d: Th_guess=%.3f K, Ph_guess=%.3e Pa -> "
-                "Th_in_calc-Th_in=%+.1e K (target %.1e), Ph_in_calc-Ph_in=%+.1e Pa (target %.1e Pa)"
-            ),
+            ("Residual eval %d: x=%s -> Th_in_calc-Th_in=%+.1e K (target %.1e)%s"),
             eval_state["count"],
-            x[0],
-            x[1],
+            np.array2string(x, precision=3),
             raw[0],
             tol_root,
-            raw[1],
-            tol_P,
+            "" if raw.size == 1 else f", Ph_in_calc-Ph_in={raw[1]:+.1e} Pa (target {tol_P:.1e} Pa)",
         )
         return scaled
 
-    x0 = np.array([Th0, Ph0], dtype=float)
-    sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 40})
-
-    final_diag: dict[str, float] = {}
-    final_raw = F_inboard(
-        Th_out_guess=sol.x[0],
-        Ph_out_guess=sol.x[1],
-        geometry=geom,
-        fluid_hot=fluid_hot,
-        fluid_cold=fluid_cold,
-        Th_in=params["Th_in"],
-        Ph_known=Ph_in_known if Ph_in_known is not None else Ph_out_known,
-        Tc_in=params["Tc_in"],
-        Pc_in=params["Pc_in"],
-        mdot_h_total=params["mflow_h_total"],
-        mdot_c_total=params["mflow_c_total"],
-        wall_conductivity=params["wall_conductivity"],
-        options=MarchingOptions(),
-        diagnostics=final_diag,
-        outlet_pressure_known=(Ph_out_known is not None),
+    x0 = (
+        np.array([Th0, Ph0], dtype=float)
+        if Ph_in_known is not None
+        else np.array([Th0], dtype=float)
     )
+    sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 60})
+
+    result = compute_overall_performance(
+        sol.x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
+    )
+    final_diag: dict[str, float] = result["diagnostics"]  # type: ignore[assignment]
+    final_raw = result["residuals"]  # type: ignore[assignment]
 
     logger.debug(
         "SciPy root success=%s, nfev=%s, message=%s",
@@ -657,25 +641,29 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         getattr(sol, "nfev", None),
         sol.message,
     )
-    if Ph_in_known is not None:
-        dP_P_in = (1 - sol.x[1] / Ph_in_known) * 100.0
-    else:
-        dP_P_in = final_diag.get("dP_hot_pct", float("nan"))
+    dP_P_in = (
+        (1 - sol.x[1] / Ph_in_known) * 100.0
+        if Ph_in_known is not None
+        else final_diag.get("dP_hot_pct", float("nan"))
+    )
     logger.info(
         "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         eval_state["count"],
         sol.x[0],
         dP_P_in,
     )
-    logger.info(
-        "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e K), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e Pa)",
-        final_raw[0],
-        tol_root,
-        final_raw[1],
-        tol_P,
-    )
+    if final_raw.size == 2:
+        logger.info(
+            "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e K), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e Pa)",
+            final_raw[0],
+            tol_root,
+            final_raw[1],
+            tol_P,
+        )
+    else:
+        logger.info("Residual: Th_in_calc-Th_in=%.1e K (tol %.1e K)", final_raw[0], tol_root)
     if final_diag:
-        eps_counterflow = epsilon_ntu(
+        eps_counterflow = _eps_ntu(
             final_diag.get("NTU", float("nan")),
             final_diag.get("Cr", float("nan")),
             exchanger_type="aligned_flow",
@@ -704,7 +692,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             final_diag.get("Tc_out", float("nan")),
         )
         # Hot-side non-dimensionals and Eckert numbers at inlet and exit
-        logger.info(
+        logger.debug(
             "Hot inlet (outer r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
             final_diag.get("Re_h_in", float("nan")),
             final_diag.get("St_h_in", float("nan")),
@@ -713,14 +701,14 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             final_diag.get("V_h_in", float("nan")),
             final_diag.get("V2_h_in", float("nan")),
         )
-        logger.info(
+        logger.debug(
             "  Ec rationale (inlet): Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
             final_diag.get("V2_h_in", float("nan")),
             final_diag.get("cp_h_in", float("nan")),
             final_diag.get("dT_hw_in", float("nan")),
             final_diag.get("Ec_h_in", float("nan")),
         )
-        logger.info(
+        logger.debug(
             "Hot exit (inner r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
             final_diag.get("Re_h_out", float("nan")),
             final_diag.get("St_h_out", float("nan")),
@@ -729,18 +717,12 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             final_diag.get("V_h_out", float("nan")),
             final_diag.get("V2_h_out", float("nan")),
         )
-        logger.info(
+        logger.debug(
             "  Ec rationale (exit):  Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
             final_diag.get("V2_h_out", float("nan")),
             final_diag.get("cp_h_out", float("nan")),
             final_diag.get("dT_hw_out", float("nan")),
             final_diag.get("Ec_h_out", float("nan")),
-        )
-        logger.debug(
-            "1D effective area ratios: hot=%5.2f, cold=%5.2f across %.0f layers",
-            final_diag.get("area_ratio_hot_total", float("nan")),
-            final_diag.get("area_ratio_cold_total", float("nan")),
-            final_diag.get("n_layers", float("nan")),
         )
 
 
