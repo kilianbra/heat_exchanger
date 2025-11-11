@@ -120,6 +120,39 @@ class FluidModel(Protocol):
     def state(self, T: float, P: float) -> FluidState: ...
 
 
+class FluidInputs(Protocol):
+    """
+    Inputs container for a two-stream heat exchanger.
+
+    Contains the fluid models for the hot and cold streams, their mass flow rates,
+    and inlet boundary values. The hot-side pressure can be provided either at
+    inlet (Ph_in) or as outlet (Ph_out); implementations should ensure exactly
+    one of these is provided.
+
+    Units:
+      - Temperatures [K]
+      - Pressures [Pa]
+      - Mass flows [kg/s]
+    """
+
+    # Fluids
+    hot: FluidModel
+    cold: FluidModel
+
+    # Mass flow rates
+    m_dot_hot: float
+    m_dot_cold: float
+
+    # Boundary values
+    Tc_in: float
+    Pc_in: float
+    Th_in: float
+
+    # Hot-side pressure: provide either inlet or outlet
+    Ph_in: float | None
+    Ph_out: float | None
+
+
 class PerfectGasFluid:
     # region Docstring
     """
@@ -603,6 +636,7 @@ class _RefPropState:
 __all__ = [
     "FluidState",
     "FluidModel",
+    "FluidInputs",
     "PerfectGasFluid",
     "CoolPropFluid",
     "RefPropFluid",
