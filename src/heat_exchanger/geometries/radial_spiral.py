@@ -11,6 +11,19 @@ from typing import Protocol
 
 import numpy as np
 
+from heat_exchanger.conservation import update_static_properties as _update_static_properties
+from heat_exchanger.correlations import (
+    circular_pipe_friction_factor as _circ_fric,
+)
+from heat_exchanger.correlations import (
+    circular_pipe_nusselt as _circ_nu,
+)
+from heat_exchanger.correlations import (
+    tube_bank_nusselt_number_and_friction_factor as _bank_corr,
+)
+from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.protocols import FluidInputs as _FluidInputs
+
 logger = logging.getLogger(__name__)
 
 WALL_CONDUCTIVITY_304_SS = 14.0
@@ -167,12 +180,422 @@ class RadialSpiralGeometry(Protocol):
         }
 
 
-""" Marching options from old
-    property_solver_iterations: int = 20
+# ---------- Marching solver (inboard) ----------
+def calc_dh0_and_tau(
+    *,
+    geometry: RadialSpiralGeometry,
+    sh,
+    sc,
+    G_h: float,
+    G_c: float,
+    area_ht_hot_j: float,
+    area_ht_cold_j: float,
+    area_free_hot_j: float,
+    area_free_cold_j: float,
+    mdot_hot_per_header: float,
+    mdot_cold_per_header: float,
+) -> tuple[float, float, float]:
+    """Return q and (tau_hot, tau_cold) for layer j using local states and areas."""
+    cp_h = sh.cp
+    mu_h = sh.mu
+    k_h = sh.k
+    rho_h = sh.rho
+    Pr_h = mu_h * cp_h / k_h
+
+    cp_c = sc.cp
+    mu_c = sc.mu
+    k_c = sc.k
+    rho_c = sc.rho
+    Pr_c = mu_c * cp_c / k_c
+
+    Re_h_od = G_h * geometry.tube_outer_diam / mu_h
+    Re_c = G_c * geometry.tube_inner_diam / mu_c
+
+    Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+    f_c = _circ_fric(Re_c, 0)
+    h_c = Nu_c * k_c / geometry.tube_inner_diam
+
+    Nu_h, f_h = _bank_corr(
+        Re_h_od,
+        geometry.tube_spacing_long,
+        geometry.tube_spacing_trv,
+        Pr_h,
+        inline=(not geometry.staggered),
+        n_rows=geometry.n_rows_per_header * geometry.n_headers,
+    )
+    h_h = Nu_h * k_h / geometry.tube_outer_diam
+
+    wall_term = (
+        geometry.tube_outer_diam
+        / (2.0 * geometry.wall_conductivity)
+        * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
+    )
+
+    U_hot = 1.0 / (
+        (1.0 / h_h)
+        + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam)
+        + wall_term
+    )
+
+    C_h_j = mdot_hot_per_header * cp_h
+    C_c_j = mdot_cold_per_header * cp_c
+    C_min_j = min(C_h_j, C_c_j)
+    C_max_j = max(C_h_j, C_c_j)
+    Cr_j = C_min_j / C_max_j if C_max_j > 0 else 0.0
+
+    NTU_local = U_hot * area_ht_hot_j / C_min_j if C_min_j > 0 else 0.0
+    flow_type = "Cmax_mixed" if C_h_j > C_c_j else "Cmin_mixed"
+    eps_local = _eps_ntu(
+        NTU_local,
+        Cr_j,
+        exchanger_type="cross_flow",
+        flow_type=flow_type,
+        n_passes=1,
+    )
+
+    eps_C_min_local = eps_local * C_min_j
+
+    tau_hot = f_h * (area_ht_hot_j / area_free_hot_j) * (G_h**2) / (2.0 * rho_h)
+    tau_cold = f_c * (area_ht_cold_j / area_free_cold_j) * (G_c**2) / (2.0 * rho_c)
+
+    return float(eps_C_min_local), float(tau_hot), float(tau_cold)
+
+
+def rad_spiral_shoot(
+    boundary_guess: np.ndarray | list[float],
+    geometry: RadialSpiralGeometry,
+    fluids: _FluidInputs,
+    *,
+    property_solver_it_max: int = 20,
     # ruff: noqa: N815 (allow mixed case variables)
-    property_solver_tol_T: float = 1e-2
-    property_solver_rel_tol_p: float = 1e-3
-"""
+    property_solver_tol_T: float = 1e-2,
+    rel_tol_p: float = 1e-3,
+) -> np.ndarray:
+    """Inboard shooting residuals for a radial involute HX.
+    For now hard coded that hot fluid flows outside tubes and cold inside.
+
+    if fluids.Ph_in is provided:
+        boundary_guess: [Th_out_guess, Ph_out_guess]
+        Returns: [residual_T, residual_P]
+    if fluids.Ph_out is provided:
+        boundary_guess: [Th_out_guess]
+        Returns: [residual_T]
+    """
+    has_Ph_in = fluids.Ph_in is not None
+    has_Ph_out = fluids.Ph_out is not None
+    if has_Ph_in == has_Ph_out:
+        raise ValueError("Specify exactly one of Ph_in or Ph_out in FluidInputs.")
+
+    x = np.asarray(boundary_guess, dtype=float)
+    if has_Ph_in:
+        if x.size != 2:
+            raise ValueError(
+                "boundary_guess must be [Th_out_guess, Ph_out_guess] when Ph_in is given."
+            )
+        Th_out_guess = float(x[0])
+        Ph_out_guess = float(x[1])
+    else:
+        if x.size != 1:
+            raise ValueError("boundary_guess must be [Th_out_guess] when Ph_out is given.")
+        Th_out_guess = float(x[0])
+        Ph_out_guess = float("nan")  # unused
+
+    # Geometry arrays for one sector
+    geo = geometry._1d_arrays_for_one_sector()
+    area_ht_hot_of_sector = geo["area_ht_hot"]
+    area_ht_cold_of_sector = geo["area_ht_cold"]
+    area_free_hot_of_sector = geo["area_free_hot"]
+    area_free_cold_of_sector = geo["area_free_cold"]
+
+    # Per-header mass flows
+    mdot_hot_per_header = fluids.m_dot_hot / geometry.n_headers
+    mdot_cold_per_header = fluids.m_dot_cold / geometry.n_headers
+
+    Th = np.zeros(geometry.n_headers)
+    Ph = np.zeros(geometry.n_headers)
+    Tc = np.zeros(geometry.n_headers)
+    Pc = np.zeros(geometry.n_headers)
+
+    # Inner boundary (start of outward march)
+    Th[0] = Th_out_guess
+    if has_Ph_in:
+        Ph[0] = Ph_out_guess
+    else:
+        Ph[0] = fluids.Ph_out
+    Tc[0] = fluids.Tc_in
+    Pc[0] = fluids.Pc_in
+
+    # Marching
+    for j in range(geometry.n_headers - 1):
+        G_h = mdot_hot_per_header / area_free_hot_of_sector[j]
+        G_c = mdot_cold_per_header / area_free_cold_of_sector[j]
+
+        sh = fluids.hot.state(Th[j], Ph[j])
+        sc = fluids.cold.state(Tc[j], Pc[j])
+
+        eps_C_min_local, tau_hot, tau_cold = calc_dh0_and_tau(
+            geometry=geometry,
+            sh=sh,
+            sc=sc,
+            G_h=G_h,
+            G_c=G_c,
+            area_ht_hot_j=area_ht_hot_of_sector[j],
+            area_ht_cold_j=area_ht_cold_of_sector[j],
+            area_free_hot_j=area_free_hot_of_sector[j],
+            area_free_cold_j=area_free_cold_of_sector[j],
+            mdot_hot_per_header=mdot_hot_per_header,
+            mdot_cold_per_header=mdot_cold_per_header,
+        )
+
+        q = eps_C_min_local * (Th[j] - Tc[j])
+
+        dh0_hot = -q / mdot_hot_per_header
+        dh0_cold = q / mdot_cold_per_header
+
+        Th[j + 1], Ph[j + 1] = _update_static_properties(
+            fluids.hot,
+            G_h,
+            dh0_hot,
+            tau_hot,
+            T_a=Th[j],
+            p_b=Ph[j],
+            a_is_in=False,
+            b_is_in=False,
+            max_iter=property_solver_it_max,
+            tol_T=property_solver_tol_T,
+            rel_tol_p=rel_tol_p,
+        )
+
+        Tc[j + 1], Pc[j + 1] = _update_static_properties(
+            fluids.cold,
+            G_c,
+            dh0_cold,
+            tau_cold,
+            T_a=Tc[j],
+            p_b=Pc[j],
+            a_is_in=True,
+            b_is_in=True,
+            max_iter=property_solver_it_max,
+            tol_T=property_solver_tol_T,
+            rel_tol_p=rel_tol_p,
+        )
+
+        if not np.all(np.isfinite([Th[j + 1], Ph[j + 1], Tc[j + 1], Pc[j + 1]])):
+            return np.array([np.nan] if not has_Ph_in else [np.nan, np.nan], dtype=float)
+
+    Th_in_calc = Th[-1]
+    Ph_in_calc = Ph[-1]
+
+    residual_T = Th_in_calc - fluids.Th_in
+    if has_Ph_in:
+        residual_P = Ph_in_calc - fluids.Ph_in
+        return np.array([residual_T, residual_P], dtype=float)
+    else:
+        return np.array([residual_T], dtype=float)
 
 
-__all__ = ["RadialSpiralGeometry"]
+# ---------- Overall performance (diagnostics) ----------
+def compute_overall_performance(
+    boundary_converged: np.ndarray | list[float],
+    geometry: RadialSpiralGeometry,
+    fluids: _FluidInputs,
+    *,
+    property_solver_it_max: int = 20,
+    property_solver_tol_T: float = 1e-2,
+    rel_tol_p: float = 1e-3,
+) -> dict[str, object]:
+    """Run march and return residuals, state arrays, and diagnostics for inboard case."""
+    geo = geometry._1d_arrays_for_one_sector()
+    area_ht_hot = geo["area_ht_hot"]
+    area_ht_cold = geo["area_ht_cold"]
+    area_free_hot = geo["area_free_hot"]
+    area_free_cold = geo["area_free_cold"]
+
+    has_Ph_in = fluids.Ph_in is not None
+    x = np.asarray(boundary_converged, dtype=float)
+    if has_Ph_in and x.size != 2:
+        raise ValueError(
+            "boundary_converged must be [Th_out_converged, Ph_out_converged] when Ph_in is given."
+        )
+    if (not has_Ph_in) and x.size != 1:
+        raise ValueError("boundary_converged must be [Th_out_converged] when Ph_out is given.")
+
+    Th = np.zeros(geometry.n_headers)
+    Ph = np.zeros(geometry.n_headers)
+    Tc = np.zeros(geometry.n_headers)
+    Pc = np.zeros(geometry.n_headers)
+
+    Th[0] = float(x[0])
+    Ph[0] = float(x[1]) if has_Ph_in else float(fluids.Ph_out)  # type: ignore[arg-type]
+    Tc[0] = float(fluids.Tc_in)
+    Pc[0] = float(fluids.Pc_in)
+
+    mdot_h = fluids.m_dot_hot / geometry.n_headers
+    mdot_c = fluids.m_dot_cold / geometry.n_headers
+
+    UA_sum = 0.0
+    for j in range(geometry.n_headers - 1):
+        G_h = mdot_h / area_free_hot[j]
+        G_c = mdot_c / area_free_cold[j]
+        sh = fluids.hot.state(Th[j], Ph[j])
+        sc = fluids.cold.state(Tc[j], Pc[j])
+
+        eps_C_min_local, tau_h, tau_c = calc_dh0_and_tau(
+            geometry=geometry,
+            sh=sh,
+            sc=sc,
+            G_h=G_h,
+            G_c=G_c,
+            area_ht_hot_j=area_ht_hot[j],
+            area_ht_cold_j=area_ht_cold[j],
+            area_free_hot_j=area_free_hot[j],
+            area_free_cold_j=area_free_cold[j],
+            mdot_hot_per_header=mdot_h,
+            mdot_cold_per_header=mdot_c,
+        )
+
+        q = eps_C_min_local * (Th[j] - Tc[j])
+
+        # Recompute U for UA sum (kept local to avoid altering helper return signature)
+        mu_h = sh.mu
+        k_h = sh.k
+        mu_c = sc.mu
+        k_c = sc.k
+        Pr_h = mu_h * sh.cp / k_h
+        Pr_c = mu_c * sc.cp / k_c
+        Re_h_od = G_h * geometry.tube_outer_diam / mu_h
+        Re_c = G_c * geometry.tube_inner_diam / mu_c
+        Nu_h, _ = _bank_corr(
+            Re_h_od,
+            geometry.tube_spacing_long,
+            geometry.tube_spacing_trv,
+            Pr_h,
+            inline=(not geometry.staggered),
+            n_rows=geometry.n_rows_per_header * geometry.n_headers,
+        )
+        Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+        h_h = Nu_h * k_h / geometry.tube_outer_diam
+        h_c = Nu_c * k_c / geometry.tube_inner_diam
+        wall_term = (
+            geometry.tube_outer_diam
+            / (2.0 * geometry.wall_conductivity)
+            * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
+        )
+        U_hot = 1.0 / (
+            (1.0 / h_h)
+            + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam)
+            + wall_term
+        )
+        UA_sum += U_hot * area_ht_hot[j] * geometry.n_headers
+
+        Th[j + 1], Ph[j + 1] = _update_static_properties(
+            fluids.hot,
+            G_h,
+            -q / mdot_h,
+            tau_h,
+            T_a=Th[j],
+            p_b=Ph[j],
+            a_is_in=False,
+            b_is_in=False,
+            max_iter=property_solver_it_max,
+            tol_T=property_solver_tol_T,
+            rel_tol_p=rel_tol_p,
+        )
+        Tc[j + 1], Pc[j + 1] = _update_static_properties(
+            fluids.cold,
+            G_c,
+            q / mdot_c,
+            tau_c,
+            T_a=Tc[j],
+            p_b=Pc[j],
+            a_is_in=True,
+            b_is_in=True,
+            max_iter=property_solver_it_max,
+            tol_T=property_solver_tol_T,
+            rel_tol_p=rel_tol_p,
+        )
+
+    # Residuals
+    Th_in_calc = Th[-1]
+    Ph_in_calc = Ph[-1]
+    residual_T = Th_in_calc - float(fluids.Th_in)
+    if has_Ph_in:
+        residuals = np.array([residual_T, Ph_in_calc - float(fluids.Ph_in)], dtype=float)  # type: ignore[arg-type]
+    else:
+        residuals = np.array([residual_T], dtype=float)
+
+    # Performance diagnostics
+    Th_out = Th[0]
+    Tc_out = Tc[-1]
+    Pc_out = Pc[-1]
+    if has_Ph_in:
+        Ph_in = float(fluids.Ph_in)  # type: ignore[arg-type]
+        Ph_out = Ph[0]
+    else:
+        Ph_in = Ph[-1]
+        Ph_out = float(fluids.Ph_out)  # type: ignore[arg-type]
+
+    state_h_in = fluids.hot.state(float(fluids.Th_in), Ph_in)
+    state_h_out = fluids.hot.state(Th_out, Ph_out)
+    state_c_in = fluids.cold.state(float(fluids.Tc_in), float(fluids.Pc_in))
+    state_c_out = fluids.cold.state(Tc_out, Pc_out)
+
+    area_free_hot_in = area_free_hot[-1] * geometry.n_headers
+    area_free_hot_out = area_free_hot[0] * geometry.n_headers
+    area_free_cold_total = area_free_cold[0] * geometry.n_headers
+    G_h_in = fluids.m_dot_hot / area_free_hot_in
+    G_h_out = fluids.m_dot_hot / area_free_hot_out
+    G_c_total = fluids.m_dot_cold / area_free_cold_total
+
+    h_stag_in_hot = state_h_in.h + 0.5 * (G_h_in / state_h_in.rho) ** 2
+    h_stag_out_hot = state_h_out.h + 0.5 * (G_h_out / state_h_out.rho) ** 2
+    h_stag_in_cold = state_c_in.h + 0.5 * (G_c_total / state_c_in.rho) ** 2
+    h_stag_out_cold = state_c_out.h + 0.5 * (G_c_total / state_c_out.rho) ** 2
+
+    Q_hot = fluids.m_dot_hot * (h_stag_in_hot - h_stag_out_hot)
+    Q_cold = fluids.m_dot_cold * (h_stag_out_cold - h_stag_in_cold)
+
+    cp_h_avg = (h_stag_in_hot - h_stag_out_hot) / (float(fluids.Th_in) - Th_out)
+    cp_c_avg = (h_stag_out_cold - h_stag_in_cold) / (Tc_out - float(fluids.Tc_in))
+    C_h = fluids.m_dot_hot * cp_h_avg
+    C_c = fluids.m_dot_cold * cp_c_avg
+    C_min = min(C_h, C_c)
+    Cr = C_min / max(C_h, C_c) if max(C_h, C_c) > 0 else float("nan")
+    NTU = UA_sum / C_min if C_min > 0 else float("nan")
+    Q_max = C_min * (float(fluids.Th_in) - float(fluids.Tc_in))
+    epsilon = Q_hot / Q_max if Q_max > 0 else 0.0
+
+    dP_hot = Ph_in - Ph_out
+    dP_cold = Pc_out - float(fluids.Pc_in)
+    dP_hot_pct = 100.0 * dP_hot / Ph_in if Ph_in > 0 else 0.0
+    dP_cold_pct = 100.0 * dP_cold / float(fluids.Pc_in) if float(fluids.Pc_in) > 0 else 0.0
+
+    diagnostics: dict[str, float] = {
+        "total_UA": float(UA_sum),
+        "Q_total": float(Q_hot),
+        "Q_hot": float(Q_hot),
+        "Q_cold": float(Q_cold),
+        "epsilon": float(epsilon),
+        "NTU": float(NTU),
+        "Cr": float(Cr),
+        "dP_hot": float(dP_hot),
+        "dP_hot_pct": float(dP_hot_pct),
+        "dP_cold": float(dP_cold),
+        "dP_cold_pct": float(dP_cold_pct),
+        "Th_out": float(Th_out),
+        "Tc_out": float(Tc_out),
+        "Ph_out": float(Ph_out),
+        "Pc_out": float(Pc_out),
+    }
+
+    return {
+        "residuals": residuals,
+        "Th": Th,
+        "Ph": Ph,
+        "Tc": Tc,
+        "Pc": Pc,
+        "diagnostics": diagnostics,
+    }
+
+
+__all__ = ["RadialSpiralGeometry", "rad_spiral_shoot", "compute_overall_performance"]
