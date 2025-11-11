@@ -12,58 +12,6 @@ from heat_exchanger.fluids.protocols import FluidModel
 logger = logging.getLogger(__name__)
 
 
-def energy_balance_segment(
-    m_dot_hot: float, m_dot_cold: float, T_hot: float, T_cold: float, U: float, area: float
-):
-    """
-    Compute change in stagnation enthalpy for hot and cold streams in a segment.
-
-    Args:
-        m_dot_hot: Hot stream mass flow rate (kg/s)
-        m_dot_cold: Cold stream mass flow rate (kg/s)
-        T_hot: Hot stream temperature (K)
-        T_cold: Cold stream temperature (K)
-        U: Overall heat transfer coefficient (W/m²·K)
-        area: Heat transfer area (m²)
-
-    Returns:
-        tuple: (dh0_hot, dh0_cold, Q_segment)
-        dh0 is change in stagnation enthalpy (J/kg)
-        Q_segment is heat transferred (W)
-    """
-    # Heat transferred in this segment (positive if hot fluid loses heat)
-    Q_segment = U * area * (T_hot - T_cold)
-
-    # Change in stagnation enthalpy
-    dh0_hot = -Q_segment / m_dot_hot if m_dot_hot != 0 else 0.0
-    dh0_cold = Q_segment / m_dot_cold if m_dot_cold != 0 else 0.0
-
-    return dh0_hot, dh0_cold, Q_segment
-
-
-def momentum_balance_segment(
-    G: float, rho_mean: float, D_h: float, length: float, f: float
-) -> float:
-    """
-    Compute change in impulse function (F/A = p + G²/rho) over a segment.
-    F/A_out - F/A_in = - tau_eff * P dx/A_cross_section = - tau_eff * 4dx/d_h
-    Uses Fanning/Kays-London friction factor (includes mixing/wake pressure drop).
-
-    Args:
-        G: Mass velocity (kg/m²s)
-        rho_mean: Mean density in segment (kg/m³)
-        D_h: Hydraulic diameter (m)
-        length: Segment length (m)
-        f: Friction factor (-), Fanning/Kays-London definition
-
-    Returns:
-        float: Change in impulse function (Pa)
-    """
-    if rho_mean == 0 or D_h == 0:
-        return 0.0
-    return -f * (4 * length / D_h) * (G**2) / (2 * rho_mean)
-
-
 def update_static_properties(
     fluid: FluidModel,
     G,
@@ -80,7 +28,7 @@ def update_static_properties(
     r"""
     Solve simultaneously for T_not_a and p_not_b so that:
       1) Energy/stagnation enthalpy: (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
-      2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = -tau_dA_over_A_c
+      2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = - tau * dA / A_c
 
     a can either be in (if a_is_in is True) or out (if a_is_in is False) of the heat exchanger.
     b can either be in (if b_is_in is True) or out (if b_is_in is False) of the heat exchanger.
