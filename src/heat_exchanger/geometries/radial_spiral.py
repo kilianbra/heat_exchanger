@@ -6,9 +6,9 @@ for a single sector used in radial marching (inner radius j=0 to outer j=n_heade
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Protocol
-from dataclasses import dataclass
 
 import numpy as np
 
