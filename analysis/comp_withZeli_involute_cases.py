@@ -41,6 +41,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
       - ``ahjeb`` (Base Adv H2 Jet Engine Design)
       - ``ahjeb_toc`` (Top of Climb Variant)
       - ``ahjeb_toc_outb`` (Outboard ToC Variant)
+      - ``ahjeb_mto_k1`` (Maximum take-off, k=1 variant)
       - ``chinese`` (preset_chinese == 1, K. He et al. 2024)
     """
     if fluid_model == "PerfectGas":
@@ -205,8 +206,8 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "mflow_c_total": 2.0,
             "wall_conductivity": 11.4,  # Inconel 718
         },
-        "ahjeb_MTO_k1": { # Uses conditions from 28/10 ppt
-            "case_name": "AHJE MTO k",  # version B - H2TOCv2 ExPHT
+        "ahjeb_mto_k1": {  # Uses conditions from 28/10 presentation
+            "case_name": "AHJE MTO k=1",
             "fluid_hot": air,
             "fluid_cold": h2,
             "Th_in": 574.0,
@@ -418,7 +419,7 @@ def _zero_d_two_step_guess(
         Tc_in,
         Pc_in,
         Th_in,
-        Ph_in,
+        Ph_in if Ph_out is None else Ph_out,
         Tc_in,
         Pc_in,
         _Ph_out=Ph_out,
@@ -442,7 +443,10 @@ def _zero_d_two_step_guess(
         )
     Th_mean = 0.5 * (Th_in + Th_o1)
     Tc_mean = 0.5 * (Tc_in + Tc_o1)
-    Ph_mean = 0.5 * (Ph_in + Ph_not_b1) if Ph_out is not None else 0.5 * (Ph_out + Ph_not_b1)
+    Ph_known = Ph_out if Ph_out is not None else Ph_in
+    if Ph_known is None:
+        raise ValueError("Either Ph_in or Ph_out must be provided for the 0D guess.")
+    Ph_mean = 0.5 * (Ph_known + Ph_not_b1)
     Pc_mean = 0.5 * (Pc_in + Pc_o1)
     Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_model(
         Th_in,
@@ -544,7 +548,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     eval_state = {"count": 0}
     tol_root = 1.0e-2
     tol_P_pct_of_Ph_in = 0.1
-    tol_P = tol_P_pct_of_Ph_in / 100 * params["Ph_in"]  # absolute Pa tolerance
+    tol_P = tol_P_pct_of_Ph_in / 100 * (Ph_in_known if Ph_in_known is not None else Ph_out_known)  # absolute Pa tolerance
 
     def residuals(x: np.ndarray) -> np.ndarray:
         """Residuals for the hot-side shooting problem.
@@ -566,7 +570,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         eval_state["count"] += 1
         raw = F_inboard(
             Th_out_guess=x[0],
-            Ph_not_known_guess=x[1], # disregarded if outlet pressure is known
+            Ph_out_guess=x[1], # disregarded if outlet pressure is known
             geometry=geom,
             fluid_hot=fluid_hot,
             fluid_cold=fluid_cold,
@@ -578,7 +582,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             mdot_c_total=params["mflow_c_total"],
             wall_conductivity=params["wall_conductivity"],
             options=MarchingOptions(),
-            oulet_pressure_known = True if Ph_out_known is not None else False,
+            outlet_pressure_known=True if Ph_out_known is not None else False,
         )
         # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
         # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
@@ -609,7 +613,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         fluid_hot=fluid_hot,
         fluid_cold=fluid_cold,
         Th_in=params["Th_in"],
-        Ph_in=params["Ph_in"],
+        Ph_known=Ph_in_known if Ph_in_known is not None else Ph_out_known,
         Tc_in=params["Tc_in"],
         Pc_in=params["Pc_in"],
         mdot_h_total=params["mflow_h_total"],
@@ -617,6 +621,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         wall_conductivity=params["wall_conductivity"],
         options=MarchingOptions(),
         diagnostics=final_diag,
+        outlet_pressure_known=True if Ph_out_known is not None else False,
     )
 
     logger.debug(
@@ -625,11 +630,15 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         getattr(sol, "nfev", None),
         sol.message,
     )
+    if Ph_in_known is not None:
+        dP_P_in = (1 - sol.x[1] / Ph_in_known) * 100.0
+    else:
+        dP_P_in = final_diag.get("dP_hot_pct", float("nan"))
     logger.info(
-        "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_known=%.1f %%",
         eval_state["count"],
         sol.x[0],
-        (1 - sol.x[1] / params["Ph_in"]) * 100.0,
+        dP_P_in,
     )
     logger.info(
         "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e K), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e Pa)",
@@ -681,5 +690,6 @@ if __name__ == "__main__":
     main(case="ahjeb_toc", fluid_model="CoolProp")
     # main(case="ahjeb_toc_outb") # Outboard not implemented yet
     # main(case="viper", fluid_model="RefProp")
-    main(case="viper", fluid_model="CoolProp")"""
-    main(case="custom", fluid_model="CoolProp")
+    main(case="viper", fluid_model="CoolProp")
+    main(case="custom", fluid_model="CoolProp")"""
+    main(case="ahjeb_MTO_k1", fluid_model="CoolProp")
