@@ -31,7 +31,29 @@ WALL_CONDUCTIVITY_304_SS = 14.0
 WALL_DENSITY_304_SS = 7930.0
 
 
-class RadialSpiralProtocol(Protocol):
+class TubeBankCorrelationGeometry(Protocol):
+    """Minimal protocol for tube-bank correlations and 0D metrics."""
+
+    tube_outer_diam: float
+    tube_thick: float
+    tube_spacing_trv: float
+    tube_spacing_long: float
+    staggered: bool
+    n_tubes_per_row: int
+    n_tubes_total: int
+    n_rows_total: int
+
+    @property
+    def frontal_area_outer(self) -> float: ...
+
+    @property
+    def sigma_outer(self) -> float: ...
+
+    @property
+    def tube_inner_diam(self) -> float: ...
+
+
+class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     """Protocol describing a heat-exchanger geometry where a tube bank is wrapped in a spiral
     and the flow outside the tubes is flowing radially. This produces a local crossflow
     but overall counterflow configuration.
@@ -212,8 +234,6 @@ def calc_eps_local_and_tau(
     geometry: RadialSpiralProtocol,
     sh,
     sc,
-    G_h: float,
-    G_c: float,
     area_ht_hot_j: float,
     area_ht_cold_j: float,
     area_free_hot_j: float,
@@ -222,6 +242,8 @@ def calc_eps_local_and_tau(
     mdot_cold_per_header: float,
 ) -> tuple[float, float, float]:
     """Return eps_local * C_min_local and (tau_hot, tau_cold) for layer j using local states and areas."""
+    G_h = mdot_hot_per_header / area_free_hot_j
+    G_c = mdot_cold_per_header / area_free_cold_j
     cp_h = sh.cp
     mu_h = sh.mu
     k_h = sh.k
@@ -363,8 +385,6 @@ def rad_spiral_shoot(
             geometry=geometry,
             sh=sh,
             sc=sc,
-            G_h=G_h,
-            G_c=G_c,
             area_ht_hot_j=area_ht_hot_of_sector[j],
             area_ht_cold_j=area_ht_cold_of_sector[j],
             area_free_hot_j=area_free_hot_of_sector[j],
@@ -461,8 +481,6 @@ def compute_overall_performance(
 
     UA_sum = 0.0
     for j in range(geometry.n_headers - 1):
-        G_h = mdot_h / area_free_hot[j]
-        G_c = mdot_c / area_free_cold[j]
         sh = fluids.hot.state(Th[j], Ph[j])
         sc = fluids.cold.state(Tc[j], Pc[j])
 
@@ -470,8 +488,6 @@ def compute_overall_performance(
             geometry=geometry,
             sh=sh,
             sc=sc,
-            G_h=G_h,
-            G_c=G_c,
             area_ht_hot_j=area_ht_hot[j],
             area_ht_cold_j=area_ht_cold[j],
             area_free_hot_j=area_free_hot[j],
@@ -481,6 +497,9 @@ def compute_overall_performance(
         )
 
         q = eps_C_min_local * (Th[j] - Tc[j])
+
+        G_h = mdot_h / area_free_hot[j]
+        G_c = mdot_c / area_free_cold[j]
 
         # Recompute U for UA sum (kept local to avoid altering helper return signature)
         mu_h = sh.mu
@@ -782,6 +801,7 @@ def compute_overall_performance(
 
 
 __all__ = [
+    "TubeBankCorrelationGeometry",
     "RadialSpiralProtocol",
     "RadialSpiralSpec",
     "rad_spiral_shoot",

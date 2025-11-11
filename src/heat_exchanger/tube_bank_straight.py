@@ -18,6 +18,7 @@ class TubeBankStraightGeometry:
     frontal_area_outer: float
     annular_not_box: bool = True
 
+    @property
     def tube_inner_diam(self) -> float:
         return self.tube_outer_diam - 2 * self.tube_thick
 
@@ -43,9 +44,11 @@ class TubeBankStraightGeometry:
             W = self.row_width()
             return self.frontal_area_outer / W
 
+    @property
     def axial_length(self) -> float:
         return self.tube_spacing_long * self.tube_outer_diam * self.n_rows_per_pass * self.n_passes
 
+    @property
     def sigma_outer(self) -> float:
         interim = (self.tube_spacing_trv - 1) / self.tube_spacing_trv
         if self.staggered:
@@ -54,16 +57,24 @@ class TubeBankStraightGeometry:
         return interim
 
     def area_free_flow_outer(self) -> float:
-        return self.frontal_area_outer * self.sigma_outer()
+        return self.frontal_area_outer * self.sigma_outer
+
+    @property
+    def n_rows_total(self) -> int:
+        return self.n_rows_per_pass * self.n_passes
+
+    @property
+    def n_tubes_total(self) -> int:
+        return self.n_tubes_per_row * self.n_rows_total
 
     def n_tubes_per_pass(self) -> int:
         return self.n_tubes_per_row * self.n_rows_per_pass
 
     def area_free_flow_inner(self) -> float:
-        return np.pi / 4 * self.tube_inner_diam() ** 2 * self.n_tubes_per_pass()
+        return np.pi / 4 * self.tube_inner_diam**2 * self.n_tubes_per_pass()
 
     def area_heat_transfer_outer_per_row(self) -> float:
         return np.pi * self.tube_outer_diam * self.tube_length() * self.n_tubes_per_row
 
     def area_heat_transfer_inner_per_row(self) -> float:
-        return np.pi * self.tube_inner_diam() * self.tube_length() * self.n_tubes_per_row
+        return np.pi * self.tube_inner_diam * self.tube_length() * self.n_tubes_per_row

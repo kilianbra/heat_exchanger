@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import Button, Slider
 
-from heat_exchanger.involute_inboard import RadialInvoluteGeometry, _compute_geometry_arrays
+from heat_exchanger.geometries.radial_spiral import RadialSpiralSpec
 
 
 def _build_geometry(
@@ -20,7 +20,7 @@ def _build_geometry(
     n_r_h = int(max(1, round(n_r_h)))
     n_r_a = int(max(1, round(n_r_a)))
     n_h = int(max(1, round(n_h)))
-    geom = RadialInvoluteGeometry(
+    geom = RadialSpiralSpec(
         tube_outer_diam=float(tube_OD),
         tube_thick=float(tube_thick),
         tube_spacing_trv=float(Xt_star),
@@ -28,7 +28,7 @@ def _build_geometry(
         staggered=bool(staggered),
         n_headers=int(n_h),
         n_rows_per_header=int(n_r_h),
-        n_rows_axial=int(n_r_a),
+        n_tubes_per_row=int(n_r_a),
         radius_outer_whole_hex=float(R_o),
         inv_angle_deg=float(inv_angle_deg),
     )
@@ -81,7 +81,7 @@ def main():
 
     # Plot spiral(s) and boundary circles
     x_sp_base, y_sp_base = _spiral_xy(
-        geom.radius_inner_whole_hex(), geom.radius_outer_whole_hex, geom.inv_angle_deg
+        geom.radius_inner_whole_hex, geom.radius_outer_whole_hex, geom.inv_angle_deg
     )
     lines_spirals: list = []
     for k in range(geom.n_headers):
@@ -95,16 +95,16 @@ def main():
         lines_spirals.append(lk)
 
     theta_circ = np.linspace(0, 2 * np.pi, 512)
-    x_in = geom.radius_inner_whole_hex() * np.cos(theta_circ)
-    y_in = geom.radius_inner_whole_hex() * np.sin(theta_circ)
+    x_in = geom.radius_inner_whole_hex * np.cos(theta_circ)
+    y_in = geom.radius_inner_whole_hex * np.sin(theta_circ)
     x_out = geom.radius_outer_whole_hex * np.cos(theta_circ)
     y_out = geom.radius_outer_whole_hex * np.sin(theta_circ)
     (line_inner,) = ax.plot(x_in, y_in, "k--", alpha=0.6, label="Inner radius")
     (line_outer,) = ax.plot(x_out, y_out, "k--", alpha=0.6, label="Outer radius")
     # Header points on inner/outer circles
     thetas_hdr = np.linspace(0.0, 2.0 * np.pi, geom.n_headers, endpoint=False)
-    x_hdr_in = geom.radius_inner_whole_hex() * np.cos(thetas_hdr)
-    y_hdr_in = geom.radius_inner_whole_hex() * np.sin(thetas_hdr)
+    x_hdr_in = geom.radius_inner_whole_hex * np.cos(thetas_hdr)
+    y_hdr_in = geom.radius_inner_whole_hex * np.sin(thetas_hdr)
     x_hdr_out = geom.radius_outer_whole_hex * np.cos(thetas_hdr)
     y_hdr_out = geom.radius_outer_whole_hex * np.sin(thetas_hdr)
     (pts_inner,) = ax.plot(
@@ -134,14 +134,14 @@ def main():
     # ax.legend(loc="upper left")
 
     # Areas
-    def _areas_values(g: RadialInvoluteGeometry) -> tuple[float, float, float]:
-        c = _compute_geometry_arrays(g)
-        A_q = float(np.sum(c.area_ht_hot)) * g.n_headers
-        A_ff_i = float(c.area_free_hot[0]) * g.n_headers
-        A_ff_o = float(c.area_free_hot[-1]) * g.n_headers
+    def _areas_values(g: RadialSpiralSpec) -> tuple[float, float, float]:
+        c = g._1d_arrays_for_one_sector()
+        A_q = float(np.sum(c["area_ht_hot"])) * g.n_headers
+        A_ff_i = float(c["area_free_hot"][0]) * g.n_headers
+        A_ff_o = float(c["area_free_hot"][-1]) * g.n_headers
         return A_q, A_ff_i, A_ff_o
 
-    def _areas_title(g: RadialInvoluteGeometry):
+    def _areas_title(g: RadialSpiralSpec):
         A_q, A_ff_i, A_ff_o = _areas_values(g)
         return f"A_q={A_q:.3e} m^2  |  A_ff_i={A_ff_i:.3e} m^2  |  A_ff_o={A_ff_o:.3e} m^2"
 
@@ -149,14 +149,14 @@ def main():
     baseline_A_q, baseline_A_ff_i, baseline_A_ff_o = _areas_values(geom)
     normalize = False
 
-    def _title_normalized(g: RadialInvoluteGeometry):
+    def _title_normalized(g: RadialSpiralSpec):
         A_q, A_ff_i, A_ff_o = _areas_values(g)
         pct_q = 100.0 * A_q / baseline_A_q if baseline_A_q > 0 else float("nan")
         pct_i = 100.0 * A_ff_i / baseline_A_ff_i if baseline_A_ff_i > 0 else float("nan")
         pct_o = 100.0 * A_ff_o / baseline_A_ff_o if baseline_A_ff_o > 0 else float("nan")
         return f"A_q={pct_q:.0f}%  |  A_ff_i={pct_i:.0f}%  |  A_ff_o={pct_o:.0f}%"
 
-    def set_title_for_geometry(g: RadialInvoluteGeometry):
+    def set_title_for_geometry(g: RadialSpiralSpec):
         ax.set_title(_title_normalized(g) if normalize else _areas_title(g))
 
     set_title_for_geometry(geom)
@@ -230,7 +230,7 @@ def main():
     sl_Xt = Slider(s_Xt, "Xt*", 1.05, 5.0, valinit=init["Xt_star"], valstep=0.01)
     sl_Xl = Slider(s_Xl, "Xl*", 1.00, 4.0, valinit=init["Xl_star"], valstep=0.01)
     sl_angle = Slider(
-        s_angle, "inv_angle [deg]", 30.0, 720.0, valinit=init["inv_angle_deg"], valstep=1.0
+        s_angle, "inv_angle [deg]", 30.0, 720.0, valinit=init["inv_angle_deg"], valstep=None
     )
 
     # Put tube OD slider on the right side to save vertical space
@@ -245,7 +245,20 @@ def main():
         orientation="vertical",
     )
 
+    def _snap_inv_angle_to_headers() -> None:
+        """Snap inv_angle to nearest multiple of 360/n_h."""
+        n_h_now = max(1, int(round(sl_n_h.val)))
+        step = 360.0 / float(n_h_now)
+        raw = float(sl_angle.val)
+        # Round to nearest multiple and clamp to slider range
+        snapped = step * round(raw / step)
+        snapped = min(max(snapped, sl_angle.valmin), sl_angle.valmax)
+        if abs(snapped - raw) > 1e-9:
+            sl_angle.set_val(snapped)
+
     def update(_):
+        # Ensure inv_angle respects discretization before rebuilding geometry
+        _snap_inv_angle_to_headers()
         g = _build_geometry(
             R_o=sl_Ro.val,
             n_r_h=int(sl_n_r_h.val),
@@ -259,7 +272,7 @@ def main():
         try:
             # Recompute spiral base and circles
             x_sp, y_sp = _spiral_xy(
-                g.radius_inner_whole_hex(), g.radius_outer_whole_hex, g.inv_angle_deg
+                g.radius_inner_whole_hex, g.radius_outer_whole_hex, g.inv_angle_deg
             )
             # Ensure correct number of spiral lines equals n_headers
             nonlocal lines_spirals
@@ -280,8 +293,8 @@ def main():
                 ln.set_data(xk, yk)
                 ln.set_color("red" if k == 0 else "black")
 
-            x_in = g.radius_inner_whole_hex() * np.cos(theta_circ)
-            y_in = g.radius_inner_whole_hex() * np.sin(theta_circ)
+            x_in = g.radius_inner_whole_hex * np.cos(theta_circ)
+            y_in = g.radius_inner_whole_hex * np.sin(theta_circ)
             x_out = g.radius_outer_whole_hex * np.cos(theta_circ)
             y_out = g.radius_outer_whole_hex * np.sin(theta_circ)
             line_inner.set_data(x_in, y_in)
@@ -289,8 +302,8 @@ def main():
             # Update header points
             thetas_hdr = np.linspace(0.0, 2.0 * np.pi, g.n_headers, endpoint=False)
             pts_inner.set_data(
-                g.radius_inner_whole_hex() * np.cos(thetas_hdr),
-                g.radius_inner_whole_hex() * np.sin(thetas_hdr),
+                g.radius_inner_whole_hex * np.cos(thetas_hdr),
+                g.radius_inner_whole_hex * np.sin(thetas_hdr),
             )
             pts_outer.set_data(
                 g.radius_outer_whole_hex * np.cos(thetas_hdr),
@@ -311,6 +324,18 @@ def main():
 
     for s in (sl_Ro, sl_n_r_h, sl_n_r_a, sl_n_h, sl_Xt, sl_Xl, sl_angle, sl_OD):
         s.on_changed(update)
+
+    # Additionally enforce snapping when n_h or angle changes
+    def _on_n_h_changed(_):
+        _snap_inv_angle_to_headers()
+        update(_)
+
+    def _on_angle_changed(_):
+        _snap_inv_angle_to_headers()
+        update(_)
+
+    sl_n_h.on_changed(_on_n_h_changed)
+    sl_angle.on_changed(_on_angle_changed)
 
     plt.show()
 
