@@ -31,7 +31,9 @@ WALL_DENSITY_304_SS = 7930.0
 
 
 class RadialSpiralGeometry(Protocol):
-    """Protocol describing an involute heat-exchanger geometry.
+    """Protocol describing a heat-exchanger geometry where a tube bank is wrapped in a spiral
+    and the flow outside the tubes is flowing radially. This produces a local crossflow
+    but overall counterflow configuration.
 
     Required inputs:
       - tube_outer_diam, tube_thick
