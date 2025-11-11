@@ -186,6 +186,8 @@ def _compute_overall_performance(
     mdot_c_total: float,
     geom_cache: _GeometryCache,
     n_headers: int,
+    geometry: RadialInvoluteGeometry,
+    opts: MarchingOptions,
     outlet_pressure_known: bool = False,
 ) -> None:
     """Calculate overall heat exchanger performance metrics.
@@ -200,6 +202,10 @@ def _compute_overall_performance(
     - dP_cold_pct: Cold side pressure drop as % of inlet
     - Th_out: Hot side outlet temperature (K)
     - Tc_out: Cold side outlet temperature (K)
+    - Re_h_in/out: Hot side Reynolds numbers based on OD at inlet/outlet (-)
+    - St_h_in/out: Hot side Stanton numbers at inlet/outlet (-)
+    - f_h_in/out: Hot side friction factors (tube bank) at inlet/outlet (-)
+    - Ec_h_in/out: Hot side Eckert numbers at inlet/outlet (-)
     """
     # Hot side: flows from outer (index -1) to inner (index 0)
     # Cold side: flows from inner (index 0) to outer (index -1)
@@ -280,6 +286,204 @@ def _compute_overall_performance(
     diagnostics["Tc_out"] = float(Tc_out)
     diagnostics["Ph_out"] = float(Ph_out)
     diagnostics["Pc_out"] = float(Pc_out)
+
+    # Hot-side inlet/exit Reynolds, Stanton, friction, and Eckert numbers
+    # Recompute local transport properties at the two ends
+    mu_h_in = state_h_in.mu
+    mu_h_out = state_h_out.mu
+    k_h_in = state_h_in.k
+    k_h_out = state_h_out.k
+    cp_h_in = state_h_in.cp
+    cp_h_out = state_h_out.cp
+    rho_h_in = state_h_in.rho
+    rho_h_out = state_h_out.rho
+
+    # For cold side at corresponding radii: use inner for hot-out, outer for hot-in
+    state_c_at_hot_out = state_c_in
+    state_c_at_hot_in = state_c_out
+    mu_c_in = state_c_at_hot_in.mu
+    mu_c_out = state_c_at_hot_out.mu
+    k_c_in = state_c_at_hot_in.k
+    k_c_out = state_c_at_hot_out.k
+    cp_c_in = state_c_at_hot_in.cp
+    cp_c_out = state_c_at_hot_out.cp
+
+    # Outer/inner diameters
+    # Note: for Stanton based on tube-bank external flow, use OD-based Nu and Re
+    # Access OD/ID via geometry values available from radii spacing through total HT areas; simpler to pull from ratios used elsewhere
+    # We don't carry geometry here, so infer from area ratios is cumbersome; instead, stash OD/ID in diagnostics earlier
+
+    # Use geometry-provided diameters directly
+    Do_eff = geometry.tube_outer_diam
+    Di_eff = geometry.tube_inner_diam()
+
+    # Mass fluxes and velocities
+    V_h_in = G_h_in / rho_h_in if rho_h_in > 0 else float("nan")
+    V_h_out = G_h_out / rho_h_out if rho_h_out > 0 else float("nan")
+
+    # Reynolds based on OD
+    Re_h_in = G_h_in * Do_eff / mu_h_in if np.isfinite(Do_eff) and mu_h_in > 0 else float("nan")
+    Re_h_out = G_h_out * Do_eff / mu_h_out if np.isfinite(Do_eff) and mu_h_out > 0 else float("nan")
+
+    # Prandtl numbers
+    Pr_h_in = mu_h_in * cp_h_in / k_h_in if k_h_in > 0 else float("nan")
+    Pr_h_out = mu_h_out * cp_h_out / k_h_out if k_h_out > 0 else float("nan")
+
+    # Tube bank Nu and f at inlet and outlet
+    Nu_h_in, f_h_in = (
+        tube_bank_nusselt_number_and_friction_factor(
+            Re_h_in,
+            geometry.tube_spacing_long,
+            geometry.tube_spacing_trv,
+            Pr_h_in,
+            inline=(not geometry.staggered),
+            n_rows=geometry.n_rows_per_header * n_headers,
+        )
+        if np.isfinite(Re_h_in) and np.isfinite(Pr_h_in)
+        else (float("nan"), float("nan"))
+    )
+    Nu_h_out, f_h_out = (
+        tube_bank_nusselt_number_and_friction_factor(
+            Re_h_out,
+            geometry.tube_spacing_long,
+            geometry.tube_spacing_trv,
+            Pr_h_out,
+            inline=(not geometry.staggered),
+            n_rows=geometry.n_rows_per_header * n_headers,
+        )
+        if np.isfinite(Re_h_out) and np.isfinite(Pr_h_out)
+        else (float("nan"), float("nan"))
+    )
+
+    # Stanton numbers
+    St_h_in = (
+        Nu_h_in / (Re_h_in * Pr_h_in)
+        if np.isfinite(Nu_h_in) and Re_h_in > 0 and Pr_h_in > 0
+        else float("nan")
+    )
+    St_h_out = (
+        Nu_h_out / (Re_h_out * Pr_h_out)
+        if np.isfinite(Nu_h_out) and Re_h_out > 0 and Pr_h_out > 0
+        else float("nan")
+    )
+
+    # Local h_h and h_c at inlet and outlet (use OD based for hot, ID for cold)
+    Di_eff = Di_eff
+    h_h_in = (
+        Nu_h_in * k_h_in / Do_eff
+        if np.isfinite(Nu_h_in) and np.isfinite(Do_eff) and Do_eff > 0
+        else float("nan")
+    )
+    h_h_out = (
+        Nu_h_out * k_h_out / Do_eff
+        if np.isfinite(Nu_h_out) and np.isfinite(Do_eff) and Do_eff > 0
+        else float("nan")
+    )
+    # Apply heat transfer tuning consistent with marching
+    h_h_in *= opts.heat_transfer_tuning if np.isfinite(h_h_in) else 1.0
+    h_h_out *= opts.heat_transfer_tuning if np.isfinite(h_h_out) else 1.0
+
+    # Cold side
+    # Re_c and Nu_c at the two ends (Re_c is same if G_c and mu don't vary with radius much; mu varies with T)
+    tube_inner_diam = geometry.tube_inner_diam()
+    Re_c_in = (
+        G_c * tube_inner_diam / mu_c_in
+        if np.isfinite(tube_inner_diam) and mu_c_in > 0
+        else float("nan")
+    )
+    Re_c_out = (
+        G_c * tube_inner_diam / mu_c_out
+        if np.isfinite(tube_inner_diam) and mu_c_out > 0
+        else float("nan")
+    )
+    Pr_c_in = mu_c_in * cp_c_in / k_c_in if k_c_in > 0 else float("nan")
+    Pr_c_out = mu_c_out * cp_c_out / k_c_out if k_c_out > 0 else float("nan")
+    Nu_c_in = (
+        circular_pipe_nusselt(Re_c_in, 0, prandtl=Pr_c_in)
+        if np.isfinite(Re_c_in) and np.isfinite(Pr_c_in)
+        else float("nan")
+    )
+    Nu_c_out = (
+        circular_pipe_nusselt(Re_c_out, 0, prandtl=Pr_c_out)
+        if np.isfinite(Re_c_out) and np.isfinite(Pr_c_out)
+        else float("nan")
+    )
+    h_c_in = (
+        Nu_c_in * k_c_in / tube_inner_diam
+        if np.isfinite(Nu_c_in) and np.isfinite(tube_inner_diam) and tube_inner_diam > 0
+        else float("nan")
+    )
+    h_c_out = (
+        Nu_c_out * k_c_out / tube_inner_diam
+        if np.isfinite(Nu_c_out) and np.isfinite(tube_inner_diam) and tube_inner_diam > 0
+        else float("nan")
+    )
+
+    # Wall conduction term
+    wall_term = (
+        Do_eff
+        / (2.0 * (diagnostics.get("_wall_k", float("nan"))))
+        * np.log(Do_eff / tube_inner_diam)
+        if np.isfinite(Do_eff)
+        and np.isfinite(tube_inner_diam)
+        and Do_eff > 0
+        and tube_inner_diam > 0
+        else float("nan")
+    )
+
+    def _U_local(hh: float, hc: float) -> float:
+        if not (np.isfinite(hh) and np.isfinite(hc) and np.isfinite(wall_term)):
+            return float("nan")
+        return 1.0 / (1.0 / hh + (1.0 / hc) * (Do_eff / tube_inner_diam) + wall_term)
+
+    U_in = _U_local(h_h_in, h_c_in)
+    U_out = _U_local(h_h_out, h_c_out)
+
+    # Wall temperatures on hot side: Tw_hot = Th - q''/h_h, q'' = U*(Th-Tc)
+    deltaT_in = Th_in - Tc_out
+    deltaT_out = Th_out - Tc_in
+    qpp_in = U_in * deltaT_in if np.isfinite(U_in) else float("nan")
+    qpp_out = U_out * deltaT_out if np.isfinite(U_out) else float("nan")
+    Tw_h_in = (
+        Th_in - (qpp_in / h_h_in)
+        if np.isfinite(qpp_in) and np.isfinite(h_h_in) and h_h_in > 0
+        else float("nan")
+    )
+    Tw_h_out = (
+        Th_out - (qpp_out / h_h_out)
+        if np.isfinite(qpp_out) and np.isfinite(h_h_out) and h_h_out > 0
+        else float("nan")
+    )
+
+    # Eckert numbers
+    Ec_h_in = (
+        (V_h_in**2) / (cp_h_in * max(Th_in - Tw_h_in, 1e-16))
+        if np.isfinite(V_h_in) and np.isfinite(Tw_h_in)
+        else float("nan")
+    )
+    Ec_h_out = (
+        (V_h_out**2) / (cp_h_out * max(Th_out - Tw_h_out, 1e-16))
+        if np.isfinite(V_h_out) and np.isfinite(Tw_h_out)
+        else float("nan")
+    )
+
+    diagnostics["Re_h_in"] = float(Re_h_in)
+    diagnostics["Re_h_out"] = float(Re_h_out)
+    diagnostics["St_h_in"] = float(St_h_in)
+    diagnostics["St_h_out"] = float(St_h_out)
+    diagnostics["f_h_in"] = float(f_h_in)
+    diagnostics["f_h_out"] = float(f_h_out)
+    diagnostics["Ec_h_in"] = float(Ec_h_in)
+    diagnostics["Ec_h_out"] = float(Ec_h_out)
+    # Store supporting quantities for explanation/logging
+    diagnostics["V_h_in"] = float(V_h_in)
+    diagnostics["V_h_out"] = float(V_h_out)
+    diagnostics["V2_h_in"] = float(V_h_in**2) if np.isfinite(V_h_in) else float("nan")
+    diagnostics["V2_h_out"] = float(V_h_out**2) if np.isfinite(V_h_out) else float("nan")
+    diagnostics["cp_h_in"] = float(cp_h_in)
+    diagnostics["cp_h_out"] = float(cp_h_out)
+    diagnostics["dT_hw_in"] = float(Th_in - Tw_h_in) if np.isfinite(Tw_h_in) else float("nan")
+    diagnostics["dT_hw_out"] = float(Th_out - Tw_h_out) if np.isfinite(Tw_h_out) else float("nan")
 
 
 def F_inboard(
@@ -418,7 +622,7 @@ def F_inboard(
         # U_cold = 1.0 / (
         #    h_c_inv + h_h_inv * (tube_inner_diam / max(geometry.tube_outer_diam, 1e-16)) + wall_term
         # )
-        UA_sum += U_hot * geom_cache.area_ht_hot[j]
+        UA_sum += U_hot * geom_cache.area_ht_hot[j] * geometry.n_headers
 
         C_h = m_dot_hot * cp_h
         C_c = m_dot_cold * cp_c
@@ -517,6 +721,10 @@ def F_inboard(
         total_UA = UA_sum
         diagnostics["total_UA"] = float(total_UA)
         diagnostics["total_area_ht_hot"] = float(total_area_ht_hot)
+        # Stash geometry and wall info for downstream diagnostics
+        diagnostics["_Do"] = float(geometry.tube_outer_diam)
+        diagnostics["_Di"] = float(tube_inner_diam)
+        diagnostics["_wall_k"] = float(wall_conductivity)
         mid_index = n_nodes // 2
         total_aff_hot = geom_cache.area_free_hot[mid_index]
         total_aff_cold = geom_cache.area_free_cold[mid_index]
@@ -549,6 +757,8 @@ def F_inboard(
             mdot_c_total,
             geom_cache,
             geometry.n_headers,
+            geometry,
+            opts,
             outlet_pressure_known,
         )
 

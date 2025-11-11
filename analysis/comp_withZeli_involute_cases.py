@@ -210,10 +210,32 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "case_name": "AHJE MTO k=1",
             "fluid_hot": air,
             "fluid_cold": h2,
-            "Th_in": 574.0,
+            "Th_in": 718.1,
             "Ph_out": 1.01e5,
             "Tc_in": 287.0,
-            "Pc_in": 150e5,
+            "Pc_in": 96.05e5,
+            "tube_outer_diam": 1.067e-3,
+            "tube_thick": 0.129e-3,
+            "tube_spacing_trv": 3.0,  # Why higher than for ahje?
+            "tube_spacing_long": 1.5,
+            "staggered": True,
+            "n_headers": 11,
+            "n_rows_per_header": 4,
+            "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "radius_outer_whole_hex": 460e-3,
+            "inv_angle_deg": 360.0,
+            "mflow_h_total": 162.04 * 0.2,
+            "mflow_c_total": 1.316,
+            "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+        },
+        "ahjeb_toc_k1": {  # Uses conditions from 28/10 presentation
+            "case_name": "AHJE MTO k=1",
+            "fluid_hot": air,
+            "fluid_cold": h2,
+            "Th_in": 571.65,
+            "Ph_out": 0.22631e5,
+            "Tc_in": 287.0,
+            "Pc_in": 27.9e5,
             "tube_outer_diam": 1.067e-3,
             "tube_thick": 0.129e-3,
             "tube_spacing_trv": 3.0,  # Why higher than for ahje?
@@ -224,11 +246,10 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> dict[str, object]:
             "n_rows_axial": int(round(690e-3 / (3.0 * 1.067e-3))),
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
-            "mflow_h_total": 162.04 * 0.2,
-            "mflow_c_total": 1.316,
+            "mflow_h_total": 64.3 * 0.2,
+            "mflow_c_total": 0.418,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
-        
     }
 
     if canonical not in cases:
@@ -383,12 +404,12 @@ def _zero_d_two_step_guess(
             T_a=_Th_in,
             p_b=_Ph_out if _Ph_out is not None else _Ph_in,
             a_is_in=True,
-            b_is_in=False if _Ph_out is not None else True,
+            b_is_in=(_Ph_out is None),
             max_iter=100,
             tol_T=1e-2,
             rel_tol_p=1e-2,
         )
-        
+
         Tc_out, Pc_out = update_static_properties(
             fluid_cold,
             G_c0,
@@ -537,7 +558,11 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         Ph_in_known if Ph_in_known is not None else Ph_out_known,
         "inlet" if Ph_in_known is not None else "outlet",
     )
-    dP_P_in = (1-Ph0/Ph_in_known) * 100.0 if Ph_in_known is not None else (1-Ph_out_known/Ph0) * 100.0
+    dP_P_in = (
+        (1 - Ph0 / Ph_in_known) * 100.0
+        if Ph_in_known is not None
+        else (1 - Ph_out_known / Ph0) * 100.0
+    )
     logger.info(
         "Case %10s: 0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         params["case_name"],
@@ -548,7 +573,9 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     eval_state = {"count": 0}
     tol_root = 1.0e-2
     tol_P_pct_of_Ph_in = 0.1
-    tol_P = tol_P_pct_of_Ph_in / 100 * (Ph_in_known if Ph_in_known is not None else Ph_out_known)  # absolute Pa tolerance
+    tol_P = (
+        tol_P_pct_of_Ph_in / 100 * (Ph_in_known if Ph_in_known is not None else Ph_out_known)
+    )  # absolute Pa tolerance
 
     def residuals(x: np.ndarray) -> np.ndarray:
         """Residuals for the hot-side shooting problem.
@@ -570,7 +597,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         eval_state["count"] += 1
         raw = F_inboard(
             Th_out_guess=x[0],
-            Ph_out_guess=x[1], # disregarded if outlet pressure is known
+            Ph_out_guess=x[1],  # disregarded if outlet pressure is known
             geometry=geom,
             fluid_hot=fluid_hot,
             fluid_cold=fluid_cold,
@@ -582,7 +609,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             mdot_c_total=params["mflow_c_total"],
             wall_conductivity=params["wall_conductivity"],
             options=MarchingOptions(),
-            outlet_pressure_known=True if Ph_out_known is not None else False,
+            outlet_pressure_known=(Ph_out_known is not None),
         )
         # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
         # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
@@ -621,7 +648,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         wall_conductivity=params["wall_conductivity"],
         options=MarchingOptions(),
         diagnostics=final_diag,
-        outlet_pressure_known=True if Ph_out_known is not None else False,
+        outlet_pressure_known=(Ph_out_known is not None),
     )
 
     logger.debug(
@@ -635,7 +662,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     else:
         dP_P_in = final_diag.get("dP_hot_pct", float("nan"))
     logger.info(
-        "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_known=%.1f %%",
+        "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         eval_state["count"],
         sol.x[0],
         dP_P_in,
@@ -676,6 +703,39 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             final_diag.get("Th_out", float("nan")),
             final_diag.get("Tc_out", float("nan")),
         )
+        # Hot-side non-dimensionals and Eckert numbers at inlet and exit
+        logger.info(
+            "Hot inlet (outer r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
+            final_diag.get("Re_h_in", float("nan")),
+            final_diag.get("St_h_in", float("nan")),
+            final_diag.get("f_h_in", float("nan")),
+            final_diag.get("Ec_h_in", float("nan")),
+            final_diag.get("V_h_in", float("nan")),
+            final_diag.get("V2_h_in", float("nan")),
+        )
+        logger.info(
+            "  Ec rationale (inlet): Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
+            final_diag.get("V2_h_in", float("nan")),
+            final_diag.get("cp_h_in", float("nan")),
+            final_diag.get("dT_hw_in", float("nan")),
+            final_diag.get("Ec_h_in", float("nan")),
+        )
+        logger.info(
+            "Hot exit (inner r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
+            final_diag.get("Re_h_out", float("nan")),
+            final_diag.get("St_h_out", float("nan")),
+            final_diag.get("f_h_out", float("nan")),
+            final_diag.get("Ec_h_out", float("nan")),
+            final_diag.get("V_h_out", float("nan")),
+            final_diag.get("V2_h_out", float("nan")),
+        )
+        logger.info(
+            "  Ec rationale (exit):  Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
+            final_diag.get("V2_h_out", float("nan")),
+            final_diag.get("cp_h_out", float("nan")),
+            final_diag.get("dT_hw_out", float("nan")),
+            final_diag.get("Ec_h_out", float("nan")),
+        )
         logger.debug(
             "1D effective area ratios: hot=%5.2f, cold=%5.2f across %.0f layers",
             final_diag.get("area_ratio_hot_total", float("nan")),
@@ -693,3 +753,4 @@ if __name__ == "__main__":
     main(case="viper", fluid_model="CoolProp")
     main(case="custom", fluid_model="CoolProp")"""
     main(case="ahjeb_MTO_k1", fluid_model="CoolProp")
+    main(case="ahjeb_toc_k1", fluid_model="CoolProp")
