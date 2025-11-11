@@ -181,7 +181,7 @@ class RadialSpiralGeometry(Protocol):
 
 
 # ---------- Marching solver (inboard) ----------
-def calc_dh0_and_tau(
+def calc_eps_local_and_tau(
     *,
     geometry: RadialSpiralGeometry,
     sh,
@@ -195,7 +195,7 @@ def calc_dh0_and_tau(
     mdot_hot_per_header: float,
     mdot_cold_per_header: float,
 ) -> tuple[float, float, float]:
-    """Return q and (tau_hot, tau_cold) for layer j using local states and areas."""
+    """Return eps_local * C_min_local and (tau_hot, tau_cold) for layer j using local states and areas."""
     cp_h = sh.cp
     mu_h = sh.mu
     k_h = sh.k
@@ -333,7 +333,7 @@ def rad_spiral_shoot(
         sh = fluids.hot.state(Th[j], Ph[j])
         sc = fluids.cold.state(Tc[j], Pc[j])
 
-        eps_C_min_local, tau_hot, tau_cold = calc_dh0_and_tau(
+        eps_C_min_local, tau_hot, tau_cold = calc_eps_local_and_tau(
             geometry=geometry,
             sh=sh,
             sc=sc,
@@ -440,7 +440,7 @@ def compute_overall_performance(
         sh = fluids.hot.state(Th[j], Ph[j])
         sc = fluids.cold.state(Tc[j], Pc[j])
 
-        eps_C_min_local, tau_h, tau_c = calc_dh0_and_tau(
+        eps_C_min_local, tau_h, tau_c = calc_eps_local_and_tau(
             geometry=geometry,
             sh=sh,
             sc=sc,
