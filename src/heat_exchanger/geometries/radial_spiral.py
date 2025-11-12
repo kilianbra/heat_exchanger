@@ -1,6 +1,8 @@
 """Involute heat-exchanger geometry protocol.
 Provides 0D cached properties and an on-demand method to compute 1D arrays
-for a single sector used in radial marching (inner radius j=0 to outer j=n_headers).
+for a single sector used in radial marching. Arrays are oriented so that
+index 0 corresponds to the flow in tubes / cold inlet (which may be at the inner or outer
+radius depending on configuration).
 """
 
 from __future__ import annotations
@@ -68,6 +70,13 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
 
     0D analysis uses the cached-style properties below. 1D analysis calls
     _1d_arrays_for_one_sector() to compute all arrays needed for stepping.
+
+    Orientation:
+      - ext_fluid_flows_radially_inwards: True for inboard (external hot fluid
+        flows from outer to inner radius), False for outboard (external hot
+        fluid flows from inner to outer radius).
+      - All returned 1D arrays are oriented such that index 0 is at the cold
+        inlet, so marching proceeds from cold inlet to cold outlet.
     """
 
     # Core, non-cached inputs (implementers provide these as attributes)
@@ -82,6 +91,8 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     radius_outer_whole_hex: float
     inv_angle_deg: float = 360.0
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
+    # Orientation flag: True=inboard (external flow inward), False=outboard (external flow outward)
+    ext_fluid_flows_radially_inwards: bool = True
 
     # ---------- Cached-style 0D properties (default implementations) ----------
     @cached_property
@@ -153,6 +164,8 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     def _1d_arrays_for_one_sector(self) -> dict[str, np.ndarray | float]:
         """Compute and return geometry arrays of length n_headers for 1D marching in one sector.
 
+        Arrays are oriented such that index 0 corresponds to the flow in tubes / cold inlet.
+
         Returns a dict with keys:
           - radii, theta, tube_length, area_ht_hot, area_ht_cold,
             area_frontal_hot, area_free_hot, area_free_cold, d_h_hot
@@ -197,6 +210,22 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
             )
             d_h_hot[j] = (4.0 * area_free_hot[j] * length_flow_outer_per_header) / area_ht_hot[j]
 
+        # Orient arrays so index 0 corresponds to cold inlet.
+        # For inboard (external flow inward), cold inlet is at inner radius (current order).
+        # For outboard (external flow outward), cold inlet is at outer radius -> reverse arrays.
+        if not self.ext_fluid_flows_radially_inwards:
+            # Reverse per-header arrays
+            area_ht_hot = area_ht_hot[::-1]
+            area_ht_cold = area_ht_cold[::-1]
+            area_frontal_hot = area_frontal_hot[::-1]
+            area_free_hot = area_free_hot[::-1]
+            area_free_cold = area_free_cold[::-1]
+            tube_length = tube_length[::-1]
+            d_h_hot = d_h_hot[::-1]
+            # Reverse node arrays (n_headers + 1)
+            radii = radii[::-1]
+            theta = theta[::-1]
+
         return {
             "radii": radii,
             "theta": theta,
@@ -226,9 +255,10 @@ class RadialSpiralSpec(RadialSpiralProtocol):
     radius_outer_whole_hex: float
     inv_angle_deg: float = 360.0
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
+    ext_fluid_flows_radially_inwards: bool = True
 
 
-# ---------- Marching solver (inboard) ----------
+# ---------- Marching solver ----------
 def calc_eps_local_and_tau(
     *,
     geometry: RadialSpiralProtocol,
@@ -319,8 +349,10 @@ def rad_spiral_shoot(
     property_solver_tol_T: float = 1e-2,
     rel_tol_p: float = 1e-3,
 ) -> np.ndarray:
-    """Inboard shooting residuals for a radial involute HX.
-    For now hard coded that hot fluid flows outside tubes and cold inside.
+    """Shooting residuals for a radial involute HX.
+    For now hot fluid flows outside tubes and cold inside. Marching occurs
+    from the cold inlet, which may be located at the inner or outer radius
+    depending on the configuration (controlled by geometry.ext_fluid_flows_radially_inwards).
 
     if fluids.Ph_in is provided:
         boundary_guess: [Th_out_guess, Ph_out_guess]
@@ -450,7 +482,12 @@ def compute_overall_performance(
     property_solver_tol_T: float = 1e-2,
     rel_tol_p: float = 1e-3,
 ) -> dict[str, object]:
-    """Run march and return residuals, state arrays, and diagnostics for inboard case."""
+    """Run march and return residuals, state arrays, and diagnostics.
+
+    Marching is performed from the cold inlet (inner or outer radius depending
+    on configuration). Diagnostics map hot-side inlet/outlet consistently based
+    on array orientation (hot inlet at index -1, hot outlet at index 0).
+    """
     geo = geometry._1d_arrays_for_one_sector()
     area_ht_hot = geo["area_ht_hot"]
     area_ht_cold = geo["area_ht_cold"]

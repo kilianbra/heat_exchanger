@@ -42,9 +42,7 @@ WALL_DENSITY_304_SS = 7930.0
 WALL_MATERIAL_304_SS = "304 Stainless Steel"
 
 
-def load_case(
-    case: str, fluid_model: str = "PerfectGas"
-) -> tuple[RadialSpiralProtocol, FluidInputs, str]:
+def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralProtocol, FluidInputs, str]:
     """Return (geometry, inputs, case_name) for a named case.
 
     Supported case identifiers (case-insensitive):
@@ -167,7 +165,7 @@ def load_case(
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
-            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
+            "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),  # 216 tubes per row (Axially)
             "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
@@ -190,11 +188,12 @@ def load_case(
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
-            "radius_outer_whole_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # From inner radius
+            "radius_outer_whole_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # 0.814 m  From inner radius
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
             "mflow_c_total": 0.76,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
+            "ext_fluid_flows_radially_inwards": False,
         },
         "chinese": {
             "case_name": "K. He 2024",
@@ -241,7 +240,7 @@ def load_case(
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
         "ahjeb_toc_k1": {  # Uses conditions from 28/10 presentation
-            "case_name": "AHJE MTO k=1",
+            "case_name": "AHJE ToC k=1",
             "fluid_hot": air,
             "fluid_cold": h2,
             "Th_in": 571.65,
@@ -283,6 +282,7 @@ def load_case(
         radius_outer_whole_hex=params["radius_outer_whole_hex"],
         inv_angle_deg=params["inv_angle_deg"],
         wall_conductivity=params["wall_conductivity"],
+        ext_fluid_flows_radially_inwards=params.get("ext_fluid_flows_radially_inwards", True),
     )
 
     # Build inputs
@@ -301,9 +301,7 @@ def load_case(
     return geom, inputs, params["case_name"]
 
 
-def _compute_spiral_length(
-    radius_inner: float, radius_outer: float, inv_angle_deg: float, n_points: int = 64
-) -> float:
+def _compute_spiral_length(radius_inner: float, radius_outer: float, inv_angle_deg: float, n_points: int = 64) -> float:
     theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), n_points)
     b = (radius_outer - radius_inner) / np.deg2rad(inv_angle_deg)
     r_vals = radius_inner + b * theta_vals
@@ -362,7 +360,7 @@ def _initial_guess_two_step_xflow(
     G_h0 = mflow_h_total / Aff_hot_mid
     G_c0 = mflow_c_total / Aff_cold_total
 
-    def _0d_counterflow_approx(
+    def _0d_xflow_guess(
         _Th_in: float,
         _Ph_in: float,
         _Tc_in: float,
@@ -408,11 +406,7 @@ def _initial_guess_two_step_xflow(
         h_h = Nu_h * sh.k / geom.tube_outer_diam
         h_c = Nu_c * sc.k / tube_ID
 
-        wall_term = (
-            geom.tube_outer_diam
-            / (2.0 * geom.wall_conductivity)
-            * np.log(geom.tube_outer_diam / tube_ID)
-        )
+        wall_term = geom.tube_outer_diam / (2.0 * geom.wall_conductivity) * np.log(geom.tube_outer_diam / tube_ID)
         U = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / tube_ID) + wall_term)
 
         if logger.isEnabledFor(logging.DEBUG):
@@ -470,14 +464,14 @@ def _initial_guess_two_step_xflow(
         return Th_out, Tc_out, Ph_not_b, Pc_out
 
     logger.debug(
-        "0D guess 0: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%5.2e Pa, Pc_in =%5.2e Pa (Ph_out=%s)",
+        "0D guess 0: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%s Pa, Pc_in =%5.2e Pa (Ph_out=%s)",
         Th_in,
         Tc_in,
-        Ph_in,
+        f"{Ph_in:.2e}" if Ph_in is not None else "N/A",
         Pc_in,
-        f"{Ph_out:.2f}" if Ph_out is not None else "N/A",
+        f"{Ph_out:.2e}" if Ph_out is not None else "N/A",
     )
-    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_counterflow_approx(
+    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_xflow_guess(
         Th_in,
         Ph_in if Ph_in is not None else float("nan"),
         Tc_in,
@@ -512,7 +506,7 @@ def _initial_guess_two_step_xflow(
         raise ValueError("Either Ph_in or Ph_out must be provided for the 0D guess.")
     Ph_mean = 0.5 * (Ph_known + Ph_not_b1)
     Pc_mean = 0.5 * (Pc_in + Pc_o1)
-    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_counterflow_approx(
+    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_xflow_guess(
         Th_in,
         Ph_in if Ph_in is not None else float("nan"),
         Tc_in,
@@ -546,13 +540,12 @@ def _initial_guess_two_step_xflow(
 
 def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
-    configure_logging(logging.DEBUG)
+    configure_logging(logging.WARNING)
 
     # Control logging levels for different modules
-    logging.getLogger("heat_exchanger.conservation").setLevel(
-        logging.WARNING
-    )  # Suppress debug from conservation.py
-    logging.getLogger("heat_exchanger.geometries.radial_spiral").setLevel(logging.INFO)
+    # Suppress debug from conservation.py
+    logging.getLogger("heat_exchanger.conservation").setLevel(logging.WARNING)
+    logging.getLogger("heat_exchanger.geometries.radial_spiral").setLevel(logging.DEBUG)
     logging.getLogger("__main__").setLevel(logging.DEBUG)  # Main loop stays at INFO
 
     geom, inputs, case_name = load_case(case, fluid_model)
@@ -569,11 +562,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         Ph_in_known if Ph_in_known is not None else Ph_out_known,
         "inlet" if Ph_in_known is not None else "outlet",
     )
-    dP_P_in = (
-        (1 - Ph0 / Ph_in_known) * 100.0
-        if Ph_in_known is not None
-        else (1 - Ph_out_known / Ph0) * 100.0
-    )
+    dP_P_in = (1 - Ph0 / Ph_in_known) * 100.0 if Ph_in_known is not None else (1 - Ph_out_known / Ph0) * 100.0
     logger.info(
         "Case %10s: 0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
         case_name,
@@ -603,9 +592,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             pressure residual scaled so that |ΔP| == tol_P maps to tol_root (when present).
         """
         eval_state["count"] += 1
-        raw = rad_spiral_shoot(
-            x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
-        )
+        raw = rad_spiral_shoot(x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3)
         # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
         # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
         if raw.size == 2:
@@ -622,11 +609,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         )
         return scaled
 
-    x0 = (
-        np.array([Th0, Ph0], dtype=float)
-        if Ph_in_known is not None
-        else np.array([Th0], dtype=float)
-    )
+    x0 = np.array([Th0, Ph0], dtype=float) if Ph_in_known is not None else np.array([Th0], dtype=float)
     sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 60})
 
     result = compute_overall_performance(
@@ -642,9 +625,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         sol.message,
     )
     dP_P_in = (
-        (1 - sol.x[1] / Ph_in_known) * 100.0
-        if Ph_in_known is not None
-        else final_diag.get("dP_hot_pct", float("nan"))
+        (1 - sol.x[1] / Ph_in_known) * 100.0 if Ph_in_known is not None else final_diag.get("dP_hot_pct", float("nan"))
     )
     logger.info(
         "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
@@ -724,15 +705,25 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
             final_diag.get("dT_hw_out", float("nan")),
             final_diag.get("Ec_h_out", float("nan")),
         )
+        logger.warning(
+            "for case %20s, NTU=%5.2f, eps=%.2f %%, dP_hot=%5.1f %%, C_r=%.3f, eps_xflow=%.2f %%",
+            case_name,
+            final_diag.get("NTU", float("nan")),
+            final_diag.get("epsilon", float("nan")) * 100.0,
+            final_diag.get("dP_hot_pct", float("nan")),
+            final_diag.get("Cr", float("nan")),
+            eps_counterflow * 100.0,
+        )
 
 
 if __name__ == "__main__":
-    """main(case="chinese", fluid_model="CoolProp")
-    main(case="ahjeb", fluid_model="CoolProp")
+    # main(case="custom", fluid_model="CoolProp")
+    # main(case="ahjeb", fluid_model="CoolProp")
     main(case="ahjeb_toc", fluid_model="CoolProp")
-    # main(case="ahjeb_toc_outb") # Outboard not implemented yet
-    # main(case="viper", fluid_model="RefProp")
-    main(case="viper", fluid_model="CoolProp")
-    main(case="custom", fluid_model="CoolProp")"""
-    main(case="ahjeb_MTO_k1", fluid_model="CoolProp")
-    main(case="ahjeb_toc_k1", fluid_model="CoolProp")
+    # main(case="ahjeb_toc_outb", fluid_model="CoolProp")
+    # # main(case="viper", fluid_model="RefProp")
+    # main(case="viper", fluid_model="CoolProp")
+    # main(case="chinese", fluid_model="CoolProp")
+
+    # main(case="ahjeb_MTO_k1", fluid_model="CoolProp")
+    # main(case="ahjeb_toc_k1", fluid_model="CoolProp")
