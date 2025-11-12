@@ -128,7 +128,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "mflow_c_total": 0.3,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
-        "ahjeb": {
+        "ahjeb": {  # Zelim at MTO conditions
             "case_name": "AHJE",  # version B
             "fluid_hot": air,
             "fluid_cold": h2,
@@ -136,28 +136,28 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "Ph_in": 1.02e5,
             "Tc_in": 40.0,
             "Pc_in": 50e5,
-            "tube_outer_diam": 0.98e-3,  # REL
-            "tube_thick": 0.04e-3,  # REL
+            "tube_outer_diam": 1.067e-3,  # based on 19gT/W from needleworks
+            "tube_thick": 0.129e-3,  # based on 19gT/W from needleworks
             "tube_spacing_trv": 2.5,
             "tube_spacing_long": 1.5,
             "staggered": True,
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (2.5 * 1.067e-3))),  # 259 from axial length
-            "radius_outer_whole_hex": 448e-3,
+            "radius_outer_whole_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
             "mflow_c_total": 0.3,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
         "ahjeb_toc": {
-            "case_name": "AHJE ToC",  # version B - H2TOCv2 ExPHT
+            "case_name": "AHJE ToC Work",  # version B - H2TOCv2 ExPHT
             "fluid_hot": air,
             "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
             "Tc_in": 287.0,
-            "Pc_in": 150e5,
+            "Pc_in": 150e5,  # This is work cycle - Hydrogen turbine included after
             "tube_outer_diam": 1.067e-3,
             "tube_thick": 0.129e-3,
             "tube_spacing_trv": 3.0,  # Why higher than for ahje?
@@ -173,13 +173,13 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
         "ahjeb_toc_outb": {
-            "case_name": "AHJE ToC Outb",  # version B - H2TOCv2 ExPHT (Outboard)
+            "case_name": "AHJE ToC Outb Work",  # version B - H2TOCv2 ExPHT (Outboard)
             "fluid_hot": air,
             "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
             "Tc_in": 287.0,
-            "Pc_in": 150e5,
+            "Pc_in": 150e5,  # This is work cycle - Hydrogen turbine included after
             "tube_outer_diam": 1.067e-3,
             "tube_thick": 0.129e-3,
             "tube_spacing_trv": 3.0,  # Why higher than for ahje?
@@ -707,8 +707,6 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         )
         logger.debug(
             "Total Q_hot=%.2f MW, Q_cold=%.2f MW",
-            final_diag.get("Q_total", float("nan")) / 1e6,
-            final_diag.get("Q_cold", float("nan")) / 1e6,
         )
         logger.warning(
             "for case %20s, NTU=%5.2f, eps=%.2f %%, dP_hot=%5.1f %%, C_r=%.3f, eps_xflow=%.2f %%",

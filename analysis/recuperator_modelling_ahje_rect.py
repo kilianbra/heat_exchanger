@@ -23,8 +23,8 @@ from heat_exchanger.geometry_tube_bank import (
 )
 from heat_exchanger.hex_basic import dp_tube_bank, ntu
 
-mdot_hot = 1144 / 60  # 19.07  # kg/s
-mdot_cold = 9.95 / 60  # 0.166  # kg/s
+mdot_hot = 12.0  # 19.07  # kg/s
+mdot_cold = 0.76  # 0.166  # kg/s
 
 model = "RP"  # "CP" or "PG"
 
@@ -43,31 +43,38 @@ match model:
 
 
 # Brewer recuperator values
-temp_hot_in = 778  # K
-temp_cold_in = 264  # K
+temp_hot_in = 574  # K
+temp_cold_in = 287  # K
 
-p_hot_in = 4e4  # Pa
-p_cold_in = 17.3e5  # Pa
+p_hot_in = 0.368e5  # Pa
+p_cold_in = 150e5  # Pa
 
-total_diameter_outer = 1.265  # m
-total_diameter_inner = 0.564  # m
-spacing_trans = 6.0  # out of correlation, overruled correlation checks
-spacing_long = 1.25
+total_diameter_outer = 0.871  # m
+total_diameter_inner = 0.541  # m
+spacing_trans = 3.0  # out of correlation, overruled correlation checks
+spacing_long = 1.5
 
-tube_diameter_outer = 0.478e-2  # m - 4.78 mm
-t_tubes = 0.03e-2  # m -  300 microns or 0.3 mm
+tube_diameter_outer = 1.067e-3  # m - 4.78 mm
+t_tubes = 0.129e-3  # m -  300 microns or 0.3 mm
 tube_diameter_inner = tube_diameter_outer - 2 * t_tubes
 
 n_passes_cold = 8
 
-n_tubes_per_row = 62  # approx np.pi * D_i**2 / (Xt* * d_o)
-n_rows = 32
+n_tubes_per_row = round(
+    np.pi * 0.541**2 / (3.0 * 1.067e-3)
+)  # now 287 tubes per row (Axially)  old 62  # approx np.pi * D_i**2 / (Xt* * d_o)
+n_rows = 32 * 8
 
 n_tubes_per_pass = n_tubes_per_row * n_rows / n_passes_cold
 
-area_frontal = area_frontal_bank(total_diameter_outer, total_diameter_inner)
+print(f"Axial length: {n_rows * spacing_long * tube_diameter_outer:.2f} m (N_tubes = {n_tubes_per_row * n_rows})")
+
+area_frontal = 2 * area_frontal_bank(total_diameter_outer, total_diameter_inner)
 
 sigma = sigma_tube_bank(spacing_trans)
+print(
+    f"Axial length: {n_rows * spacing_long * tube_diameter_outer:.2f} m (N_tubes = {n_tubes_per_row * n_rows}), sigma = {sigma:.2f}"
+)
 area_free_flow_hot = area_free_flow_bank(area_frontal, sigma)
 tube_length = axial_involute_tube_length(total_diameter_outer, total_diameter_inner)
 area_heat_transfer_hot = area_heat_transfer_bank(tube_diameter_outer, tube_length, n_rows, n_tubes_per_row)
@@ -142,9 +149,12 @@ epsilon = epsilon_ntu(
 )
 
 heat_transfer = epsilon * c_min * (temp_hot_in - temp_cold_in)  # not caring about enthalpy yet
+print(f"heat_transfer: {heat_transfer / 1e6:.2f} MW")
 
 temp_hot_out = temp_hot_in - heat_transfer / heat_capacity_flux_hot
 temp_cold_out = temp_cold_in + heat_transfer / heat_capacity_flux_cold
+
+print(f"temp_hot_out: {temp_hot_out:.2f} K, temp_cold_out: {temp_cold_out:.2f} K")
 
 rho_hot_in = hot_air.get_density(temp_hot_in, p_hot_in)
 rho_hot_out_approx = hot_air.get_density(temp_hot_out, p_hot_in)
