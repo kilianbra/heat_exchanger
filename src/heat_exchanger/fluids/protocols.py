@@ -285,6 +285,7 @@ class PerfectGasFluid:
         *,
         gamma: float = 1.4,
         Pr: float = 0.7,
+        cp: float | None = None,  # override constant specific heat
         label: str | None = None,
     ) -> None:
         self.R_specific = self.R_UNIVERSAL / M  # J/(kg·K)
@@ -293,7 +294,7 @@ class PerfectGasFluid:
         self.S = S
         self.gamma = gamma
         self.Pr = Pr
-        self.cp_const = self.R_specific * gamma / (gamma - 1.0)
+        self.cp_const = cp if cp is not None else self.R_specific * gamma / (gamma - 1.0)
         self._preset_name = label
 
     def state(self, T: float, P: float) -> FluidState:

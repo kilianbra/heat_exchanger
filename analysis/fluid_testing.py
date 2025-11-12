@@ -79,16 +79,12 @@ def build_h2_flue_models(FAR: float = 9.95 / (1144 - 9.95)):
         models["CoolProp-Air"] = f"Error: {e}"
 
     try:
-        models["CombProdH2-CP"] = CombustionProductsProperties(
-            fuel_type="H2", FAR_mass=FAR, prefer_refprop=False
-        )
+        models["CombProdH2-CP"] = CombustionProductsProperties(fuel_type="H2", FAR_mass=FAR, prefer_refprop=False)
     except Exception as e:
         models["CombProdH2-CP"] = f"Error: {e}"
 
     try:
-        models["CombProdH2-RP"] = CombustionProductsProperties(
-            fuel_type="H2", FAR_mass=FAR, prefer_refprop=True
-        )
+        models["CombProdH2-RP"] = CombustionProductsProperties(fuel_type="H2", FAR_mass=FAR, prefer_refprop=True)
     except Exception as e:
         models["CombProdH2-RP"] = f"Error: {e}"
 
@@ -129,11 +125,7 @@ def query_properties(strategy, T, P):
                 "gamma [-]": f"{gamma_val:.2f}" if np.isfinite(gamma_val) else "nan",
             }
         else:
-            return (
-                {"error": str(strategy)}
-                if isinstance(strategy, str)
-                else {"error": "Unsupported strategy"}
-            )
+            return {"error": str(strategy)} if isinstance(strategy, str) else {"error": "Unsupported strategy"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -234,9 +226,7 @@ def plot_mu_combustion_products_one_temp_as_function_of_FAR(
         mu_air = air.get_viscosity(T, P)
     except Exception:
         # Fallback to a simple perfect gas estimate if CoolProp fails
-        air_pg = PerfectGasProperties(
-            molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4
-        )
+        air_pg = PerfectGasProperties(molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4)
         mu_air = air_pg.get_viscosity(T, P)
 
     rel_mu_H2 = []
@@ -263,9 +253,7 @@ def plot_mu_combustion_products_one_temp_as_function_of_FAR(
     ax.yaxis.set_major_formatter(PercentFormatter(1.0))
     ax.set_xlabel("FAR [-]")
     ax.set_ylabel(f"Relative viscosity vs air at {T:.0f} K (mu_air={mu_air:.3e} Pa·s)")
-    ax.set_title(
-        f"Viscosity change of combustion products vs air at T={T:.0f} K, p={P / BAR_TO_PA:.1f} bar"
-    )
+    ax.set_title(f"Viscosity change of combustion products vs air at T={T:.0f} K, p={P / BAR_TO_PA:.1f} bar")
     ax.grid(True, alpha=0.3)
     ax.legend()
 
@@ -395,6 +383,66 @@ def main_table():
     print(f"  cold c_p = {cp_mean_cold:.1f} J/kg-K ({c_in_pct:+.0f} %, {c_out_pct:+.0f} %)")
     print(f"  hot  c_p = {cp_mean_hot:.1f} J/kg-K ({h_in_pct:+.0f} %, {h_out_pct:+.0f} %)")
 
+    # Helper to back-calculate perfect-gas parameters for a model using two states
+    def backcalc_pg_params(
+        label: str,
+        model,
+        T_in: float,
+        P_in: float,
+        T_out: float,
+        P_out: float,
+        cp_mean: float,
+        T_ref: float = 273.15,
+    ) -> None:
+        R_UNIVERSAL_LOCAL = 8314.462618  # J/(kmol·K)
+        # Compute R_specific via ideal relation and molecular masses
+        rho_in = model.get_density(T_in, P_in)
+        rho_out = model.get_density(T_out, P_out)
+        R_in = P_in / (rho_in * T_in)
+        R_out = P_out / (rho_out * T_out)
+        M_in = R_UNIVERSAL_LOCAL / R_in
+        M_out = R_UNIVERSAL_LOCAL / R_out
+        # mu_ref at T_ref (at inlet pressure context)
+        mu_ref = model.get_viscosity(T_ref, P_in)
+
+        # Back-calc Sutherland constant from Sutherland's law at each state
+        def _S_from(T: float, mu_T: float) -> float:
+            A = (mu_T / mu_ref) / ((T / T_ref) ** 1.5)
+            return (T_ref - A * T) / (A - 1.0)
+
+        mu_in = model.get_viscosity(T_in, P_in)
+        mu_out = model.get_viscosity(T_out, P_out)
+        S_in = _S_from(T_in, mu_in)
+        S_out = _S_from(T_out, mu_out)
+
+        print(f"PG backcalc [{label}]")
+        print(f"  M_in={M_in:.3f} kg/kmol, M_out={M_out:.3f} kg/kmol")
+        print(f"  cp_mean={cp_mean:.1f} J/kg-K  |  mu_ref(T_ref={T_ref:.2f} K)={mu_ref:.3e} Pa·s")
+        print(f"  S_in={S_in:.2f} K, S_out={S_out:.2f} K")
+
+    # Brewer pair: para-H2 (cold) and H2 combustion products (hot)
+    if cold_model is not None:
+        backcalc_pg_params(
+            f"Brewer cold ({cold_key}) para-H2/H2",
+            cold_model,
+            T_c_in,
+            P_cold,
+            T_c_out,
+            P_cold,
+            cp_mean_cold,
+        )
+    if hot_model is not None:
+        backcalc_pg_params(
+            f"Brewer hot ({hot_key}) H2 comb. products",
+            hot_model,
+            T_h_in,
+            P_hot,
+            T_h_out,
+            P_hot,
+            cp_mean_hot,
+            T_ref=350.0,
+        )
+
     # ======================
     # AHJE conditions: MTO
     # ======================
@@ -433,7 +481,7 @@ def main_table():
             row.update(props)
         rows.append(row)
     print_table(
-        f"AHJE MTO cold inlet properties at T={T_c_in_MTO:.1f} K, P={P_c_in_MTO / BAR_TO_PA:.2f} bar",
+        f"AHJE MTO cold inlet prop@ T={T_c_in_MTO:.1f} K, P={P_c_in_MTO / BAR_TO_PA:.2f} bar",
         rows,
     )
 
@@ -457,7 +505,7 @@ def main_table():
             row.update(props)
         rows.append(row)
     print_table(
-        f"AHJE MTO cold outlet properties at T={T_c_out_MTO:.1f} K, P={P_c_out_MTO / BAR_TO_PA:.2f} bar",
+        f"AHJE MTO cold outlet prop@ T={T_c_out_MTO:.1f} K, P={P_c_out_MTO / BAR_TO_PA:.2f} bar",
         rows,
     )
 
@@ -481,7 +529,7 @@ def main_table():
             row.update(props)
         rows.append(row)
     print_table(
-        f"AHJE MTO hot inlet properties at T={T_h_in_MTO:.1f} K, P={P_h_in_MTO / BAR_TO_PA:.2f} bar",
+        f"AHJE MTO hot inlet prop@ T={T_h_in_MTO:.1f} K, P={P_h_in_MTO / BAR_TO_PA:.2f} bar",
         rows,
     )
 
@@ -505,7 +553,7 @@ def main_table():
             row.update(props)
         rows.append(row)
     print_table(
-        f"AHJE MTO hot outlet properties at T={T_h_out_MTO:.1f} K, P={P_h_out_MTO / BAR_TO_PA:.2f} bar",
+        f"AHJE MTO hot outlet prop@ T={T_h_out_MTO:.1f} K, P={P_h_out_MTO / BAR_TO_PA:.2f} bar",
         rows,
     )
 
@@ -559,6 +607,29 @@ def main_table():
     print(f"  cold c_p = {cp_mean_cold_MTO:.1f} J/kg-K ({c_in_pct:+.0f} %, {c_out_pct:+.0f} %)")
     print(f"  hot  c_p = {cp_mean_hot_MTO:.1f} J/kg-K ({h_in_pct:+.0f} %, {h_out_pct:+.0f} %)")
 
+    # MTO pair: para-H2 (cold) and H2 combustion products (hot)
+    if cold_model_MTO is not None:
+        backcalc_pg_params(
+            f"AHJE MTO cold ({cold_key_MTO}) para-H2/H2",
+            cold_model_MTO,
+            T_c_in_MTO,
+            P_c_in_MTO,
+            T_c_out_MTO,
+            P_c_out_MTO,
+            cp_mean_cold_MTO,
+        )
+    if hot_model_MTO is not None:
+        backcalc_pg_params(
+            f"AHJE MTO hot ({hot_key_MTO}) H2 comb. products",
+            hot_model_MTO,
+            T_h_in_MTO,
+            P_h_in_MTO,
+            T_h_out_MTO,
+            P_h_out_MTO,
+            cp_mean_hot_MTO,
+            T_ref=350.0,
+        )
+
     # ======================
     # AHJE conditions: ToC
     # ======================
@@ -596,10 +667,7 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE ToC cold inlet properties at T={T_c_in_TOC:.1f} K, P={P_c_in_TOC / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    print_table(f"AHJE ToC cold inlet prop@ T={T_c_in_TOC:.1f} K, P={P_c_in_TOC / BAR_TO_PA:.2f} bar", rows)
 
     # Cold outlet (ToC)
     rows = []
@@ -620,10 +688,7 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE ToC cold outlet properties at T={T_c_out_TOC:.1f} K, P={P_c_out_TOC / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    print_table(f"AHJE ToC cold outlet prop@ T={T_c_out_TOC:.1f} K, P={P_c_out_TOC / BAR_TO_PA:.2f} bar", rows)
 
     # Hot inlet (ToC)
     rows = []
@@ -644,10 +709,7 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE ToC hot inlet properties at T={T_h_in_TOC:.1f} K, P={P_h_in_TOC / BAR_TO_PA:.3f} bar",
-        rows,
-    )
+    print_table(f"AHJE ToC hot inlet prop@ T={T_h_in_TOC:.1f} K, P={P_h_in_TOC / BAR_TO_PA:.3f} bar", rows)
 
     # Hot outlet (ToC)
     rows = []
@@ -668,10 +730,7 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE ToC hot outlet properties at T={T_h_out_TOC:.1f} K, P={P_h_out_TOC / BAR_TO_PA:.3f} bar",
-        rows,
-    )
+    print_table(f"AHJE ToC hot outlet prop@ T={T_h_out_TOC:.1f} K, P={P_h_out_TOC / BAR_TO_PA:.3f} bar", rows)
 
     # Mean cp summary for AHJE ToC
     cold_key_TOC, cold_model_TOC = pick_first_valid(
@@ -722,6 +781,29 @@ def main_table():
     print(f"AHJE ToC mean cp (in/out % diff) (cold={cold_key_TOC}, hot={hot_key_TOC})")
     print(f"  cold c_p = {cp_mean_cold_TOC:.1f} J/kg-K ({c_in_pct:+.0f} %, {c_out_pct:+.0f} %)")
     print(f"  hot  c_p = {cp_mean_hot_TOC:.1f} J/kg-K ({h_in_pct:+.0f} %, {h_out_pct:+.0f} %)")
+
+    # ToC pair: para-H2 (cold) and H2 combustion products (hot)
+    if cold_model_TOC is not None:
+        backcalc_pg_params(
+            f"AHJE ToC cold ({cold_key_TOC}) para-H2/H2",
+            cold_model_TOC,
+            T_c_in_TOC,
+            P_c_in_TOC,
+            T_c_out_TOC,
+            P_c_out_TOC,
+            cp_mean_cold_TOC,
+        )
+    if hot_model_TOC is not None:
+        backcalc_pg_params(
+            f"AHJE ToC hot ({hot_key_TOC}) H2 comb. products",
+            hot_model_TOC,
+            T_h_in_TOC,
+            P_h_in_TOC,
+            T_h_out_TOC,
+            P_h_out_TOC,
+            cp_mean_hot_TOC,
+            T_ref=350.0,
+        )
 
 
 if __name__ == "__main__":
