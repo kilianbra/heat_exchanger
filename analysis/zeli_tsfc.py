@@ -5,6 +5,7 @@ import os
 import numpy as np
 from CoolProp.CoolProp import PropsSI
 from matplotlib import pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 
 os.system("cls")
 
@@ -81,7 +82,7 @@ s4h2 = PropsSI("S", "T", T4h2, "P", p4h2, fluid_h)
 print(f"T4h2: {T4h2:.0f} K, p4h2: {p4h2:.0f} Pa, s4h2: {s4h2:.2f} J/kgK")
 
 # isobar curves
-qT = np.linspace(0, 2000, 100)  # 0-2000 K queries
+qT = np.linspace(100, 2000, 100)  # 0-2000 K queries
 qS0 = PropsSI("S", "T", qT, "P", p0, fluid_h)
 qS1 = PropsSI("S", "T", qT, "P", p1, fluid_h)
 qS2 = PropsSI("S", "T", qT, "P", p2, fluid_h)
@@ -283,87 +284,29 @@ for i_dp in range(n_samples):
             - 1
         ) * 100
 
-# MAKE FIGURE
-plt.figure()
-plt.title("T-s diagram")
-plt.scatter([s0, s1, s2, s3, s4, s4h2], [T0, T1, T2, T3, T4, T4h2], c="black", marker="o")
-plt.plot(s_cycle, T_cycle, c="black", label="Core + Split streams")
-plt.plot(qS0, qT, c="black", linestyle="--", linewidth=0.5, label="Atm")
-plt.plot(qS1, qT, c="black", linestyle="--", linewidth=0.5, label="ramPressure")
-plt.plot(qS2, qT, c="black", linestyle="--", linewidth=0.5, label="CPR")
-plt.xlabel("Entropy")
-plt.ylabel("Temperature")
-plt.xlim(round(s1 - 500, -2), round(s4 + 500, -2))
-plt.ylim(0, 2000)
-plt.legend()
 
-# PRESSURE DROP SENSITIVITY
-fig, ax1 = plt.subplots(figsize=(7, 5))
-xvals = (1 - qp4h2 / p4) * 100
-ax1.set_title(f"Pressure drop sensitivity \nFixed air-side effectiveness = {eps * 100:.0f}% \nDuct-B at TOC")
-ax1.set_xlabel("Air-side pressure drop [%]")
-ax1.set_ylabel(r"Jet velocity excess $(V_{\mathrm{EXIT,HX}}-V_{\mathrm{flight}})$ [m/s]", color="black")
-(l1,) = ax1.plot(xvals, dVel, color="black", label="dVel", linewidth=2)
-ax1.tick_params(axis="y", labelcolor="black")
-ax1.grid(True, color="black")  # Add grid lines to the primary axis
-# Second y-axis (right)
-qFnet_HX = m_split_hx * dVel
-ax2 = ax1.twinx()
-ax2.set_ylabel(r"HX exhaust net thrust ($F_{\mathrm{NET,HX}}$) [N]", color="blue")
-(l2,) = ax2.plot(xvals, qFnet_HX, color="blue", label="Thrust change", alpha=0)
-ax2.tick_params(axis="y", labelcolor="blue")
-ax2.grid(True, color="blue")  # Add grid lines to the second axis
-# Third y-axis (right, offset, flipped)
-qFnet_preheated = m_split_core * (V4 - V0) + qFnet_HX
-qd_tsfc = ((fuel_massflow_preheated / (qFnet_preheated + Fnet_bypass)) / tsfc_baseline_total - 1) * 100
-ax3 = ax1.twinx()
-# Offset the third axis further to the right
-ax3.spines["right"].set_position(("axes", 1.25))
-ax3.spines["right"].set_visible(True)
-ax3.set_ylabel("tsfc change from baseline [%]", color="tab:red")
-(l3,) = ax3.plot(
-    xvals, qd_tsfc, color="tab:red", linestyle="--", label="tsfc change", alpha=0
-)  # Make the line invisible
-ax3.tick_params(axis="y", labelcolor="tab:red")
-ax3.invert_yaxis()  # Flip the third y axis
-ax3.grid(True, color="red")  # Add grid lines to the third axis and make them red
-plt.tight_layout()
+# T-S DIAGRAM FUNCTION (commented out - call plot_ts_diagram() to generate)
+def plot_ts_diagram():
+    """Plot T-s diagram for the cycle."""
+    plt.figure()
+    plt.title("T-s diagram")
+    plt.scatter([s0, s1, s2, s3, s4, s4h2], [T0, T1, T2, T3, T4, T4h2], c="black", marker="o")
+    plt.plot(s_cycle, T_cycle, c="black", label="Core + Split streams")
+    plt.plot(qS0, qT, c="black", linestyle="--", linewidth=0.5, label="Atm")
+    plt.plot(qS1, qT, c="black", linestyle="--", linewidth=0.5, label="ramPressure")
+    plt.plot(qS2, qT, c="black", linestyle="--", linewidth=0.5, label="CPR")
+    plt.xlabel("Entropy")
+    plt.ylabel("Temperature")
+    plt.xlim(round(s1 - 500, -2), round(s4 + 500, -2))
+    plt.ylim(0, 2000)
+    plt.legend()
+    plt.show()
 
-# EFFECTIVENESS SENSITIVITY
-fig, ax1 = plt.subplots(figsize=(7, 5))
-xvals_eps = qeps * 100  # Effectiveness in percentage
-ax1.set_title(f"Effectiveness sensitivity \nFixed air-side pressure drop = {(1 - dP) * 100:.0f}% \nDuct-B at TOC")
-ax1.set_xlabel("Air-side effectiveness [%]")
-ax1.set_ylabel(r"Jet velocity excess $(V_{\mathrm{EXIT,HX}}-V_{\mathrm{flight}})$ [m/s]", color="black")
-(l1,) = ax1.plot(xvals_eps, dVel_eps, color="black", label="dVel", linewidth=2)
-ax1.tick_params(axis="y", labelcolor="black")
-ax1.grid(True, color="black")  # Add grid lines to the primary axis
-# Second y-axis (right)
-qFnet_HX_eps = m_split_hx * dVel_eps
-ax2 = ax1.twinx()
-ax2.set_ylabel(r"HX exhaust net thrust ($F_{\mathrm{NET,HX}}$) [N]", color="blue")
-(l2,) = ax2.plot(xvals_eps, qFnet_HX_eps, color="blue", label="Thrust change", alpha=0)
-ax2.tick_params(axis="y", labelcolor="blue")
-ax2.grid(True, color="blue")  # Add grid lines to the second axis
-# Third y-axis (right, offset, flipped)
-qFnet_preheated_eps = m_split_core * (V4 - V0) + qFnet_HX_eps
-qd_tsfc_eps = ((qd_fuel_massflow_eps / (qFnet_preheated_eps + Fnet_bypass)) / tsfc_baseline_total - 1) * 100
-ax3 = ax1.twinx()
-# Offset the third axis further to the right
-ax3.spines["right"].set_position(("axes", 1.25))
-ax3.spines["right"].set_visible(True)
-ax3.set_ylabel("tsfc change from baseline [%]", color="tab:red")
-(l3,) = ax3.plot(
-    xvals_eps, qd_tsfc_eps, color="tab:red", linestyle="-", label="tsfc change", alpha=1
-)  # Make the line invisible
-ax3.tick_params(axis="y", labelcolor="tab:red")
-ax3.invert_yaxis()  # Flip the third y axis
-ax3.grid(True, color="red")  # Add grid lines to the third axis and make them red
-plt.tight_layout()
+
+# Uncomment the line below to generate the T-s diagram
+# plot_ts_diagram()
 
 # COMBINED SENSITIVITY - CONTOUR PLOTS
-from matplotlib.colors import TwoSlopeNorm
-
 # Create 2D contour plots to show optimal combinations
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 # Create meshgrids for contour plotting
