@@ -254,6 +254,24 @@ class PerfectGasFluid:
             "gamma": 1.66,
             "Pr": 0.70,
         },
+        "h2comb_ahje": {  # equivalent to R = 8314.462618 / 27.5 = 302 J/(kg·K)
+            "M": 27.5,  # from fluid_testing.py (27.479, 27.481, 27.744, 27.746)
+            "S": 150.0,  # same (159.0,152.7,149.3,143.5)
+            "T_ref": 350.0,  # chosen so that water not solid
+            "mu_ref": 1.12e-5,  # (20.08e-6 and 20.22e-6)
+            "gamma": 1.37,  # (1.35, 1.37, 1.37, 1.38)
+            "Pr": 0.74,  # (0.75,0.75, 0.74, 0.74)
+            "cp": 1100.0,  # (1138, 1093)
+        },
+        "para_h2": {  # equivalent to R = 8314.462618 / 1.97 = 4222 J/(kg·K)
+            "M": 1.97,  # (1.935, 1.975, 1.986, 2.000)
+            "S": 75.0,  # (54.87, 92.9, 63.32, 91.09)
+            "T_ref": 273.15,  # same
+            "mu_ref": 8.4e-6,  # (8.463e-6, 8.399e-6)
+            "gamma": 1.39,  # (1.39, 1.39, 1.39, 1.40)
+            "Pr": 0.69,  # (0.69, 0.68, 0.69, 0.68)
+            "cp": 14633.0,  # (14650.4, 14614.6 - both +3% at inlet -0% at exit)
+        },
     }
     _PRESET_ALIASES: ClassVar[dict[str, str]] = {}
     _PRESET_DISPLAY_NAMES: ClassVar[dict[str, str]] = {
@@ -270,6 +288,8 @@ class PerfectGasFluid:
         "nitrogen": ("nitrogen", "Nitrogen", "NITROGEN", "n2", "N2"),
         "steam": ("steam", "Steam", "STEAM", "water", "Water", "WATER", "h2o", "H2O"),
         "helium": ("helium", "Helium", "HELIUM", "he", "He", "HE"),
+        "h2comb_ahje": ("h2comb_ahje", "H2_Combustion_Products_AHJE"),
+        "para_h2": ("para_h2", "Para_Hydrogen", "ParaHydrogen", "Para-Hydrogen", "Para_Hydrogen", "Para-H2", "Para_H2"),
     }
     for _canonical, _aliases in _PRESET_SYNONYMS.items():
         for _alias in _aliases:

@@ -258,7 +258,7 @@ def plot_mu_combustion_products_one_temp_as_function_of_FAR(
     ax.legend()
 
 
-def main_table():
+def main_table(print_tables: bool = True):
     print("Brewer Fluid Properties")
     # Cold side (H2 / p-H2) at 28 bar
     P_cold = 28.0 * BAR_TO_PA
@@ -284,7 +284,8 @@ def main_table():
             else:
                 row.update(props)
             rows.append(row)
-        print_table(f"Transport properties at T={T:.1f} K, P=28 bar", rows)
+        if print_tables:
+            print_table(f"Transport properties at T={T:.1f} K, P=28 bar", rows)
 
     # Hot side at 0.4 bar
     P_hot = 0.4 * BAR_TO_PA
@@ -312,7 +313,8 @@ def main_table():
             else:
                 row.update(props)
             rows.append(row)
-        print_table(f"Hot-side transport properties at T={T:.1f} K, P=0.4 bar", rows)
+        if print_tables:
+            print_table(f"Hot-side transport properties at T={T:.1f} K, P=0.4 bar", rows)
 
     # Helper to choose a preferred valid model
     def pick_first_valid(models_dict, preferred_keys):
@@ -480,10 +482,11 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE MTO cold inlet prop@ T={T_c_in_MTO:.1f} K, P={P_c_in_MTO / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    if print_tables:
+        print_table(
+            f"AHJE MTO cold inlet prop@ T={T_c_in_MTO:.1f} K, P={P_c_in_MTO / BAR_TO_PA:.2f} bar",
+            rows,
+        )
 
     # Cold outlet (MTO)
     rows = []
@@ -504,10 +507,11 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE MTO cold outlet prop@ T={T_c_out_MTO:.1f} K, P={P_c_out_MTO / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    if print_tables:
+        print_table(
+            f"AHJE MTO cold outlet prop@ T={T_c_out_MTO:.1f} K, P={P_c_out_MTO / BAR_TO_PA:.2f} bar",
+            rows,
+        )
 
     # Hot inlet (MTO)
     rows = []
@@ -528,10 +532,11 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE MTO hot inlet prop@ T={T_h_in_MTO:.1f} K, P={P_h_in_MTO / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    if print_tables:
+        print_table(
+            f"AHJE MTO hot inlet prop@ T={T_h_in_MTO:.1f} K, P={P_h_in_MTO / BAR_TO_PA:.2f} bar",
+            rows,
+        )
 
     # Hot outlet (MTO)
     rows = []
@@ -552,10 +557,11 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(
-        f"AHJE MTO hot outlet prop@ T={T_h_out_MTO:.1f} K, P={P_h_out_MTO / BAR_TO_PA:.2f} bar",
-        rows,
-    )
+    if print_tables:
+        print_table(
+            f"AHJE MTO hot outlet prop@ T={T_h_out_MTO:.1f} K, P={P_h_out_MTO / BAR_TO_PA:.2f} bar",
+            rows,
+        )
 
     # Mean cp summary for AHJE MTO
     cold_key_MTO, cold_model_MTO = pick_first_valid(
@@ -667,7 +673,8 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(f"AHJE ToC cold inlet prop@ T={T_c_in_TOC:.1f} K, P={P_c_in_TOC / BAR_TO_PA:.2f} bar", rows)
+    if print_tables:
+        print_table(f"AHJE ToC cold inlet prop@ T={T_c_in_TOC:.1f} K, P={P_c_in_TOC / BAR_TO_PA:.2f} bar", rows)
 
     # Cold outlet (ToC)
     rows = []
@@ -688,7 +695,8 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(f"AHJE ToC cold outlet prop@ T={T_c_out_TOC:.1f} K, P={P_c_out_TOC / BAR_TO_PA:.2f} bar", rows)
+    if print_tables:
+        print_table(f"AHJE ToC cold outlet prop@ T={T_c_out_TOC:.1f} K, P={P_c_out_TOC / BAR_TO_PA:.2f} bar", rows)
 
     # Hot inlet (ToC)
     rows = []
@@ -709,7 +717,8 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(f"AHJE ToC hot inlet prop@ T={T_h_in_TOC:.1f} K, P={P_h_in_TOC / BAR_TO_PA:.3f} bar", rows)
+    if print_tables:
+        print_table(f"AHJE ToC hot inlet prop@ T={T_h_in_TOC:.1f} K, P={P_h_in_TOC / BAR_TO_PA:.3f} bar", rows)
 
     # Hot outlet (ToC)
     rows = []
@@ -730,7 +739,8 @@ def main_table():
         else:
             row.update(props)
         rows.append(row)
-    print_table(f"AHJE ToC hot outlet prop@ T={T_h_out_TOC:.1f} K, P={P_h_out_TOC / BAR_TO_PA:.3f} bar", rows)
+    if print_tables:
+        print_table(f"AHJE ToC hot outlet prop@ T={T_h_out_TOC:.1f} K, P={P_h_out_TOC / BAR_TO_PA:.3f} bar", rows)
 
     # Mean cp summary for AHJE ToC
     cold_key_TOC, cold_model_TOC = pick_first_valid(
@@ -826,7 +836,7 @@ if __name__ == "__main__":
         logger.info(f"T={T:6.1f} K, cp={cps:+8.3e} J/kg-K")
         # TODO: dig deeper into why returning -inf cp
 
-    main_table()
+    main_table(print_tables=False)
     # Kerosene products cp(T) plots
     # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
     # plt.show()
