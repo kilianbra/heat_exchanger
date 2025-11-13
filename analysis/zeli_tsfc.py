@@ -6,6 +6,7 @@ import numpy as np
 from CoolProp.CoolProp import PropsSI
 from matplotlib import pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
+from scipy.interpolate import griddata
 
 os.system("cls")
 
@@ -206,7 +207,7 @@ qT4h2_eps = np.zeros(n_samples)
 qV4h2_eps = np.zeros(n_samples)
 qd_fuel_massflow_eps = np.zeros(n_samples)
 # Define the range for effectiveness (e.g., from 0.7 to 1)
-eps_min = 0.7
+eps_min = 0.3
 eps_max = 1
 for jj in range(n_samples):
     current_eps = eps_min + jj * (eps_max - eps_min) / (n_samples - 1)
@@ -234,6 +235,7 @@ qp4h2_both = np.zeros((n_samples, n_samples))
 qT4h2_both = np.zeros((n_samples, n_samples))
 qV4h2_both = np.zeros((n_samples, n_samples))
 dVel_both = np.zeros((n_samples, n_samples))
+eps_cold_both = np.zeros((n_samples, n_samples))  # Store H2 effectiveness
 # Define ranges for pressure drop and effectiveness
 dp_percent_values = np.linspace(0, 35, n_samples)
 # Effectiveness values: from eps_min to eps_max
@@ -246,7 +248,10 @@ for i_dp in range(n_samples):  # Iterate over pressure drop
         # Recalculate heat capacity rates for current conditions
         C_hot_current = m_split_hx * PropsSI("C", "T", T4, "P", p4, fluid_h)
         C_cold_current = m_split_hx_coolant * PropsSI("C", "T", Tc_inlet_real, "P", Pc_inlet, fluid_c)
-        qmax_current = min(C_hot_current, C_cold_current) * (T4 - Tc_inlet_real)
+        C_min_current = min(C_hot_current, C_cold_current)
+        # Convert to H2 effectiveness: eps = C_cold / C_min * eps_cold, so eps_cold = eps * C_min / C_cold
+        eps_cold_both[i_dp, i_eps] = current_eps * C_min_current / C_cold_current
+        qmax_current = C_min_current * (T4 - Tc_inlet_real)
         # Calculate heat transfer and temperatures
         q_current = current_eps * qmax_current
         Tc_outlet_current = Tc_inlet_real + q_current / C_cold_current
@@ -259,6 +264,11 @@ for i_dp in range(n_samples):  # Iterate over pressure drop
         dVel_both[i_dp, i_eps] = qV4h2_both[i_dp, i_eps] - V0
 qFnet_HX_both = m_split_hx * dVel_both
 qFnet_preheated_both = m_split_core * (V4 - V0) + qFnet_HX_both
+# Calculate lost thrust: baseline HX thrust - actual HX thrust
+# Baseline HX thrust would be m_split_hx * (V4 - V0) if there was no pressure drop/temp reduction
+baseline_HX_thrust = m_split_hx * (V4 - V0)
+lost_thrust_HX_both = baseline_HX_thrust - qFnet_HX_both  # Lost thrust due to HX
+
 # Recalculate fuel mass flow for each effectiveness case
 qd_fuel_massflow_both = np.zeros((n_samples, n_samples))
 qd_tsfc_both = np.zeros((n_samples, n_samples))
@@ -307,55 +317,124 @@ def plot_ts_diagram():
 # plot_ts_diagram()
 
 # COMBINED SENSITIVITY - CONTOUR PLOTS
-# Create 2D contour plots to show optimal combinations
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-# Create meshgrids for contour plotting
-Eps_mesh, Dp_mesh = np.meshgrid(eps_values * 100, dp_percent_values)
-# First subplot: Net Thrust contours
-norm1 = TwoSlopeNorm(vmin=-1800, vcenter=0, vmax=900)
-contour1 = ax1.contourf(Eps_mesh, Dp_mesh, qFnet_HX_both, levels=50, cmap="coolwarm_r", norm=norm1)
-ax1.contour(Eps_mesh, Dp_mesh, qFnet_HX_both, levels=10, colors="black", alpha=0.3, linewidths=0.5)
-ax1.set_title("Net Thrust ($F_{NET,HX}$) vs Effectiveness & Pressure Drop")
-ax1.set_xlabel("Effectiveness [%]")
-ax1.set_ylabel("Pressure Drop [%]")
+# Create 2D contour plots with H2 Effectiveness (eps_cold) vs Lost Thrust of HX
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Create regular grid for interpolation: H2 effectiveness (x) vs lost thrust (y)
+eps_cold_min = eps_cold_both.min()
+eps_cold_max = eps_cold_both.max()
+eps_cold_grid = np.linspace(eps_cold_min * 100, eps_cold_max * 100, n_samples)
+lost_thrust_grid = np.linspace(lost_thrust_HX_both.min(), lost_thrust_HX_both.max(), n_samples)
+EpsCold_grid, LostThrust_grid = np.meshgrid(eps_cold_grid, lost_thrust_grid)
+
+# Prepare data points for interpolation (flatten the arrays)
+# The data is organized as [i_dp, i_eps], so we need to create points correctly
+eps_cold_points = []
+lost_thrust_points = []
+dp_points = []
+tsfc_points = []
+for i_dp in range(n_samples):
+    for i_eps in range(n_samples):
+        eps_cold_points.append(eps_cold_both[i_dp, i_eps] * 100)
+        lost_thrust_points.append(lost_thrust_HX_both[i_dp, i_eps])
+        dp_points.append(dp_percent_values[i_dp])
+        tsfc_points.append(qd_tsfc_both[i_dp, i_eps])
+
+eps_cold_points = np.array(eps_cold_points)
+lost_thrust_points = np.array(lost_thrust_points)
+dp_points = np.array(dp_points)
+tsfc_points = np.array(tsfc_points)
+
+# Interpolate pressure drop and TSFC onto the new grid
+dp_interp = griddata(
+    (eps_cold_points, lost_thrust_points),
+    dp_points,
+    (EpsCold_grid, LostThrust_grid),
+    method="linear",
+    fill_value=np.nan,
+)
+tsfc_interp = griddata(
+    (eps_cold_points, lost_thrust_points),
+    tsfc_points,
+    (EpsCold_grid, LostThrust_grid),
+    method="linear",
+    fill_value=np.nan,
+)
+
+# Left plot: Pressure drop contours as black lines
+contour1 = ax1.contour(
+    EpsCold_grid,
+    LostThrust_grid,
+    dp_interp,
+    levels=10,
+    colors="black",
+    linewidths=1.5,
+    alpha=0.8,
+)
+ax1.clabel(contour1, inline=True, fontsize=9, fmt="%g%%")
+ax1.set_title("Pressure Drop [%] vs H2 Effectiveness & Lost Thrust")
+ax1.set_xlabel("H2 Effectiveness [%]")
+ax1.set_ylabel("Lost Thrust of HX [N]")
 ax1.grid(True, alpha=0.3)
-cbar1 = fig.colorbar(contour1, ax=ax1, shrink=0.8)
-cbar1.set_label(r"$F_{NET,HX}$ [N]")
-# Second subplot: TSFC Change contours
-# For TSFC, extend range to show positive values and center at 0
+
+# Right plot: TSFC Change contours as colormap
 norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=0.5)
-contour2 = ax2.contourf(Eps_mesh, Dp_mesh, qd_tsfc_both, levels=50, cmap="coolwarm", norm=norm2)
-ax2.contour(Eps_mesh, Dp_mesh, qd_tsfc_both, levels=10, colors="black", alpha=0.3, linewidths=0.5)
-ax2.set_title("TSFC Change [%] vs Effectiveness & Pressure Drop")
-ax2.set_xlabel("Effectiveness [%]")
-ax2.set_ylabel("Pressure Drop [%]")
+contour2 = ax2.contourf(EpsCold_grid, LostThrust_grid, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2)
+ax2.contour(EpsCold_grid, LostThrust_grid, tsfc_interp, levels=10, colors="black", alpha=0.3, linewidths=0.5)
+ax2.set_title("TSFC Change [%] vs H2 Effectiveness & Lost Thrust")
+ax2.set_xlabel("H2 Effectiveness [%]")
+ax2.set_ylabel("Lost Thrust of HX [N]")
 ax2.grid(True, alpha=0.3)
 cbar2 = fig.colorbar(contour2, ax=ax2, shrink=0.8)
 cbar2.set_label("TSFC Change [%]")
 # Invert the TSFC colorbar so negative values (better efficiency) are green
 cbar2.ax.invert_yaxis()
 
+# Find design points in new coordinate system (H2 effectiveness, lost thrust)
+# Design A: 83.6% eps, 18.2% dP
+# Design B: 86.7% eps, 4.2% dP
+# Need to convert eps to eps_cold for design points
+# First, get the heat capacity rates (they should be constant)
+C_hot_design = m_split_hx * PropsSI("C", "T", T4, "P", p4, fluid_h)
+C_cold_design = m_split_hx_coolant * PropsSI("C", "T", Tc_inlet_real, "P", Pc_inlet, fluid_c)
+C_min_design = min(C_hot_design, C_cold_design)
 
-# Add hover functionality to show z values
-def format_coord(x, y):
-    """Custom coordinate formatter to show x, y, and z values"""
-    # Find the closest grid point
-    i = np.argmin(np.abs(eps_values * 100 - x))
-    j = np.argmin(np.abs(dp_percent_values - y))
-    # Get the z values for both plots
-    z1 = qFnet_HX_both[j, i]  # Net thrust
-    z2 = qd_tsfc_both[j, i]  # TSFC change
-    return f"x={x:.1f}%, y={y:.1f}%, Thrust={z1:.0f}N, TSFC={z2:.2f}%"
+design_A_eps = 83.6 / 100  # Convert to fraction
+design_A_eps_cold = design_A_eps * C_min_design / C_cold_design
+design_A_dp = 18.2
+design_B_eps = 86.7 / 100  # Convert to fraction
+design_B_eps_cold = design_B_eps * C_min_design / C_cold_design
+design_B_dp = 4.2
 
+# Find lost thrust for design points by interpolating
+design_A_lost_thrust = griddata(
+    (eps_cold_points, dp_points),
+    lost_thrust_points,
+    (design_A_eps_cold * 100, design_A_dp),
+    method="linear",
+)
+design_B_lost_thrust = griddata(
+    (eps_cold_points, dp_points),
+    lost_thrust_points,
+    (design_B_eps_cold * 100, design_B_dp),
+    method="linear",
+)
 
 # Add design points as star markers
-# Design A: Inboard - 83.6% eps, 18.2% dP
 ax1.scatter(
-    83.6, 18.2, marker="*", s=200, color="silver", edgecolor="black", linewidth=1, label="Design A (Inboard)", zorder=5
+    design_A_eps_cold * 100,
+    design_A_lost_thrust,
+    marker="*",
+    s=200,
+    color="silver",
+    edgecolor="black",
+    linewidth=1,
+    label="Design A (Inboard)",
+    zorder=5,
 )
 ax2.scatter(
-    83.6,
-    18.2,
+    design_A_eps_cold * 100,
+    design_A_lost_thrust,
     marker="*",
     s=200,
     color="silver",
@@ -365,13 +444,20 @@ ax2.scatter(
     zorder=5,
 )
 
-# Design B: Outboard - 86.7% eps, 4.2% dP
 ax1.scatter(
-    86.7, 4.2, marker="*", s=200, color="gold", edgecolor="black", linewidth=1, label="Design B (Outboard)", zorder=5
+    design_B_eps_cold * 100,
+    design_B_lost_thrust,
+    marker="*",
+    s=200,
+    color="gold",
+    edgecolor="black",
+    linewidth=1,
+    label="Design B (Outboard)",
+    zorder=5,
 )
 ax2.scatter(
-    86.7,
-    4.2,
+    design_B_eps_cold * 100,
+    design_B_lost_thrust,
     marker="*",
     s=200,
     color="gold",
@@ -384,10 +470,6 @@ ax2.scatter(
 # Add legends to both plots
 ax1.legend(loc="upper right", fontsize=8)
 ax2.legend(loc="upper right", fontsize=8)
-
-# Apply the custom formatter to both axes
-ax1.format_coord = format_coord
-ax2.format_coord = format_coord
 
 plt.tight_layout()
 
