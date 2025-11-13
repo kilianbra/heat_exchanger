@@ -13,6 +13,7 @@ from functools import cached_property
 from typing import Protocol
 
 import numpy as np
+from scipy.optimize import root
 
 from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
 from heat_exchanger.correlations import (
@@ -289,81 +290,392 @@ class RadialSpiralSpec(RadialSpiralProtocol):
     ext_fluid_flows_radially_inwards: bool = True
 
 
-# ---------- Marching solver ----------
-def calc_eps_local_and_tau(
-    *,
-    geometry: RadialSpiralProtocol,
-    sh,
-    sc,
-    area_ht_hot_j: float,
-    area_ht_cold_j: float,
-    area_free_hot_j: float,
-    area_free_cold_j: float,
-    mdot_hot_per_header: float,
-    mdot_cold_per_header: float,
-) -> tuple[float, float, float]:
-    """Return eps_local * C_min_local and (tau_hot, tau_cold) for layer j using local states and areas."""
-    G_h = mdot_hot_per_header / area_free_hot_j
-    G_c = mdot_cold_per_header / area_free_cold_j
-    cp_h = sh.cp
-    mu_h = sh.mu
-    k_h = sh.k
-    rho_h = sh.rho
-    Pr_h = mu_h * cp_h / k_h
+def spiral_hex_solver(
+    geom: RadialSpiralProtocol,
+    f_in: _FluidInputs,
+    method: str = "0d",
+) -> dict[str, object]:
+    """Solve the radial spiral heat exchanger.
+    Method can be "0d" for 0D guess assuming counterflow HEx, or "1d" for 1D marching.
+    """
 
-    cp_c = sc.cp
-    mu_c = sc.mu
-    k_c = sc.k
-    rho_c = sc.rho
-    Pr_c = mu_c * cp_c / k_c
+    logger = logging.getLogger(__name__ + ".spiral_hex_solver")
 
-    Re_h_od = G_h * geometry.tube_outer_diam / mu_h
-    Re_c = G_c * geometry.tube_inner_diam / mu_c
-
-    Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
-    f_c = _circ_fric(Re_c, 0)
-    h_c = Nu_c * k_c / geometry.tube_inner_diam
-
-    Nu_h, f_h = _bank_corr(
-        Re_h_od,
-        geometry.tube_spacing_long,
-        geometry.tube_spacing_trv,
-        Pr_h,
-        inline=(not geometry.staggered),
-        n_rows=geometry.n_rows_per_header * geometry.n_headers,
-    )
-    h_h = Nu_h * k_h / geometry.tube_outer_diam
-
-    wall_term = (
-        geometry.tube_outer_diam
-        / (2.0 * geometry.wall_conductivity)
-        * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
+    logger.info(
+        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
+        f_in.Th_in,
+        f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out,
+        "inlet" if f_in.Ph_in is not None else "outlet",
     )
 
-    U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
+    # 0D two-step initial guess assuming counterflow epsilon-NTU relationship
+    # (first using inlet properties as average, then using average of first guess
+    # outlet and known inlet to get a better average properties guess)
+    Th0, Ph0 = xflow_guess_0d(geom, f_in)
 
-    C_h_j = mdot_hot_per_header * cp_h
-    C_c_j = mdot_cold_per_header * cp_c
-    C_min_j = min(C_h_j, C_c_j)
-    C_max_j = max(C_h_j, C_c_j)
-    Cr_j = C_min_j / C_max_j if C_max_j > 0 else 0.0
+    dP_P_in = (1 - Ph0 / f_in.Ph_in) * 100.0 if f_in.Ph_in is not None else (1 - f_in.Ph_out / Ph0) * 100.0
 
-    NTU_local = U_hot * area_ht_hot_j / C_min_j if C_min_j > 0 else 0.0
-    flow_type = "Cmax_mixed" if C_h_j > C_c_j else "Cmin_mixed"
-    eps_local = _eps_ntu(
-        NTU_local,
-        Cr_j,
-        exchanger_type="cross_flow",
-        flow_type=flow_type,
-        n_passes=1,
+    logger.info(
+        "0D guess (inner b.) \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+        Th0,
+        dP_P_in,
     )
 
-    eps_C_min_local = eps_local * C_min_j
+    if method != "0d":
+        eval_state = {"count": 0}
+        tol_root = 1.0e-2
+        tol_P_pct_of_Ph_in = 0.1
+        tol_P = (
+            tol_P_pct_of_Ph_in
+            / 100
+            * (f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out if f_in.Ph_out is not None else float("nan"))
+        )  # absolute Pa tolerance
 
-    tau_hot = f_h * (area_ht_hot_j / area_free_hot_j) * (G_h**2) / (2.0 * rho_h)
-    tau_cold = f_c * (area_ht_cold_j / area_free_cold_j) * (G_c**2) / (2.0 * rho_c)
+        def residuals(x: np.ndarray) -> np.ndarray:
+            """Residuals for the hot-side shooting problem.
 
-    return float(eps_C_min_local), float(tau_hot), float(tau_cold)
+            Inputs
+            -------
+            x : ndarray
+                boundary guess vector; [Th_out, Ph_out] if Ph_in known; [Th_out] if Ph_out known.
+
+            Returns
+            --------
+            scaled : np.ndarray shape (1 or 2,)
+                Temperature residual ``Th_in_calc - Th_in`` unscaled;
+                pressure residual scaled so that |ΔP| == tol_P maps to tol_root (when present).
+            """
+            eval_state["count"] += 1
+            raw = rad_spiral_shoot(x, geom, f_in, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3)
+            # Root solver uses a single scalar tolerance (tol_root). Temperature residual uses it directly;
+            # pressure residual is normalised so that when |ΔP| == tol_P the scaled residual equals tol_root.
+            if raw.size == 2:
+                scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
+            else:
+                scaled = np.array([raw[0]], dtype=float)
+            logger.debug(
+                ("Residual eval %d: x=%s -> Th_in_calc-Th_in=%+.1e K (target %.1e)%s"),
+                eval_state["count"],
+                np.array2string(x, precision=3),
+                raw[0],
+                tol_root,
+                "" if raw.size == 1 else f", Ph_in_calc-Ph_in={raw[1]:+.1e} Pa (target {tol_P:.1e} Pa)",
+            )
+            return scaled
+
+        x0 = np.array([Th0, Ph0], dtype=float) if f_in.Ph_in is not None else np.array([Th0], dtype=float)
+        sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 60})
+
+        logger.debug(
+            "SciPy root success=%s, nfev=%s, message=%s",
+            sol.success,
+            getattr(sol, "nfev", None),
+            sol.message,
+        )
+
+        bound_converged = sol.x
+
+    else:  # 0D method
+        if f_in.Ph_in is not None:
+            bound_converged = [Th0, Ph0]
+            dP_P_in = (1 - Ph0 / f_in.Ph_in) * 100.0
+        else:
+            bound_converged = [Th0]
+            dP_P_in = (1 - f_in.Ph_out / Ph0) * 100.0
+
+    result = compute_overall_performance(
+        bound_converged, geom, f_in, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
+    )
+    final_diag: dict[str, float] = result["diagnostics"]  # type: ignore[assignment]
+    final_raw = result["residuals"]  # type: ignore[assignment]
+
+    if method != "0d":
+        dP_P_in = (
+            (1 - bound_converged[1] / f_in.Ph_in) * 100.0
+            if f_in.Ph_in is not None
+            else final_diag.get("dP_hot_pct", float("nan"))
+        )
+        logger.info(
+            "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+            eval_state["count"],
+            bound_converged[0],
+            dP_P_in,
+        )
+
+        if final_raw.size == 2:
+            logger.info(
+                "Residuals: Th_in_calc-Th_in=%.1e K (tol %.1e K), Ph_in_calc-Ph_in=%.1e Pa (tol %.1e Pa)",
+                final_raw[0],
+                tol_root,
+                final_raw[1],
+                tol_P,
+            )
+        else:
+            logger.info("Residual: Th_in_calc-Th_in=%.1e K (tol %.1e K)", final_raw[0], tol_root)
+    if final_diag:
+        logger.info(
+            "Performance: ε=%.3f, NTU=%.2f, Cr=%.3f, Q_hot=%.2f MW, Q_cold=%.2f MW",
+            final_diag.get("epsilon", float("nan")),
+            final_diag.get("NTU", float("nan")),
+            final_diag.get("Cr", float("nan")),
+            final_diag.get("Q_total", float("nan")) / 1e6,
+            final_diag.get("Q_cold", float("nan")) / 1e6,
+        )
+        logger.info(
+            "Pressure drops: ΔPh=%.1f%% (%.1f Pa), ΔPc=%.1f%% (%.1f Pa)",
+            final_diag.get("dP_hot_pct", float("nan")),
+            final_diag.get("dP_hot", float("nan")),
+            final_diag.get("dP_cold_pct", float("nan")),
+            final_diag.get("dP_cold", float("nan")),
+        )
+        logger.info(
+            "Outlet conditions: Th_out=%.2f K, Tc_out=%.2f K",
+            final_diag.get("Th_out", float("nan")),
+            final_diag.get("Tc_out", float("nan")),
+        )
+        # Hot-side non-dimensionals and Eckert numbers at inlet and exit
+        logger.debug(
+            "Hot inlet (outer r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
+            final_diag.get("Re_h_in", float("nan")),
+            final_diag.get("St_h_in", float("nan")),
+            final_diag.get("f_h_in", float("nan")),
+            final_diag.get("Ec_h_in", float("nan")),
+            final_diag.get("V_h_in", float("nan")),
+            final_diag.get("V2_h_in", float("nan")),
+        )
+        logger.debug(
+            "  Ec rationale (inlet): Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
+            final_diag.get("V2_h_in", float("nan")),
+            final_diag.get("cp_h_in", float("nan")),
+            final_diag.get("dT_hw_in", float("nan")),
+            final_diag.get("Ec_h_in", float("nan")),
+        )
+        logger.debug(
+            "Hot exit (inner r): Re=%.3e, St=%.3e, f=%.3e, Ec=%.3e, V=%.3f m/s (V^2=%.1e)",
+            final_diag.get("Re_h_out", float("nan")),
+            final_diag.get("St_h_out", float("nan")),
+            final_diag.get("f_h_out", float("nan")),
+            final_diag.get("Ec_h_out", float("nan")),
+            final_diag.get("V_h_out", float("nan")),
+            final_diag.get("V2_h_out", float("nan")),
+        )
+        logger.debug(
+            "  Ec rationale (exit):  Ec = V^2 / (cp*(Th-Tw)) = %.1e / (%.3e*%.3f) = %.3e",
+            final_diag.get("V2_h_out", float("nan")),
+            final_diag.get("cp_h_out", float("nan")),
+            final_diag.get("dT_hw_out", float("nan")),
+            final_diag.get("Ec_h_out", float("nan")),
+        )
+        logger.debug(
+            "Total Q_hot=%.2f MW, Q_cold=%.2f MW",
+            final_diag.get("Q_hot", float("nan")) / 1e6,
+            final_diag.get("Q_cold", float("nan")) / 1e6,
+        )
+
+    return result
+
+
+# ---------- Initial guess (0D estimate) ----------
+def xflow_guess_0d(
+    geom: RadialSpiralProtocol,
+    f_in: _FluidInputs,
+) -> tuple[float, float]:
+    """Return (Th_inner_guess, Ph_other_guess) using a two-step 0D estimate.
+    Assumes that the Radial Spiral Geometry is close enough to a counterflow configuration.
+    This tends to be off by only a few percentage points
+
+    The first step evaluates properties at the inlet conditions; the second step
+    re-evaluates at the mean of the inlet and the first-step outlet to refine the
+    guess.
+    """
+
+    logger = logging.getLogger(__name__ + ".xflow_guess_0d")
+
+    # Validate boundary pressure specification
+    if (f_in.Ph_in is None and f_in.Ph_out is None) or (f_in.Ph_in is not None and f_in.Ph_out is not None):
+        raise ValueError("Specify exactly one of Ph_in or Ph_out in FluidInputs.")
+
+    A_total_hot0 = geom.area_heat_transfer_outer_total
+    A_total_cold0 = geom.area_heat_transfer_inner_total
+
+    # Frontal/free areas at mid-radius and total cold frontal area (per sector/header)
+    r_mid = 0.5 * (geom.radius_inner_hex + geom.radius_outer_hex)
+    Afr_hot_mid = geom.axial_length * 2.0 * np.pi * r_mid
+    Aff_hot_mid = Afr_hot_mid * geom.sigma_outer
+
+    Aff_cold_total = geom.n_tubes_total * np.pi * geom.tube_inner_diam**2 / 4.0
+
+    G_h0 = f_in.m_dot_hot / Aff_hot_mid
+    G_c0 = f_in.m_dot_cold / Aff_cold_total
+
+    def _0d_xflow_guess(
+        _Th_in: float,
+        _Ph_in: float,
+        _Tc_in: float,
+        _Pc_in: float,
+        Th_eval: float,
+        Ph_eval: float,
+        Tc_eval: float,
+        Pc_eval: float,
+        _Ph_out: float | None = None,
+    ) -> tuple[float, float, float, float]:
+        """Single 0D estimate using property evaluation at (eval) and inlets (b).
+        Approximates the heat exchanger as counterflow
+        If _Ph_out is specified, then any input at _Ph_in is ignored. The inlet pressure
+        is then calculated and returned as Ph_not_b.
+        If no _Ph_out is specified, then like with the other three, _Ph_in is used
+        and the exit pressure is returned as Ph_not_b."""
+        sh = f_in.hot.state(Th_eval, Ph_eval)
+        sc = f_in.cold.state(Tc_eval, Pc_eval)
+        Pr_h = sh.mu * sh.cp / sh.k
+        Pr_c = sc.mu * sc.cp / sc.k
+        Re_h_OD = G_h0 * geom.tube_outer_diam / sh.mu
+        Re_c = G_c0 * geom.tube_inner_diam / sc.mu
+
+        Nu_h, f_h = _bank_corr(
+            Re_h_OD,
+            geom.tube_spacing_long,
+            geom.tube_spacing_trv,
+            Pr_h,
+            inline=(not geom.staggered),
+            n_rows=geom.n_rows_per_header * geom.n_headers,
+        )
+        logger.info(
+            "0D guess tube bank for Re_od=%5.2e: St_h=%5.2f, f_h=%5.2e",
+            Re_h_OD,
+            Nu_h / Re_h_OD / Pr_h,
+            f_h,
+        )
+        Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+        f_c = _circ_fric(Re_c, 0)
+
+        h_h = Nu_h * sh.k / geom.tube_outer_diam
+        h_c = Nu_c * sc.k / geom.tube_inner_diam
+
+        wall_term = (
+            geom.tube_outer_diam / (2.0 * geom.wall_conductivity) * np.log(geom.tube_outer_diam / geom.tube_inner_diam)
+        )
+        U_h = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / geom.tube_inner_diam) + wall_term)
+
+        C_h_tot = f_in.m_dot_hot * sh.cp
+        C_c_tot = f_in.m_dot_cold * sc.cp
+        C_min = min(C_h_tot, C_c_tot)
+        C_max = max(C_h_tot, C_c_tot)
+        Cr = C_min / C_max
+
+        NTU = U_h * A_total_hot0 / C_min
+        eps = _eps_ntu(NTU, Cr, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1)
+        logger.info("0D guess epsilon-NTU: NTU=%5.2f, eps=%5.2f", NTU, eps)
+        Q = eps * C_min * (_Th_in - _Tc_in)
+
+        tau_h = f_h * (A_total_hot0 / Aff_hot_mid) * (G_h0**2) / (2.0 * sh.rho)
+        tau_c = f_c * (A_total_cold0 / Aff_cold_total) * (G_c0**2) / (2.0 * sc.rho)
+
+        dh0_h = -Q / f_in.m_dot_hot
+        dh0_c = Q / f_in.m_dot_cold
+        Th_out, Ph_not_b = _upd_stat_prop(
+            f_in.hot,
+            G_h0,
+            dh0_h,
+            tau_h,
+            T_a=_Th_in,
+            p_b=_Ph_out if _Ph_out is not None else _Ph_in,
+            a_is_in=True,
+            b_is_in=(_Ph_out is None),
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
+        )
+
+        Tc_out, Pc_out = _upd_stat_prop(
+            f_in.cold,
+            G_c0,
+            dh0_c,
+            tau_c,
+            T_a=_Tc_in,
+            p_b=_Pc_in,
+            a_is_in=True,
+            b_is_in=True,
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
+        )
+
+        return Th_out, Tc_out, Ph_not_b, Pc_out
+
+    logger.info(
+        "0D guess inputs: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%s Pa, Pc_in =%5.2e Pa (Ph_out=%s)",
+        f_in.Th_in,
+        f_in.Tc_in,
+        f"{f_in.Ph_in:.2e}" if f_in.Ph_in is not None else "N/A",
+        f_in.Pc_in,
+        f"{f_in.Ph_out:.2e}" if f_in.Ph_out is not None else "N/A",
+    )
+    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_xflow_guess(
+        _Th_in=f_in.Th_in,
+        _Ph_in=f_in.Ph_in if f_in.Ph_in is not None else float("nan"),
+        _Tc_in=f_in.Tc_in,
+        _Pc_in=f_in.Pc_in,
+        Th_eval=f_in.Th_in,
+        Ph_eval=f_in.Ph_out if f_in.Ph_out is not None else f_in.Ph_in,
+        Tc_eval=f_in.Tc_in,
+        Pc_eval=f_in.Pc_in,
+        _Ph_out=f_in.Ph_out,
+    )
+    if f_in.Ph_out is not None:
+        logger.info(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o1,
+            Tc_o1,
+            f_in.Ph_out,
+            Pc_o1,
+            Ph_not_b1,
+        )
+    else:
+        logger.info(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o1,
+            Tc_o1,
+            Ph_not_b1,
+            Pc_o1,
+        )
+    Th_mean = 0.5 * (f_in.Th_in + Th_o1)
+    Tc_mean = 0.5 * (f_in.Tc_in + Tc_o1)
+    Ph_known = f_in.Ph_out if f_in.Ph_out is not None else f_in.Ph_in
+    if Ph_known is None:
+        raise ValueError("Either Ph_in or Ph_out must be provided for the 0D guess.")
+    Ph_mean = 0.5 * (Ph_known + Ph_not_b1)
+    Pc_mean = 0.5 * (f_in.Pc_in + Pc_o1)
+    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_xflow_guess(
+        _Th_in=f_in.Th_in,
+        _Ph_in=f_in.Ph_in if f_in.Ph_in is not None else float("nan"),
+        _Tc_in=f_in.Tc_in,
+        _Pc_in=f_in.Pc_in,
+        Th_eval=Th_mean,
+        Ph_eval=Ph_mean,
+        Tc_eval=Tc_mean,
+        Pc_eval=Pc_mean,
+        _Ph_out=f_in.Ph_out,
+    )
+    if f_in.Ph_out is not None:
+        logger.info(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o2,
+            Tc_o2,
+            f_in.Ph_out,
+            Pc_o2,
+            Ph_not_b2,
+        )
+    else:
+        logger.info(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o2,
+            Tc_o2,
+            Ph_not_b2,
+            Pc_o2,
+        )
+    # Hot inner boundary (inboard shoot) guess equals the 0D outlet
+    return float(Th_o2), float(Ph_not_b2)
 
 
 def rad_spiral_shoot(
@@ -372,7 +684,7 @@ def rad_spiral_shoot(
     fluids: _FluidInputs,
     *,
     property_solver_it_max: int = 20,
-    # ruff: noqa: N815 (allow mixed case variables)
+    # noqa: N815 (allow mixed case variables)
     property_solver_tol_T: float = 1e-2,
     rel_tol_p: float = 1e-3,
 ) -> np.ndarray:
@@ -501,6 +813,83 @@ def rad_spiral_shoot(
         return np.array([residual_T, residual_P], dtype=float)
     else:
         return np.array([residual_T], dtype=float)
+
+
+# ---------- Marching solver ----------
+def calc_eps_local_and_tau(
+    *,
+    geometry: RadialSpiralProtocol,
+    sh,
+    sc,
+    area_ht_hot_j: float,
+    area_ht_cold_j: float,
+    area_free_hot_j: float,
+    area_free_cold_j: float,
+    mdot_hot_per_header: float,
+    mdot_cold_per_header: float,
+) -> tuple[float, float, float]:
+    """Return eps_local * C_min_local and (tau_hot, tau_cold) for layer j using local states and areas."""
+    G_h = mdot_hot_per_header / area_free_hot_j
+    G_c = mdot_cold_per_header / area_free_cold_j
+    cp_h = sh.cp
+    mu_h = sh.mu
+    k_h = sh.k
+    rho_h = sh.rho
+    Pr_h = mu_h * cp_h / k_h
+
+    cp_c = sc.cp
+    mu_c = sc.mu
+    k_c = sc.k
+    rho_c = sc.rho
+    Pr_c = mu_c * cp_c / k_c
+
+    Re_h_od = G_h * geometry.tube_outer_diam / mu_h
+    Re_c = G_c * geometry.tube_inner_diam / mu_c
+
+    Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+    f_c = _circ_fric(Re_c, 0)
+    h_c = Nu_c * k_c / geometry.tube_inner_diam
+
+    Nu_h, f_h = _bank_corr(
+        Re_h_od,
+        geometry.tube_spacing_long,
+        geometry.tube_spacing_trv,
+        Pr_h,
+        inline=(not geometry.staggered),
+        n_rows=geometry.n_rows_per_header * geometry.n_headers,
+    )
+    h_h = Nu_h * k_h / geometry.tube_outer_diam
+
+    wall_term = (
+        geometry.tube_outer_diam
+        / (2.0 * geometry.wall_conductivity)
+        * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
+    )
+
+    U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
+
+    C_h_j = mdot_hot_per_header * cp_h
+    C_c_j = mdot_cold_per_header * cp_c
+    C_min_j = min(C_h_j, C_c_j)
+    C_max_j = max(C_h_j, C_c_j)
+    Cr_j = C_min_j / C_max_j if C_max_j > 0 else 0.0
+
+    NTU_local = U_hot * area_ht_hot_j / C_min_j if C_min_j > 0 else 0.0
+    flow_type = "Cmax_mixed" if C_h_j > C_c_j else "Cmin_mixed"
+    eps_local = _eps_ntu(
+        NTU_local,
+        Cr_j,
+        exchanger_type="cross_flow",
+        flow_type=flow_type,
+        n_passes=1,
+    )
+
+    eps_C_min_local = eps_local * C_min_j
+
+    tau_hot = f_h * (area_ht_hot_j / area_free_hot_j) * (G_h**2) / (2.0 * rho_h)
+    tau_cold = f_c * (area_ht_cold_j / area_free_cold_j) * (G_c**2) / (2.0 * rho_c)
+
+    return float(eps_C_min_local), float(tau_hot), float(tau_cold)
 
 
 # ---------- Overall performance (diagnostics) ----------
@@ -851,5 +1240,6 @@ __all__ = [
     "RadialSpiralProtocol",
     "RadialSpiralSpec",
     "rad_spiral_shoot",
+    "xflow_guess_0d",
     "compute_overall_performance",
 ]
