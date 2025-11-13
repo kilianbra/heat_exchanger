@@ -57,15 +57,19 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
     if fluid_model == "PerfectGas":
         air = PerfectGasFluid.from_name("Air")
         helium = PerfectGasFluid.from_name("Helium")
-        h2 = PerfectGasFluid.from_name("H2")  # should be parahydrogen
+        # h2 = PerfectGasFluid.from_name("H2")  # should be parahydrogen
+        h2comb_ahje = PerfectGasFluid.from_name("H2_Combustion_Products_AHJE")
+        h2 = PerfectGasFluid.from_name("Para_Hydrogen")
     elif fluid_model == "CoolProp":
         air = CoolPropFluid("Air")
         helium = CoolPropFluid("Helium")
         h2 = CoolPropFluid("ParaHydrogen")
+        h2comb_ahje = air
     elif fluid_model == "RefProp":
         air = RefPropFluid("Air")
         helium = RefPropFluid("Helium")
         h2 = RefPropFluid("ParaHydrogen")
+        h2comb_ahje = air
 
     case_key = case.strip().lower()
     for sep in (" ", "-", "/"):
@@ -100,15 +104,15 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 31,
             "n_rows_per_header": 4,
             "n_tubes_per_row": 200,
-            "radius_outer_whole_hex": 478e-3,
+            "radius_outer_hex": 478e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.26,
             "mflow_c_total": 1.945,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
         "custom": {
-            "case_name": "Custom Design",
-            "fluid_hot": air,
+            "case_name": "AHJE w Viper tube",  # I think No work cycle (unclear if MTO or ToC?
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 500.0,
             "Ph_in": 1.02e5,
@@ -122,15 +126,15 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(540e-3 / (2.5 * 0.98e-3))),  # 220 from axial length
-            "radius_outer_whole_hex": 325e-3 + 21 * 4 * 1.5 * 0.98e-3,  # 448.5e-3
+            "radius_outer_hex": 325e-3 + 21 * 4 * 1.5 * 0.98e-3,  # 448.5e-3
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,  # 60 * 0.2
             "mflow_c_total": 0.3,
             "wall_conductivity": WALL_CONDUCTIVITY_304_SS,
         },
         "ahjeb": {  # Zelim at MTO conditions
-            "case_name": "AHJE",  # version B
-            "fluid_hot": air,
+            "case_name": "AHJE",  # version B (MTO but no work cycle?)
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 500.0,
             "Ph_in": 1.02e5,
@@ -144,7 +148,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (2.5 * 1.067e-3))),  # 259 from axial length
-            "radius_outer_whole_hex": 460e-3,
+            "radius_outer_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
             "mflow_c_total": 0.3,
@@ -152,7 +156,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
         },
         "ahjeb_toc": {
             "case_name": "AHJE ToC Work",  # version B - H2TOCv2 ExPHT
-            "fluid_hot": air,
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
@@ -166,7 +170,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),  # 216 tubes per row (Axially)
-            "radius_outer_whole_hex": 460e-3,
+            "radius_outer_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
             "mflow_c_total": 0.76,
@@ -174,7 +178,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
         },
         "ahjeb_toc_outb": {
             "case_name": "AHJE ToC Outb Work",  # version B - H2TOCv2 ExPHT (Outboard)
-            "fluid_hot": air,
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 574.0,
             "Ph_in": 0.368e5,
@@ -188,7 +192,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
-            "radius_outer_whole_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # 0.814 m  From inner radius
+            "radius_outer_hex": 680e-3 + 21 * 4 * 1.5 * 1.067e-3,  # 0.814 m  From inner radius
             "inv_angle_deg": 360.0,
             "mflow_h_total": 12.0,
             "mflow_c_total": 0.76,
@@ -211,7 +215,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 8,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(2.08 / (2.0 * 1.0e-3))),
-            "radius_outer_whole_hex": 0.112 + 8 * 4 * 1.5 * 1.0e-3,
+            "radius_outer_hex": 0.112 + 8 * 4 * 1.5 * 1.0e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 24.0,
             "mflow_c_total": 2.0,
@@ -219,7 +223,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
         },
         "ahjeb_mto_k1": {  # Uses conditions from 28/10 presentation
             "case_name": "AHJE MTO k=1",
-            "fluid_hot": air,
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 718.1,
             "Ph_out": 1.01e5,
@@ -233,7 +237,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 11,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
-            "radius_outer_whole_hex": 460e-3,
+            "radius_outer_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 162.04 * 0.2,
             "mflow_c_total": 1.316,
@@ -241,7 +245,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
         },
         "ahjeb_toc_k1": {  # Uses conditions from 28/10 presentation
             "case_name": "AHJE ToC k=1",
-            "fluid_hot": air,
+            "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
             "Th_in": 571.65,
             "Ph_out": 0.22631e5,
@@ -255,7 +259,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "n_headers": 21,
             "n_rows_per_header": 4,
             "n_tubes_per_row": int(round(690e-3 / (3.0 * 1.067e-3))),
-            "radius_outer_whole_hex": 460e-3,
+            "radius_outer_hex": 460e-3,
             "inv_angle_deg": 360.0,
             "mflow_h_total": 64.3 * 0.2,
             "mflow_c_total": 0.418,
@@ -279,7 +283,7 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
         n_headers=params["n_headers"],
         n_rows_per_header=params["n_rows_per_header"],
         n_tubes_per_row=params["n_tubes_per_row"],
-        radius_outer_whole_hex=params["radius_outer_whole_hex"],
+        radius_outer_hex=params["radius_outer_hex"],
         inv_angle_deg=params["inv_angle_deg"],
         wall_conductivity=params["wall_conductivity"],
         ext_fluid_flows_radially_inwards=params.get("ext_fluid_flows_radially_inwards", True),
@@ -299,13 +303,6 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
     )
 
     return geom, inputs, params["case_name"]
-
-
-def _compute_spiral_length(radius_inner: float, radius_outer: float, inv_angle_deg: float, n_points: int = 64) -> float:
-    theta_vals = np.linspace(0.0, np.deg2rad(inv_angle_deg), n_points)
-    b = (radius_outer - radius_inner) / np.deg2rad(inv_angle_deg)
-    r_vals = radius_inner + b * theta_vals
-    return float(np.trapezoid(np.sqrt(r_vals**2 + b**2), theta_vals))
 
 
 def _initial_guess_two_step_xflow(
@@ -335,27 +332,15 @@ def _initial_guess_two_step_xflow(
     if (Ph_in is None and Ph_out is None) or (Ph_in is not None and Ph_out is not None):
         raise ValueError("Specify exactly one of Ph_in or Ph_out in FluidInputs.")
 
-    tube_ID = geom.tube_inner_diam
-    r_in = geom.radius_inner_whole_hex
-    r_out = geom.radius_outer_whole_hex
-    Lx = geom.axial_length
-
-    # Global single-tube areas using total involute length
-    inv_len = _compute_spiral_length(r_in, r_out, geom.inv_angle_deg)
-    A_ht_hot_one = np.pi * geom.tube_outer_diam * inv_len
-    A_ht_cold_one = np.pi * tube_ID * inv_len
-
-    n_rows_radial = geom.n_rows_per_header * geom.n_headers
-    n_tubes_total = geom.n_tubes_total
-    A_total_hot0 = A_ht_hot_one * n_tubes_total
-    A_total_cold0 = A_ht_cold_one * n_tubes_total
+    A_total_hot0 = geom.area_heat_transfer_outer_total
+    A_total_cold0 = geom.area_heat_transfer_inner_total
 
     # Frontal/free areas at mid-radius and total cold frontal area (per sector/header)
-    r_mid = 0.5 * (r_in + r_out)
-    Afr_hot_mid = Lx * 2.0 * np.pi * r_mid
+    r_mid = 0.5 * (geom.radius_inner_hex + geom.radius_outer_hex)
+    Afr_hot_mid = geom.axial_length * 2.0 * np.pi * r_mid
     Aff_hot_mid = Afr_hot_mid * geom.sigma_outer
 
-    Aff_cold_total = n_tubes_total * np.pi * tube_ID**2 / 4.0
+    Aff_cold_total = geom.n_tubes_total * np.pi * geom.tube_inner_diam**2 / 4.0
 
     G_h0 = mflow_h_total / Aff_hot_mid
     G_c0 = mflow_c_total / Aff_cold_total
@@ -384,7 +369,7 @@ def _initial_guess_two_step_xflow(
         rho_h = sh.rho
         rho_c = sc.rho
         Re_h_OD = G_h0 * geom.tube_outer_diam / sh.mu
-        Re_c = G_c0 * tube_ID / sc.mu
+        Re_c = G_c0 * geom.tube_inner_diam / sc.mu
 
         Nu_h, f_h = _bank_corr(
             Re_h_OD,
@@ -392,7 +377,7 @@ def _initial_guess_two_step_xflow(
             geom.tube_spacing_trv,
             Pr_h,
             inline=(not geom.staggered),
-            n_rows=n_rows_radial,
+            n_rows=geom.n_rows_per_header * geom.n_headers,
         )
         logger.debug(
             "0D guess tube bank for Re_od=%5.2e: St_h=%5.2f, f_h=%5.2e",
@@ -404,18 +389,12 @@ def _initial_guess_two_step_xflow(
         f_c = _circ_fric(Re_c, 0)
 
         h_h = Nu_h * sh.k / geom.tube_outer_diam
-        h_c = Nu_c * sc.k / tube_ID
+        h_c = Nu_c * sc.k / geom.tube_inner_diam
 
-        wall_term = geom.tube_outer_diam / (2.0 * geom.wall_conductivity) * np.log(geom.tube_outer_diam / tube_ID)
-        U = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / tube_ID) + wall_term)
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                "0D guess geometry ratios: UA_master=%5.3e, A_hot/Aff_hot=%5.3e, A_cold/Aff_cold=%5.3e",
-                U * A_total_hot0,
-                A_total_hot0 / Aff_hot_mid,
-                A_total_cold0 / Aff_cold_total,
-            )
+        wall_term = (
+            geom.tube_outer_diam / (2.0 * geom.wall_conductivity) * np.log(geom.tube_outer_diam / geom.tube_inner_diam)
+        )
+        U = 1.0 / (1.0 / h_h + 1.0 / h_c * (geom.tube_outer_diam / geom.tube_inner_diam) + wall_term)
 
         C_h_tot = mflow_h_total * sh.cp
         C_c_tot = mflow_c_total * sc.cp
@@ -545,8 +524,8 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
     # Control logging levels for different modules
     # Suppress debug from conservation.py
     logging.getLogger("heat_exchanger.conservation").setLevel(logging.WARNING)
-    logging.getLogger("heat_exchanger.geometries.radial_spiral").setLevel(logging.DEBUG)
-    logging.getLogger("__main__").setLevel(logging.DEBUG)  # Main loop stays at INFO
+    logging.getLogger("heat_exchanger.geometries.radial_spiral").setLevel(logging.WARNING)
+    # logging.getLogger("__main__").setLevel(logging.DEBUG)  # Main loop stays at INFO
 
     geom, inputs, case_name = load_case(case, fluid_model)
 
@@ -722,13 +701,15 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
 
 
 if __name__ == "__main__":
-    # main(case="custom", fluid_model="CoolProp")
-    # main(case="ahjeb", fluid_model="CoolProp")
-    main(case="ahjeb_toc", fluid_model="CoolProp")
-    # main(case="ahjeb_toc_outb", fluid_model="CoolProp")
-    # # main(case="viper", fluid_model="RefProp")
-    # main(case="viper", fluid_model="CoolProp")
-    # main(case="chinese", fluid_model="CoolProp")
+    fluid_model = "PerfectGas"
 
-    # main(case="ahjeb_MTO_k1", fluid_model="CoolProp")
-    # main(case="ahjeb_toc_k1", fluid_model="CoolProp")
+    main(case="custom", fluid_model=fluid_model)
+    main(case="ahjeb", fluid_model=fluid_model)
+    main(case="ahjeb_toc", fluid_model=fluid_model)
+    main(case="ahjeb_toc_outb", fluid_model=fluid_model)
+    # main(case="viper", fluid_model="RefProp")
+    main(case="viper", fluid_model=fluid_model)
+    main(case="chinese", fluid_model=fluid_model)
+
+    main(case="ahjeb_MTO_k1", fluid_model=fluid_model)
+    main(case="ahjeb_toc_k1", fluid_model=fluid_model)

@@ -65,7 +65,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
       - tube_spacing_trv, tube_spacing_long (non-dimensional spacing ratios)
       - staggered (True for staggered, False for inline)
       - n_headers, n_rows_per_header, n_tubes_per_row
-      - radius_outer_whole_hex
+      - radius_outer_hex
       - inv_angle_deg (involute sweep angle in degrees)
 
     0D analysis uses the cached-style properties below. 1D analysis calls
@@ -88,7 +88,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     n_headers: int
     n_rows_per_header: int
     n_tubes_per_row: int
-    radius_outer_whole_hex: float
+    radius_outer_hex: float
     inv_angle_deg: float = 360.0
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
     # Orientation flag: True=inboard (external flow inward), False=outboard (external flow outward)
@@ -100,13 +100,13 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         return self.tube_outer_diam - 2.0 * self.tube_thick
 
     @cached_property
-    def radius_inner_whole_hex(self) -> float:
+    def radius_inner_hex(self) -> float:
         n_rows_per_axial_section = self.n_rows_per_header * self.n_headers
         outer_radius_span = n_rows_per_axial_section * self.tube_spacing_long * self.tube_outer_diam
-        if outer_radius_span >= self.radius_outer_whole_hex:
+        if outer_radius_span >= self.radius_outer_hex:
             raise ValueError(
                 f"Invalid geometry: too many rows in axial section for given outer radius: "
-                f"{outer_radius_span:.2f} m > {self.radius_outer_whole_hex:.2f} m for "
+                f"{outer_radius_span:.2f} m > {self.radius_outer_hex:.2f} m for "
                 f"{n_rows_per_axial_section} rows of tubes spaced by "
                 f"{self.tube_spacing_long * self.tube_outer_diam:.2f} m"
             )
@@ -116,22 +116,61 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
                 f"{n_rows_per_axial_section} rows of tubes spaced by "
                 f"{self.tube_spacing_long * self.tube_outer_diam:.2f} m"
             )
-        return self.radius_outer_whole_hex - outer_radius_span
+        return self.radius_outer_hex - outer_radius_span
 
     @cached_property
     def axial_length(self) -> float:
+        """Axial Length of total Heat Exchanger"""
         return self.n_tubes_per_row * self.tube_spacing_trv * self.tube_outer_diam
 
     @cached_property
+    def spiral_b(self) -> float:
+        """Archimedian spiral parameter b.
+        2 pi b is the radial distance between two points of spiral on same ray to origin.
+        """
+        return (self.radius_outer_hex - self.radius_inner_hex) / np.deg2rad(self.inv_angle_deg)
+
+    @cached_property
+    def spiral_length(self) -> float:
+        """Exact analytical formula for archimedian spiral arc length.
+
+        Formula from Wikipedia:
+            b/2 [θ√(1 + θ²) + ln(θ + √(1 + θ²))] evaluated from θ₁ to θ₂
+
+        Where θ₁ = r_min/b and θ₂ = r_max/b.
+        """
+        # Compute theta values
+        theta_1 = self.radius_inner_hex / self.spiral_b
+        theta_2 = self.radius_outer_hex / self.spiral_b
+
+        # Helper function for the integrand antiderivative
+        def antiderivative(theta: float) -> float:
+            """Antiderivative: θ√(1 + θ²) + ln(θ + √(1 + θ²))"""
+            sqrt_term = np.sqrt(1 + theta**2)
+            return theta * sqrt_term + np.log(theta + sqrt_term)
+
+        # Evaluate at bounds
+        F_theta_2 = antiderivative(theta_2)
+        F_theta_1 = antiderivative(theta_1)
+
+        # Apply the formula: b/2 * [F(θ₂) - F(θ₁)]
+        return (self.spiral_b / 2.0) * (F_theta_2 - F_theta_1)
+
+    @cached_property
     def frontal_area_outer(self) -> float:
-        return (
-            2.0
-            * np.pi
-            * self.radius_outer_whole_hex
-            * self.n_tubes_per_row
-            * self.tube_outer_diam
-            * self.tube_spacing_trv
-        )
+        return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
+
+    @cached_property
+    def area_heat_transfer_outer_total(self) -> float:
+        return np.pi * self.tube_outer_diam * self.spiral_length * self.n_tubes_total
+
+    @cached_property
+    def area_heat_transfer_inner_total(self) -> float:
+        return np.pi * self.tube_inner_diam * self.spiral_length * self.n_tubes_total
+
+    @cached_property
+    def frontal_area_outer_total(self) -> float:
+        return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
 
     @cached_property
     def n_rows(self) -> int:
@@ -171,11 +210,11 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
             area_frontal_hot, area_free_hot, area_free_cold, d_h_hot
           - dR (float)
         """
-        dR = (self.radius_outer_whole_hex - self.radius_inner_whole_hex) / self.n_headers
+        dR = (self.radius_outer_hex - self.radius_inner_hex) / self.n_headers
 
-        radii = self.radius_inner_whole_hex + np.arange(self.n_headers + 1, dtype=float) * dR
-        inv_b = (self.radius_outer_whole_hex - self.radius_inner_whole_hex) / np.deg2rad(self.inv_angle_deg)
-        theta = (radii - self.radius_inner_whole_hex) / inv_b
+        radii = self.radius_inner_hex + np.arange(self.n_headers + 1, dtype=float) * dR
+        inv_b = (self.radius_outer_hex - self.radius_inner_hex) / np.deg2rad(self.inv_angle_deg)
+        theta = (radii - self.radius_inner_hex) / inv_b
 
         area_ht_hot = np.zeros(self.n_headers)
         area_ht_cold = np.zeros(self.n_headers)
@@ -244,7 +283,7 @@ class RadialSpiralSpec(RadialSpiralProtocol):
     n_headers: int
     n_rows_per_header: int
     n_tubes_per_row: int
-    radius_outer_whole_hex: float
+    radius_outer_hex: float
     inv_angle_deg: float = 360.0
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
     ext_fluid_flows_radially_inwards: bool = True
@@ -337,17 +376,23 @@ def rad_spiral_shoot(
     property_solver_tol_T: float = 1e-2,
     rel_tol_p: float = 1e-3,
 ) -> np.ndarray:
-    """Shooting residuals for a radial involute HX.
-    For now hot fluid flows outside tubes and cold inside. Marching occurs
-    from the cold inlet, which may be located at the inner or outer radius
-    depending on the configuration (controlled by geometry.ext_fluid_flows_radially_inwards).
+    """For a radial spiral HEx, where the cold fluid is assumed to flow inside the tubes
+    and the hot fluid around them, this function takes a guess at unknown hot boundary conditions
+    at the cold inlet and marches towards the hot inlet.
+    It then returns the difference between the derived hot inlet condition from the guess
+    and the known hot inlet condition.
 
     if fluids.Ph_in is provided:
         boundary_guess: [Th_out_guess, Ph_out_guess]
-        Returns: [residual_T, residual_P]
+        Returns: [Th_in_calc - fluids.Th_in, Ph_in_calc - fluids.Ph_in]
     if fluids.Ph_out is provided:
         boundary_guess: [Th_out_guess]
-        Returns: [residual_T]
+        Returns: [Th_in_calc - fluids.Th_in]
+
+    Whether it is an inboard or outboard configuration is determined by the
+    geometry.ext_fluid_flows_radially_inwards flag. An inboard configuration means the
+    hot fluid flows from outer to inner radius, and an outboard configuration means the
+    hot fluid flows from inner to outer radius (cold fluid flows in the opposite direction).
     """
     has_Ph_in = fluids.Ph_in is not None
     has_Ph_out = fluids.Ph_out is not None
