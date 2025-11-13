@@ -442,8 +442,7 @@ class MixtureProperties(FluidPropertiesStrategy):
         # Calculate mass fraction of water for HAPropsSI
         if self.x_H2O > 0:
             total_mass = sum(
-                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97)
-                for i, comp in enumerate(self.components)
+                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97) for i, comp in enumerate(self.components)
             )
             h2o_mass = self.x_H2O * self.molar_masses["H2O"]
             self.w_H2O = h2o_mass / total_mass

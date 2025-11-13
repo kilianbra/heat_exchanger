@@ -1,5 +1,5 @@
-from contextlib import suppress
 import logging
+from contextlib import suppress
 
 import matplotlib.pyplot as plt
 import numpy as np

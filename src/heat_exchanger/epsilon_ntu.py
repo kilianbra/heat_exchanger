@@ -20,10 +20,7 @@ def poly_sum_crossflow_unmixed(n, y):
     if np.any(mask_valid):
         y_valid = y[mask_valid]
         sum_term = np.sum(
-            [
-                (n + 1 - j) / factorial(j) * np.exp((j + n) * np.log(y_valid))
-                for j in range(1, n + 1)
-            ],
+            [(n + 1 - j) / factorial(j) * np.exp((j + n) * np.log(y_valid)) for j in range(1, n + 1)],
             axis=0,
         )
         result[mask_valid] = (1.0 / factorial(n + 1)) * sum_term
@@ -58,17 +55,13 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
         "Cmin_mixed",
         "both_mixed",
     ]
-    assert exchanger_type in valid_exchanger_types, (
-        f"Invalid exchanger_type. Must be one of {valid_exchanger_types}"
-    )
+    assert exchanger_type in valid_exchanger_types, f"Invalid exchanger_type. Must be one of {valid_exchanger_types}"
     assert flow_type in valid_flow_types, f"Invalid flow_type. Must be one of {valid_flow_types}"
 
     tol = 1e-9
     tol_it = 1e-4
     ntu_p = NTU / n_passes
-    if (
-        C_ratio < 0 + tol
-    ):  # Close enough to zero, doesn't matter the type as C_min fluid doesn't change temperature
+    if C_ratio < 0 + tol:  # Close enough to zero, doesn't matter the type as C_min fluid doesn't change temperature
         epsilon = 1 - np.exp(-ntu_p)  # Kays & London (2-13a)
 
     elif exchanger_type == "aligned_flow":  # Two concentric tubes aligned with eachother
@@ -86,9 +79,7 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
         ):  # we have just calculated the effectiveness for one pass, assumes mixing between passes and overall counterflow config
             epsilon_1p = epsilon
             if C_ratio > 1 - tol:  # Close enough to 1 that will be considered as such
-                epsilon = (
-                    n_passes * epsilon_1p / (1 + (n_passes - 1) * epsilon_1p)
-                )  # Kays & London (2-18a)
+                epsilon = n_passes * epsilon_1p / (1 + (n_passes - 1) * epsilon_1p)  # Kays & London (2-18a)
             elif n_passes == 1:
                 epsilon = epsilon_1p
             else:  # Kays & London (2-18)
@@ -108,22 +99,14 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
             while np.any(np.abs(term) > tol_it):
                 epsilon += term
                 n += 1
-                term = (
-                    -np.exp(-(1 + C_ratio) * NTU)
-                    * (C_ratio**n)
-                    * poly_sum_crossflow_unmixed(n, NTU)
-                )
+                term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * poly_sum_crossflow_unmixed(n, NTU)
             return epsilon
 
         elif flow_type == "Cmax_mixed":
             # epsilon = 1 / C_ratio * (1 - np.exp(1 - C_ratio) * (1 - np.exp(-ntu_p))) # Lopez (3.25) WRONG
-            epsilon = (
-                1 / C_ratio * (1 - np.exp(-C_ratio * (1 - np.exp(-ntu_p))))
-            )  # Kays & London (2-16)
+            epsilon = 1 / C_ratio * (1 - np.exp(-C_ratio * (1 - np.exp(-ntu_p))))  # Kays & London (2-16)
         elif flow_type == "Cmin_mixed":
-            epsilon = 1 - np.exp(
-                -1 / C_ratio * (1 - np.exp(-C_ratio * ntu_p))
-            )  # Kays & London (2-15)
+            epsilon = 1 - np.exp(-1 / C_ratio * (1 - np.exp(-C_ratio * ntu_p)))  # Kays & London (2-15)
         elif flow_type == "both_mixed":
             epsilon = 1 / (
                 1 / (1 - np.exp(-ntu_p)) + C_ratio / (1 - np.exp(-C_ratio * ntu_p)) - 1 / ntu_p
@@ -134,9 +117,7 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
         ):  # we have just calculated the effectiveness for one pass, assumes mixing between passes and overall counterflow config
             epsilon_1p = epsilon
             if C_ratio > 1 - tol:  # Close enough to 1 that will be considered as such
-                epsilon = (
-                    n_passes * epsilon_1p / (1 + (n_passes - 1) * epsilon_1p)
-                )  # Kays & London (2-18a)
+                epsilon = n_passes * epsilon_1p / (1 + (n_passes - 1) * epsilon_1p)  # Kays & London (2-18a)
             elif n_passes == 1:
                 epsilon = epsilon_1p
             else:  # Kays & London (2-18)
@@ -151,13 +132,7 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
         epsilon_1p = np.where(
             ntu_p < 10,
             2
-            / (
-                1
-                + C_ratio
-                + C_ratio_sqrt
-                * (1 + np.exp(-ntu_p * C_ratio_sqrt))
-                / (1 - np.exp(-ntu_p * C_ratio_sqrt))
-            ),
+            / (1 + C_ratio + C_ratio_sqrt * (1 + np.exp(-ntu_p * C_ratio_sqrt)) / (1 - np.exp(-ntu_p * C_ratio_sqrt))),
             2 / (1 + C_ratio + C_ratio_sqrt),
         )
         if C_ratio > 1 - tol:  # Close enough to 1 that will be considered as such
@@ -210,9 +185,7 @@ if __name__ == "__main__":
         for n_pass in n_passes:
             eps = []
             # for NTU in NTUs:
-            eps = epsilon_ntu(
-                NTUs, C_ratio, exchanger_type=HX_tp, flow_type=flow_tp, n_passes=n_pass
-            )
+            eps = epsilon_ntu(NTUs, C_ratio, exchanger_type=HX_tp, flow_type=flow_tp, n_passes=n_pass)
 
             if n_pass > 10:
                 n_pass = r"$\infty$"

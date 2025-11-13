@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
-from typing import List, Tuple
 
 import numpy as np
-from matplotlib import pyplot as plt
-from scipy.optimize import root
-
 from comp_withZeli_involute_cases import (  # type: ignore
     _initial_guess_two_step_xflow,
     load_case,
 )
+from matplotlib import pyplot as plt
+from scipy.optimize import root
+
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
 from heat_exchanger.geometries.radial_spiral import (
     RadialSpiralProtocol,
@@ -20,7 +18,6 @@ from heat_exchanger.geometries.radial_spiral import (
     rad_spiral_shoot,
 )
 from heat_exchanger.logging_utils import configure_logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +34,14 @@ def _solve_for_geometry(geom: RadialSpiralProtocol, inputs) -> dict:
     tol_P = tol_P_pct_of_Ph_in / 100 * (Ph_known if Ph_known is not None else 1.0)
 
     def residuals(x: np.ndarray) -> np.ndarray:
-        raw = rad_spiral_shoot(
-            x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
-        )
+        raw = rad_spiral_shoot(x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3)
         if raw.size == 2:
             scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
         else:
             scaled = np.array([raw[0]], dtype=float)
         return scaled
 
-    x0 = (
-        np.array([Th0, Ph_or_None], dtype=float)
-        if Ph_in_known is not None
-        else np.array([Th0], dtype=float)
-    )
+    x0 = np.array([Th0, Ph_or_None], dtype=float) if Ph_in_known is not None else np.array([Th0], dtype=float)
     sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 60})
 
     result = compute_overall_performance(
@@ -59,9 +50,7 @@ def _solve_for_geometry(geom: RadialSpiralProtocol, inputs) -> dict:
     return result
 
 
-def _representative_capacity_ratio_and_mixing(
-    geom: RadialSpiralProtocol, inputs
-) -> Tuple[float, str]:
+def _representative_capacity_ratio_and_mixing(geom: RadialSpiralProtocol, inputs) -> tuple[float, str]:
     """Estimate a representative overall C_r and choose fair crossflow mixing type based on which stream is Cmax."""
     # Use inlet cp as a simple, robust proxy for overall capacity rates
     # For hot-side pressure, use whichever boundary is specified; cp is weakly pressure-sensitive here.
@@ -85,25 +74,23 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
     step_deg = 360.0 / base_geom.n_headers
 
     # Build list of angles from full 360 down in steps of 360/n_headers, staying > 0
-    angles: List[float] = []
+    angles: list[float] = []
     angle = 360.0
     while angle > 0.0 + 1e-9:
         angles.append(angle)
         angle -= step_deg
 
-    logger.info(
-        "Sweeping inv_angle_deg for %s: %d steps, step=%.2f deg", case_name, len(angles), step_deg
-    )
+    logger.info("Sweeping inv_angle_deg for %s: %d steps, step=%.2f deg", case_name, len(angles), step_deg)
 
     # Representative bounds parameters from inlets (stable across the sweep)
     Cr_rep, xflow_mix_type = _representative_capacity_ratio_and_mixing(base_geom, inputs)
     logger.info("Representative C_r=%.3f, crossflow bound uses '%s'", Cr_rep, xflow_mix_type)
 
     # Collect results
-    eps_list: List[float] = []
-    NTU_list: List[float] = []
-    Cr_list: List[float] = []
-    ang_list: List[float] = []
+    eps_list: list[float] = []
+    NTU_list: list[float] = []
+    Cr_list: list[float] = []
+    ang_list: list[float] = []
 
     for ang in angles:
         geom = RadialSpiralSpec(
@@ -148,24 +135,16 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
 
     # Bounds curves (use a representative Cr and appropriate crossflow mixing)
     NTU_grid = np.linspace(0.0, max(1.05 * np.nanmax(NTU_arr), 1.0), 300)
-    eps_counter = _eps_ntu(
-        NTU_grid, Cr_rep, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1
-    )
-    eps_xflow = _eps_ntu(
-        NTU_grid, Cr_rep, exchanger_type="cross_flow", flow_type=xflow_mix_type, n_passes=1
-    )
+    eps_counter = _eps_ntu(NTU_grid, Cr_rep, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1)
+    eps_xflow = _eps_ntu(NTU_grid, Cr_rep, exchanger_type="cross_flow", flow_type=xflow_mix_type, n_passes=1)
 
     # Plot
     plt.figure(figsize=(7.5, 5.0))
-    sc = plt.scatter(
-        NTU_arr, eps_arr, c=ang_arr, cmap="viridis", s=40, edgecolors="k", linewidths=0.5
-    )
+    sc = plt.scatter(NTU_arr, eps_arr, c=ang_arr, cmap="viridis", s=40, edgecolors="k", linewidths=0.5)
     cbar = plt.colorbar(sc)
     cbar.set_label("Involute angle (deg)")
     plt.plot(NTU_grid, eps_counter, "r--", label=f"Counterflow bound (C_r={Cr_rep:.3f})")
-    plt.plot(
-        NTU_grid, eps_xflow, "b-.", label=f"Crossflow bound {xflow_mix_type} (C_r={Cr_rep:.3f})"
-    )
+    plt.plot(NTU_grid, eps_xflow, "b-.", label=f"Crossflow bound {xflow_mix_type} (C_r={Cr_rep:.3f})")
     plt.xlabel("NTU = UA/C_min (-)")
     plt.ylabel("Effectiveness, ε (-)")
     plt.title(f"{case_name}: ε vs NTU as involute angle decreases by 360/n_headers")

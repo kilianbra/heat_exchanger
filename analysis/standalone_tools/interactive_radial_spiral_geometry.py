@@ -46,9 +46,7 @@ def _spiral_xy(radius_inner: float, radius_outer: float, inv_angle_deg: float, n
     return x, y
 
 
-def _flow_angle_deg_at_point(
-    position: np.ndarray, tangent: np.ndarray, eps: float = 1e-12
-) -> float:
+def _flow_angle_deg_at_point(position: np.ndarray, tangent: np.ndarray, eps: float = 1e-12) -> float:
     pos_norm = np.linalg.norm(position)
     tan_norm = np.linalg.norm(tangent)
     if pos_norm < eps or tan_norm < eps:
@@ -80,9 +78,7 @@ def main():
     plt.subplots_adjust(left=0.1, right=0.95, bottom=0.33)
 
     # Plot spiral(s) and boundary circles
-    x_sp_base, y_sp_base = _spiral_xy(
-        geom.radius_inner_whole_hex, geom.radius_outer_whole_hex, geom.inv_angle_deg
-    )
+    x_sp_base, y_sp_base = _spiral_xy(geom.radius_inner_whole_hex, geom.radius_outer_whole_hex, geom.inv_angle_deg)
     lines_spirals: list = []
     for k in range(geom.n_headers):
         phi = 2.0 * np.pi * k / geom.n_headers
@@ -229,9 +225,7 @@ def main():
     sl_n_h = Slider(s_n_h, "n_h", 1, 64, valinit=init["n_h"], valstep=1)
     sl_Xt = Slider(s_Xt, "Xt*", 1.05, 5.0, valinit=init["Xt_star"], valstep=0.01)
     sl_Xl = Slider(s_Xl, "Xl*", 1.00, 4.0, valinit=init["Xl_star"], valstep=0.01)
-    sl_angle = Slider(
-        s_angle, "inv_angle [deg]", 30.0, 720.0, valinit=init["inv_angle_deg"], valstep=None
-    )
+    sl_angle = Slider(s_angle, "inv_angle [deg]", 30.0, 720.0, valinit=init["inv_angle_deg"], valstep=None)
 
     # Put tube OD slider on the right side to save vertical space
     s_OD = plt.axes([0.82, 0.40, 0.12, 0.45], facecolor=axcolor)
@@ -271,9 +265,7 @@ def main():
         )
         try:
             # Recompute spiral base and circles
-            x_sp, y_sp = _spiral_xy(
-                g.radius_inner_whole_hex, g.radius_outer_whole_hex, g.inv_angle_deg
-            )
+            x_sp, y_sp = _spiral_xy(g.radius_inner_whole_hex, g.radius_outer_whole_hex, g.inv_angle_deg)
             # Ensure correct number of spiral lines equals n_headers
             nonlocal lines_spirals
             # Remove extra

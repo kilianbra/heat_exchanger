@@ -47,9 +47,7 @@ def _rotate_points(x: np.ndarray, y: np.ndarray, angle_rad: float):
     return xr, yr
 
 
-def _intersect_ray_with_segment(
-    p: np.ndarray, d: np.ndarray, a: np.ndarray, b: np.ndarray, eps: float = 1e-9
-):
+def _intersect_ray_with_segment(p: np.ndarray, d: np.ndarray, a: np.ndarray, b: np.ndarray, eps: float = 1e-9):
     """Return lambda (distance along ray) and u (segment param) for intersection, tolerant to endpoints/FP error."""
     s = b - a
     M = np.array([[d[0], -s[0]], [d[1], -s[1]]], dtype=float)
@@ -91,9 +89,7 @@ def _intersect_ray_with_polyline(
 
 
 # Add this helper below _intersect_ray_with_polyline or near other helpers
-def _flow_angle_deg_at_point(
-    position: np.ndarray, tangent: np.ndarray, eps: float = 1e-12
-) -> float:
+def _flow_angle_deg_at_point(position: np.ndarray, tangent: np.ndarray, eps: float = 1e-12) -> float:
     # Angle between inward radial direction (-r_hat) and tangent vector
     pos_norm = np.linalg.norm(position)
     tan_norm = np.linalg.norm(tangent)
@@ -186,10 +182,7 @@ def update(val):
             hit1
             if (
                 hit1 is not None
-                and (
-                    hit2 is None
-                    or np.linalg.norm(hit1 - p_sp_in_main) <= np.linalg.norm(hit2 - p_sp_in_main)
-                )
+                and (hit2 is None or np.linalg.norm(hit1 - p_sp_in_main) <= np.linalg.norm(hit2 - p_sp_in_main))
             )
             else hit2
         )
@@ -209,10 +202,7 @@ def update(val):
             hit1
             if (
                 hit1 is not None
-                and (
-                    hit2 is None
-                    or np.linalg.norm(hit1 - p_sp_out_off) <= np.linalg.norm(hit2 - p_sp_out_off)
-                )
+                and (hit2 is None or np.linalg.norm(hit1 - p_sp_out_off) <= np.linalg.norm(hit2 - p_sp_out_off))
             )
             else hit2
         )
@@ -275,10 +265,7 @@ def update(val):
             hit1
             if (
                 hit1 is not None
-                and (
-                    hit2 is None
-                    or np.linalg.norm(hit1 - p_iv_out_main) <= np.linalg.norm(hit2 - p_iv_out_main)
-                )
+                and (hit2 is None or np.linalg.norm(hit1 - p_iv_out_main) <= np.linalg.norm(hit2 - p_iv_out_main))
             )
             else hit2
         )
@@ -323,9 +310,7 @@ def update(val):
         d_inward = -p_off_outer
         hit_rad_in = _intersect_ray_with_polyline(p_off_outer, d_inward, x_s, y_s)
         if hit_rad_in is not None:
-            spiral_rad_in_from_off.set_data(
-                [p_off_outer[0], hit_rad_in[0]], [p_off_outer[1], hit_rad_in[1]]
-            )
+            spiral_rad_in_from_off.set_data([p_off_outer[0], hit_rad_in[0]], [p_off_outer[1], hit_rad_in[1]])
             spiral_rad_in_from_off.set_visible(True)
             len_sp_rad_in = float(np.linalg.norm(hit_rad_in - p_off_outer))
         else:
@@ -338,9 +323,7 @@ def update(val):
         d_outward = p_main_inner / (norm if norm > 0 else 1.0)
         hit_rad_out = _intersect_ray_with_polyline(p_main_inner, d_outward, x_s_off, y_s_off)
         if hit_rad_out is not None:
-            spiral_rad_out_from_main.set_data(
-                [p_main_inner[0], hit_rad_out[0]], [p_main_inner[1], hit_rad_out[1]]
-            )
+            spiral_rad_out_from_main.set_data([p_main_inner[0], hit_rad_out[0]], [p_main_inner[1], hit_rad_out[1]])
             spiral_rad_out_from_main.set_visible(True)
             len_sp_rad_out = float(np.linalg.norm(hit_rad_out - p_main_inner))
         else:
@@ -481,9 +464,7 @@ ax.add_patch(circle_mask)
 # Sliders on the right side
 ax_slider1 = plt.axes([0.81, 0.65, 0.15, 0.03])  # numbers mean left, bottom, width, height
 ax_slider2 = plt.axes([0.81, 0.60, 0.15, 0.03])
-slider1 = Slider(
-    ax_slider1, "Flow Angle", 45, 89.9, valinit=flow_angle_deg, valstep=0.1, valfmt="%.1f°"
-)
+slider1 = Slider(ax_slider1, "Flow Angle", 45, 89.9, valinit=flow_angle_deg, valstep=0.1, valfmt="%.1f°")
 slider2 = Slider(ax_slider2, r"$r_{min}$", 0.01, 0.99, valinit=r_min, valstep=0.01)
 
 # Radio buttons for spacing toggle

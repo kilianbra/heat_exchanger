@@ -174,9 +174,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         dR = (self.radius_outer_whole_hex - self.radius_inner_whole_hex) / self.n_headers
 
         radii = self.radius_inner_whole_hex + np.arange(self.n_headers + 1, dtype=float) * dR
-        inv_b = (self.radius_outer_whole_hex - self.radius_inner_whole_hex) / np.deg2rad(
-            self.inv_angle_deg
-        )
+        inv_b = (self.radius_outer_whole_hex - self.radius_inner_whole_hex) / np.deg2rad(self.inv_angle_deg)
         theta = (radii - self.radius_inner_whole_hex) / inv_b
 
         area_ht_hot = np.zeros(self.n_headers)
@@ -187,9 +185,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         tube_length = np.zeros(self.n_headers)
         d_h_hot = np.zeros(self.n_headers)
 
-        length_flow_outer_per_header = (
-            self.n_rows_per_header * self.tube_spacing_long * self.tube_outer_diam
-        )
+        length_flow_outer_per_header = self.n_rows_per_header * self.tube_spacing_long * self.tube_outer_diam
 
         for j in range(self.n_headers):
             tube_length[j] = np.trapezoid(
@@ -199,15 +195,11 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
             area_frontal_hot[j] = self.axial_length * 2.0 * np.pi * radii[j] / self.n_headers
 
             area_ht_hot[j] = np.pi * self.tube_outer_diam * tube_length[j] * self.n_tubes_per_header
-            area_ht_cold[j] = (
-                np.pi * self.tube_inner_diam * tube_length[j] * self.n_tubes_per_header
-            )
+            area_ht_cold[j] = np.pi * self.tube_inner_diam * tube_length[j] * self.n_tubes_per_header
 
             area_free_hot[j] = area_frontal_hot[j] * self.sigma_outer
             # Valid for this segmentation of the HEx
-            area_free_cold[j] = (
-                np.pi * self.tube_inner_diam**2 / 4.0 * self.n_tubes_total / self.n_headers
-            )
+            area_free_cold[j] = np.pi * self.tube_inner_diam**2 / 4.0 * self.n_tubes_total / self.n_headers
             d_h_hot[j] = (4.0 * area_free_hot[j] * length_flow_outer_per_header) / area_ht_hot[j]
 
         # Orient arrays so index 0 corresponds to cold inlet.
@@ -309,11 +301,7 @@ def calc_eps_local_and_tau(
         * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
     )
 
-    U_hot = 1.0 / (
-        (1.0 / h_h)
-        + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam)
-        + wall_term
-    )
+    U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
 
     C_h_j = mdot_hot_per_header * cp_h
     C_c_j = mdot_cold_per_header * cp_c
@@ -369,9 +357,7 @@ def rad_spiral_shoot(
     x = np.asarray(boundary_guess, dtype=float)
     if has_Ph_in:
         if x.size != 2:
-            raise ValueError(
-                "boundary_guess must be [Th_out_guess, Ph_out_guess] when Ph_in is given."
-            )
+            raise ValueError("boundary_guess must be [Th_out_guess, Ph_out_guess] when Ph_in is given.")
         Th_out_guess = float(x[0])
         Ph_out_guess = float(x[1])
     else:
@@ -497,9 +483,7 @@ def compute_overall_performance(
     has_Ph_in = fluids.Ph_in is not None
     x = np.asarray(boundary_converged, dtype=float)
     if has_Ph_in and x.size != 2:
-        raise ValueError(
-            "boundary_converged must be [Th_out_converged, Ph_out_converged] when Ph_in is given."
-        )
+        raise ValueError("boundary_converged must be [Th_out_converged, Ph_out_converged] when Ph_in is given.")
     if (not has_Ph_in) and x.size != 1:
         raise ValueError("boundary_converged must be [Th_out_converged] when Ph_out is given.")
 
@@ -563,11 +547,7 @@ def compute_overall_performance(
             / (2.0 * geometry.wall_conductivity)
             * np.log(geometry.tube_outer_diam / geometry.tube_inner_diam)
         )
-        U_hot = 1.0 / (
-            (1.0 / h_h)
-            + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam)
-            + wall_term
-        )
+        U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
         UA_sum += U_hot * area_ht_hot[j] * geometry.n_headers
 
         Th[j + 1], Ph[j + 1] = _upd_stat_prop(
@@ -713,15 +693,9 @@ def compute_overall_performance(
     )
 
     # Stanton numbers
-    St_h_in = (
-        Nu_h_in / (Re_h_in * Pr_h_in)
-        if np.isfinite(Nu_h_in) and Re_h_in > 0 and Pr_h_in > 0
-        else float("nan")
-    )
+    St_h_in = Nu_h_in / (Re_h_in * Pr_h_in) if np.isfinite(Nu_h_in) and Re_h_in > 0 and Pr_h_in > 0 else float("nan")
     St_h_out = (
-        Nu_h_out / (Re_h_out * Pr_h_out)
-        if np.isfinite(Nu_h_out) and Re_h_out > 0 and Pr_h_out > 0
-        else float("nan")
+        Nu_h_out / (Re_h_out * Pr_h_out) if np.isfinite(Nu_h_out) and Re_h_out > 0 and Pr_h_out > 0 else float("nan")
     )
 
     # Local h_h and h_c at inlet and outlet (use OD for hot, ID for cold)
@@ -733,15 +707,9 @@ def compute_overall_performance(
     Re_c_out = G_c_total * Di_eff / mu_c_out if mu_c_out > 0 and Di_eff > 0 else float("nan")
     Pr_c_in = mu_c_in * cp_c_in / k_c_in if k_c_in > 0 else float("nan")
     Pr_c_out = mu_c_out * cp_c_out / k_c_out if k_c_out > 0 else float("nan")
-    Nu_c_in = (
-        _circ_nu(Re_c_in, 0, prandtl=Pr_c_in)
-        if np.isfinite(Re_c_in) and np.isfinite(Pr_c_in)
-        else float("nan")
-    )
+    Nu_c_in = _circ_nu(Re_c_in, 0, prandtl=Pr_c_in) if np.isfinite(Re_c_in) and np.isfinite(Pr_c_in) else float("nan")
     Nu_c_out = (
-        _circ_nu(Re_c_out, 0, prandtl=Pr_c_out)
-        if np.isfinite(Re_c_out) and np.isfinite(Pr_c_out)
-        else float("nan")
+        _circ_nu(Re_c_out, 0, prandtl=Pr_c_out) if np.isfinite(Re_c_out) and np.isfinite(Pr_c_out) else float("nan")
     )
     h_c_in = Nu_c_in * k_c_in / Di_eff if np.isfinite(Nu_c_in) and Di_eff > 0 else float("nan")
     h_c_out = Nu_c_out * k_c_out / Di_eff if np.isfinite(Nu_c_out) and Di_eff > 0 else float("nan")
@@ -772,9 +740,7 @@ def compute_overall_performance(
         else float("nan")
     )
     Tw_h_out = (
-        Th_out - (qpp_out / h_h_out)
-        if np.isfinite(qpp_out) and np.isfinite(h_h_out) and h_h_out > 0
-        else float("nan")
+        Th_out - (qpp_out / h_h_out) if np.isfinite(qpp_out) and np.isfinite(h_h_out) and h_h_out > 0 else float("nan")
     )
 
     # Eckert numbers
@@ -822,9 +788,7 @@ def compute_overall_performance(
     diagnostics["V2_h_out"] = float(V_h_out**2) if np.isfinite(V_h_out) else float("nan")
     diagnostics["cp_h_in"] = float(cp_h_in)
     diagnostics["cp_h_out"] = float(cp_h_out)
-    diagnostics["dT_hw_in"] = (
-        float(float(fluids.Th_in) - Tw_h_in) if np.isfinite(Tw_h_in) else float("nan")
-    )
+    diagnostics["dT_hw_in"] = float(float(fluids.Th_in) - Tw_h_in) if np.isfinite(Tw_h_in) else float("nan")
     diagnostics["dT_hw_out"] = float(Th_out - Tw_h_out) if np.isfinite(Tw_h_out) else float("nan")
 
     return {

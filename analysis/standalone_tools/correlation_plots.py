@@ -84,9 +84,7 @@ def _print_quick_tables():
     print("=" * 80)
     print(tabulate(table_data, headers=headers, tablefmt="grid"))
     print("=" * 80)
-    print(
-        "Note:\n Annular pipe calculations uses r_inner/r_outer = 0.2,\n Rectangular duct calculations use a/b = 0.7"
-    )
+    print("Note:\n Annular pipe calculations uses r_inner/r_outer = 0.2,\n Rectangular duct calculations use a/b = 0.7")
     print("=" * 80)
 
 
@@ -290,9 +288,7 @@ def _print_tube_bank_comparison_table():
     print("\n" + "=" * 80)
     print("TUBE BANK FRICTION FACTOR COMPARISON")
     print("=" * 80)
-    print(
-        f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}"
-    )
+    print(f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}")
     print("Data source: Kays & London Fig 10-12: I1.50 - 1.25(a)")
     print("=" * 80)
     tube_bank_headers = ["Reynolds", "f_experimental", "f_correlation"]
@@ -307,9 +303,7 @@ def _print_example_calc():
     Re_example = 1e4
     Pr_example = 0.7
     print(f"Example: Re_d = {Re_example:.0e}, Pr = {Pr_example}")
-    print(
-        f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}"
-    )
+    print(f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}")
 
     hagen_number = calculate_Hg(Re_example, spacing_long, spacing_trans, inline=True, Nr=n_rows)
     print(f"Hagen number: {hagen_number:.2f}")
@@ -328,9 +322,7 @@ def _print_complete_analysis_header():
     print("\n" + "=" * 80)
     print("COMPLETE TUBE BANK ANALYSIS")
     print("=" * 80)
-    print(
-        f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}"
-    )
+    print(f"Configuration: Inline tubes, Xt* = {spacing_trans}, Xl* = {spacing_long}, N_rows = {n_rows}")
     print("Data source: Kays & London Fig 10-12: I1.50 - 1.25(a)")
     print("=" * 80)
 
@@ -394,12 +386,8 @@ def _plot_tube_bank_inline_compare(show_twin_j_over_f_axis: bool = True):
     ax = plt.gca()
 
     # f and j vs Re on same (left) axis with log-log scaling
-    ax.scatter(
-        Re_values_inline, f_exp_k_and_l_inline, label="f exp (K&L)", color="#1f77b4", marker="o"
-    )
-    ax.plot(
-        Re_values_inline, f_corr_list_new, label="f corr (G&G)", color="#1f77b4", linestyle="--"
-    )
+    ax.scatter(Re_values_inline, f_exp_k_and_l_inline, label="f exp (K&L)", color="#1f77b4", marker="o")
+    ax.plot(Re_values_inline, f_corr_list_new, label="f corr (G&G)", color="#1f77b4", linestyle="--")
     ax.scatter(Re_values_inline, j_exp_list, label="j exp (K&L)", color="#d62728", marker="s")
     ax.plot(Re_values_inline, j_corr_list, label="j corr (G&G)", color="#d62728", linestyle="-")
     ax.set_xscale("log")
@@ -417,12 +405,8 @@ def _plot_tube_bank_inline_compare(show_twin_j_over_f_axis: bool = True):
         j_over_f_exp = [j / f for j, f in zip(j_exp_list, f_exp_k_and_l_inline, strict=True)]
         j_over_f_corr = [j / f for j, f in zip(j_corr_list, f_corr_list_new, strict=True)]
 
-        ax2.scatter(
-            Re_values_inline, j_over_f_exp, label="j/f exp (K&L)", color="black", marker="^"
-        )
-        ax2.plot(
-            Re_values_inline, j_over_f_corr, label="j/f corr (G&G)", color="black", linestyle=":"
-        )
+        ax2.scatter(Re_values_inline, j_over_f_exp, label="j/f exp (K&L)", color="black", marker="^")
+        ax2.plot(Re_values_inline, j_over_f_corr, label="j/f corr (G&G)", color="black", linestyle=":")
         ax2.set_ylabel("j/f ratio")
         ax2.set_yscale("linear")
         ax2.set_ylim(0.0, 0.5)
@@ -645,9 +629,7 @@ def _plot_tube_bank_interactive():
     # Experimental scatters (created upfront, toggled visible)
     exp_scatter = ax.scatter([], [], label="Kays & London (exp)", color="black", marker="x")
     cfd_scatter = ax.scatter([], [], label="2D CFD", color="red", marker="o", s=50)
-    cfd_3d_scatter = ax.scatter(
-        [], [], label="3D CFD (249k cells)", color="orange", marker="s", s=50
-    )
+    cfd_3d_scatter = ax.scatter([], [], label="3D CFD (249k cells)", color="orange", marker="s", s=50)
 
     # Brewer point (only shown for specific Xt*, Xl*)
     brewer_scatter = ax.scatter([], [], label="Brewer", color="black", marker="+", s=70)
@@ -689,9 +671,7 @@ def _plot_tube_bank_interactive():
         xl_slider.valmax = xl_max
         xl_slider.set_val(new_xl)
 
-    def mask_bounds(
-        values: list[float], xl_val: float, xt_val: float, is_inline: bool
-    ) -> list[float]:
+    def mask_bounds(values: list[float], xl_val: float, xt_val: float, is_inline: bool) -> list[float]:
         if is_inline:
             valid = (xt_val >= 1.25) and (xt_val <= 6.0) and (xl_val >= 1.2) and (xl_val <= 3.0)
         else:
@@ -715,9 +695,7 @@ def _plot_tube_bank_interactive():
                 nu, f_gg = tube_bank_nusselt_number_and_friction_factor(
                     Re, xl_val, xt_val, pr_local, inline=is_inline, n_rows=n_rows
                 )
-                xi = tube_bank_corrected_xi_gunter_and_shaw(
-                    Re, xl_val, xt_val, use_outside_bounds=False
-                )
+                xi = tube_bank_corrected_xi_gunter_and_shaw(Re, xl_val, xt_val, use_outside_bounds=False)
                 f_gs = (xt_val - 1) / np.pi * xi
 
                 # Gnielinski VDI correlation
@@ -827,9 +805,7 @@ def _plot_tube_bank_interactive():
         xl_val = xl_slider.val
         xt_val = xt_slider.val
 
-        gg_y, gs_y, mr_y, gn_y, zk_y, is_inline = compute_series(
-            metric, layout_name, xl_val, xt_val
-        )
+        gg_y, gs_y, mr_y, gn_y, zk_y, is_inline = compute_series(metric, layout_name, xl_val, xt_val)
         line_gg.set_data(reynolds, gg_y)
         line_gs.set_data(reynolds, gs_y)
         line_mr.set_data(reynolds, mr_y)
@@ -924,10 +900,7 @@ def _plot_tube_bank_interactive():
 
         # Brewer point overlay when Inline, Friction coeff., Xt*=6.0 and Xl*=1.25
         show_brewer = (
-            is_inline
-            and metric == "Friction coeff."
-            and abs(xl_val - 1.25) < 1e-6
-            and abs(xt_val - 6.0) < 1e-6
+            is_inline and metric == "Friction coeff." and abs(xl_val - 1.25) < 1e-6 and abs(xt_val - 6.0) < 1e-6
         )
         if show_brewer:
             brewer_scatter.set_offsets(np.array([[3000.0, 0.05]]))

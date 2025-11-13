@@ -437,9 +437,7 @@ class CoolPropFluid:
                 backend,
                 e,
             )
-            raise ValueError(
-                f"Cannot create CoolProp fluid '{fluid_name}' with backend '{backend}': {e}"
-            ) from e
+            raise ValueError(f"Cannot create CoolProp fluid '{fluid_name}' with backend '{backend}': {e}") from e
 
     def state(self, T: float, P: float) -> FluidState:
         return _CoolPropState(T=T, P=P, _model=self)

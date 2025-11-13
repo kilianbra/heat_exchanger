@@ -36,11 +36,12 @@ select = [
 ]
 ignore = [
     "E501",
-    "N802",  # Allow function names with capital letters
-    "N803",  # Allow argument names with capital letters
-    "N806",  # Allow variable names in functions with capital letters
-    "N817",  # Allow import CoolProp as CP
-    "UP038", # allow isinstance(var, (int, float)) rather than requiring isinstance(var, int | float)
+    "N802",   # Allow function names with capital letters
+    "N803",   # Allow argument names with capital letters
+    "N806",   # Allow variable names in functions with capital letters
+    "N817",   # Allow import CoolProp as CP
+    "UP038",  # allow isinstance(var, (int, float)) rather than requiring isinstance(var, int | float)
+    "SIM108", # doesn't complain anymore about multiline if else blocks
 ]
 
 [tool.ruff.lint.per-file-ignores]
