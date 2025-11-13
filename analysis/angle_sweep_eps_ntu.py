@@ -31,6 +31,7 @@ def _geometry_with_new_angle(base_geom: RadialSpiralProtocol, inv_angle_deg: flo
         radius_outer_hex=base_geom.radius_outer_hex,
         inv_angle_deg=inv_angle_deg,
         wall_conductivity=base_geom.wall_conductivity,
+        ext_fluid_flows_radially_inwards=base_geom.ext_fluid_flows_radially_inwards,
     )
 
 
