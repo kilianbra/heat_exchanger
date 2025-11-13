@@ -181,14 +181,10 @@ NUSSELT_Q_CST_RECTANGULAR_DUCT_LAMINAR_DATA = [
 
 # Create interpolation functions for laminar flow
 _interp_friction = interp1d(*zip(*FRICTION_CONCENTRIC_LAMINAR_DATA, strict=True), kind="linear")
-_interp_nusselt_laminar = interp1d(
-    *zip(*NUSSELT_CONCENTRIC_LAMINAR_DATA, strict=True), kind="linear"
-)
+_interp_nusselt_laminar = interp1d(*zip(*NUSSELT_CONCENTRIC_LAMINAR_DATA, strict=True), kind="linear")
 
 # Create interpolation functions for turbulent flow
-_interp_nusselt_circular_turbulent = interp1d(
-    *zip(*NUSSELT_CIRCULAR_TURBULENT_DATA, strict=True), kind="linear"
-)
+_interp_nusselt_circular_turbulent = interp1d(*zip(*NUSSELT_CIRCULAR_TURBULENT_DATA, strict=True), kind="linear")
 # in annular flow have two fixed graphs for prandtl=0.7: one with r_ratio = 0.2 and reynolds varying
 # the other with reynolds = 1e5 and r_ratio varying
 _interp_nusselt_reynolds = interp1d(
@@ -201,9 +197,7 @@ _interp_nusselt_rratio = interp1d(
 )
 
 # Create interpolation functions for rectangular ducts
-_interp_friction_rectangular = interp1d(
-    *zip(*FRICTION_RECTANGULAR_DUCT_LAMINAR_DATA, strict=True), kind="linear"
-)
+_interp_friction_rectangular = interp1d(*zip(*FRICTION_RECTANGULAR_DUCT_LAMINAR_DATA, strict=True), kind="linear")
 _interp_nusselt_q_cst_rectangular = interp1d(
     *zip(*NUSSELT_Q_CST_RECTANGULAR_DUCT_LAMINAR_DATA, strict=True), kind="linear"
 )
@@ -249,12 +243,7 @@ def nusselt_gnielinski(f, reynolds, prandtl):
     - 0.5 ≤ prandtl ≤ 2000
     Note: Not a good correlation in the transition regime
     """
-    return (
-        (f / 2)
-        * (reynolds - 1000)
-        * prandtl
-        / (1 + 12.7 * np.sqrt(f / 2) * (prandtl ** (2 / 3) - 1))
-    )
+    return (f / 2) * (reynolds - 1000) * prandtl / (1 + 12.7 * np.sqrt(f / 2) * (prandtl ** (2 / 3) - 1))
 
 
 def circular_pipe_friction_factor(reynolds, r_ratio=0):
@@ -288,9 +277,7 @@ def circular_pipe_friction_factor(reynolds, r_ratio=0):
         )  # values found from fidling around on Desmos and using the smooth pipe flow Fig from K&L (Fig 10-1?)
         f_lam = _interp_friction(r_ratio) / reynolds
         f_turb = 0.079 * reynolds ** (-0.25)
-        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (
-            1 + (reynolds / reynolds_fit) ** n_fit
-        )
+        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (1 + (reynolds / reynolds_fit) ** n_fit)
 
 
 def circular_pipe_nusselt(reynolds, r_ratio=0, prandtl=0.7, show_warnings=False):
@@ -317,9 +304,7 @@ def circular_pipe_nusselt(reynolds, r_ratio=0, prandtl=0.7, show_warnings=False)
         if r_ratio == 0:
             if not (1e4 <= reynolds <= 1e6):
                 if show_warnings:
-                    warnings.warn(
-                        f"reynolds={reynolds:.1e} outside correlation range", stacklevel=2
-                    )
+                    warnings.warn(f"reynolds={reynolds:.1e} outside correlation range", stacklevel=2)
                 if reynolds > 1e6:
                     return 10 ** (-1.771548501143517) * reynolds ** (0.8027382977987497)
             return _interp_nusselt_circular_turbulent(reynolds)
@@ -332,18 +317,12 @@ def circular_pipe_nusselt(reynolds, r_ratio=0, prandtl=0.7, show_warnings=False)
                 nusselt_at_fixed_rratio = _interp_nusselt_reynolds(reynolds)
             else:
                 if show_warnings:
-                    warnings.warn(
-                        f"Reynolds of {reynolds:.1e} above 1e6, extrapolating", stacklevel=2
-                    )
-                nusselt_at_fixed_rratio = 10 ** (-1.555820526825431) * reynolds ** (
-                    0.7762764854498554
-                )
+                    warnings.warn(f"Reynolds of {reynolds:.1e} above 1e6, extrapolating", stacklevel=2)
+                nusselt_at_fixed_rratio = 10 ** (-1.555820526825431) * reynolds ** (0.7762764854498554)
 
             # Scale by r_ratio effect at reynolds=1e5
             nusselt_at_fixed_reynolds = _interp_nusselt_rratio(r_ratio)
-            scaled_nusselt = nusselt_at_fixed_rratio * (
-                nusselt_at_fixed_reynolds / _interp_nusselt_rratio(0.2)
-            )
+            scaled_nusselt = nusselt_at_fixed_rratio * (nusselt_at_fixed_reynolds / _interp_nusselt_rratio(0.2))
             return scaled_nusselt
 
     else:  # Transitional
@@ -362,9 +341,7 @@ def circular_pipe_nusselt(reynolds, r_ratio=0, prandtl=0.7, show_warnings=False)
         b = j_f_lam - a * np.log10(2300)
         j_f = a * np.log10(reynolds) + b
 
-        return (
-            j_f * circular_pipe_friction_factor(reynolds, r_ratio) * reynolds * prandtl ** (1 / 3)
-        )
+        return j_f * circular_pipe_friction_factor(reynolds, r_ratio) * reynolds * prandtl ** (1 / 3)
 
 
 def rectangular_duct_friction_factor(reynolds, a_over_b=1, show_warnings=False):
@@ -402,9 +379,7 @@ def rectangular_duct_friction_factor(reynolds, a_over_b=1, show_warnings=False):
         reynolds_fit, n_fit = 4500, 4
         f_lam = _interp_friction_rectangular(a_over_b) / reynolds
         f_turb = von_karman_nikuradse_smooth(1e4)
-        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (
-            1 + (reynolds / reynolds_fit) ** n_fit
-        )
+        return (f_lam + (reynolds / reynolds_fit) ** n_fit * f_turb) / (1 + (reynolds / reynolds_fit) ** n_fit)
 
 
 def rectangular_duct_nusselt(reynolds, a_over_b=1, prandtl=0.7, show_warnings=False):
@@ -454,12 +429,7 @@ def rectangular_duct_nusselt(reynolds, a_over_b=1, prandtl=0.7, show_warnings=Fa
         b = j_f_lam - a * np.log10(2300)
         j_f = a * np.log10(reynolds) + b
 
-        return (
-            j_f
-            * rectangular_duct_friction_factor(reynolds, a_over_b)
-            * reynolds
-            * prandtl ** (1 / 3)
-        )
+        return j_f * rectangular_duct_friction_factor(reynolds, a_over_b) * reynolds * prandtl ** (1 / 3)
 
 
 def offset_strip_fin_friction_factor(
@@ -486,9 +456,7 @@ def offset_strip_fin_friction_factor(
     Valid for 120 < reynolds < 1e4
     """
     if show_warnings and (reynolds < 120 or reynolds > 1e4):
-        warnings.warn(
-            f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2
-        )
+        warnings.warn(f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2)
 
     return (
         9.6243
@@ -496,15 +464,7 @@ def offset_strip_fin_friction_factor(
         * s_over_h_prime**-0.1856
         * delta_over_l_s**0.3053
         * delta_over_s**-0.2659
-        * (
-            1
-            + 7.669e-8
-            * reynolds**4.429
-            * s_over_h_prime**0.920
-            * delta_over_l_s**3.767
-            * delta_over_s**0.236
-        )
-        ** 0.1
+        * (1 + 7.669e-8 * reynolds**4.429 * s_over_h_prime**0.920 * delta_over_l_s**3.767 * delta_over_s**0.236) ** 0.1
     )
 
 
@@ -535,9 +495,7 @@ def offset_strip_fin_j_factor(
     - 0.5 < prandtl < 15
     """
     if show_warnings and (reynolds < 120 or reynolds > 1e4):
-        warnings.warn(
-            f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2
-        )
+        warnings.warn(f"Reynolds number {reynolds:.1e} outside correlation range of 120-1e4", stacklevel=2)
 
     return (
         0.6522
@@ -545,15 +503,7 @@ def offset_strip_fin_j_factor(
         * s_over_h_prime**-0.1541
         * delta_over_l_s**0.1499
         * delta_over_s**-0.0678
-        * (
-            1
-            + 5.269e-5
-            * reynolds**1.340
-            * s_over_h_prime**0.504
-            * delta_over_l_s**0.456
-            * delta_over_s**-1.055
-        )
-        ** 0.1
+        * (1 + 5.269e-5 * reynolds**1.340 * s_over_h_prime**0.504 * delta_over_l_s**0.456 * delta_over_s**-1.055) ** 0.1
     )
 
 
@@ -617,9 +567,7 @@ def calculate_Hgturb_s(Red, Xt, Xl, Nr):
     ) * Red**1.75 + phi_t_n * Red**2
 
     if Red > 250000:
-        Hgturb_s = Hgturb_s * (
-            1 + (Red - 250000) / 325000
-        )  # Shah 2003 Fundamentals of HX Equation 7.113
+        Hgturb_s = Hgturb_s * (1 + (Red - 250000) / 325000)  # Shah 2003 Fundamentals of HX Equation 7.113
     test = Hgturb_s
     assert isinstance(test, (int, float)) and not isinstance(test, complex), (
         f"The variable Hgturb_s must be a real number but is {test}"
@@ -656,7 +604,7 @@ def calculate_Hg_dont_use(Red, Xl, Xt, inline=False, Nr=11):
         if not (0.6 <= Xl <= 3):
             raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
         if not (Nr >= 5):
-            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+            raise ValueError(f"Nr value {Nr:} is not greater than 5")
         if Xd is None or Xd < 1.25:
             raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
 
@@ -695,7 +643,7 @@ def calculate_Hg(Red, Xl, Xt, inline=False, Nr=11):
         if not (0.6 <= Xl <= 3):
             raise ValueError(f"Xl value {Xl:.2} is not within the range (0.6, 3)")
         if not (Nr >= 5):
-            raise ValueError(f"Nr value {Nr:.2} is not greater than 5")
+            raise ValueError(f"Nr value {Nr:} is not greater than 5")
         if Xd is None or Xd < 1.25:
             raise ValueError(f"X_d value {Xd:.2} is not greater than 1.25")
 
@@ -793,13 +741,9 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
 
     """
 
-    assert 1 <= reynolds <= 3e5, (
-        f"Reynolds number {reynolds:.1e} outside correlation range of 1-3e5"
-    )
+    assert 1 <= reynolds <= 3e5, f"Reynolds number {reynolds:.1e} outside correlation range of 1-3e5"
     assert n_rows >= 5, f"Number of rows {n_rows:.0f} outside correlation range of 5"
-    assert 1.25 <= spacing_trans <= 3.0, (
-        f"Spacing trans {spacing_trans:.2f} outside correlation range of 1.25-3.0"
-    )
+    assert 1.25 <= spacing_trans <= 3.0, f"Spacing trans {spacing_trans:.2f} outside correlation range of 1.25-3.0"
     if inline:
         # assert 1.2 <= spacing_long <= 3.0, (
         #    f"Inline Spacing long {spacing_long:.2f} outside correlation range of 1.2-3.0"
@@ -810,9 +754,7 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
             f"Staggered Spacing long {spacing_long:.2f} outside correlation range of 0.6-3.0"
         )
         spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
-        assert spacing_diag >= 1.25, (
-            f"Staggered Spacing diag {spacing_diag:.2f} must be greater than 1.25"
-        )
+        assert spacing_diag >= 1.25, f"Staggered Spacing diag {spacing_diag:.2f} must be greater than 1.25"
 
     if reynolds < 1e3:
         # There are very few experimental data points for reynolds < 1e3, so we should warn user
@@ -826,9 +768,7 @@ def tube_bank_friction_factor(reynolds, spacing_long, spacing_trans, inline=True
     return friction_factor_k_and_l
 
 
-def tube_bank_nusselt_from_hagen(
-    hagen, reynolds, spacing_long, spacing_trans, prandtl=0.7, inline=True
-):
+def tube_bank_nusselt_from_hagen(hagen, reynolds, spacing_long, spacing_trans, prandtl=0.7, inline=True):
     """Calculates the Nusselt number and friction factor for a tube bank in cross flow.
     Implementation based on Shah 2003, reframed from Martin 2002, original from Gnielinski 1979.
 
@@ -849,14 +789,7 @@ def tube_bank_nusselt_from_hagen(
         leveque = 0.92 * hagen * prandtl * (4 * spacing_trans / np.pi - 1) / spacing_diag
     else:
         spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
-        leveque = (
-            0.92
-            * hagen
-            * prandtl
-            * (4 * spacing_trans * spacing_long / np.pi - 1)
-            / spacing_diag
-            / spacing_long
-        )
+        leveque = 0.92 * hagen * prandtl * (4 * spacing_trans * spacing_long / np.pi - 1) / spacing_diag / spacing_long
     assert isinstance(leveque, (int | float)) and not isinstance(leveque, complex), (
         f"The Leveque number must be a real number but is {leveque:.2e}"
     )
@@ -892,9 +825,7 @@ def tube_bank_nusselt_number_and_friction_factor(
     """
 
     hagen = calculate_Hg(reynolds, spacing_long, spacing_trans, inline=inline, Nr=n_rows)
-    nusselt = tube_bank_nusselt_from_hagen(
-        hagen, reynolds, spacing_long, spacing_trans, prandtl, inline
-    )
+    nusselt = tube_bank_nusselt_from_hagen(hagen, reynolds, spacing_long, spacing_trans, prandtl, inline)
 
     friction_factor_k_and_l = 2 * hagen / reynolds**2 * (spacing_trans - 1) / np.pi
 
@@ -935,12 +866,7 @@ def tube_bank_nusselt_gnielinski_vdi(
         reynolds_psi = np.where(mask, np.nan, reynolds_psi)
 
     nusselt_laminar = 0.664 * reynolds_psi**0.5 * prandtl ** (1 / 3)
-    nusselt_turb = (
-        0.037
-        * reynolds_psi**0.8
-        * prandtl
-        / (1 + 2.443 * reynolds_psi ** (-0.1) * (prandtl ** (2 / 3) - 1))
-    )
+    nusselt_turb = 0.037 * reynolds_psi**0.8 * prandtl / (1 + 2.443 * reynolds_psi ** (-0.1) * (prandtl ** (2 / 3) - 1))
 
     nusselt_uncorrected = 0.3 + np.sqrt(nusselt_laminar**2 + nusselt_turb**2)
 
@@ -950,9 +876,7 @@ def tube_bank_nusselt_gnielinski_vdi(
         f_A = 1 + 2 / 3 / b
 
     if n_rows >= 10:
-        nusselt = (
-            f_A * nusselt_uncorrected / (np.pi / 2)
-        )  # division by pi to make result Nusselt in d_o lengthscale
+        nusselt = f_A * nusselt_uncorrected / (np.pi / 2)  # division by pi to make result Nusselt in d_o lengthscale
     else:
         nusselt = (1 + (n_rows - 1) * f_A) / n_rows * nusselt_uncorrected
 
@@ -1015,9 +939,7 @@ def tube_bank_stanton_number_from_murray(
     Beta = 0.184 is valid for Re_dh between 3e3 and 15e3
     Correction is made for lower Reynolds but was only used for Reynolds under 2e3 in thesis
     """
-    reynolds_od = (
-        np.asarray(reynolds_od) if isinstance(reynolds_od, (list, np.ndarray)) else reynolds_od
-    )
+    reynolds_od = np.asarray(reynolds_od) if isinstance(reynolds_od, (list, np.ndarray)) else reynolds_od
 
     spacing_diag = ((spacing_trans / 2) ** 2 + spacing_long**2) ** 0.5
     xls = spacing_long
@@ -1072,11 +994,7 @@ def htc_murray(G, Cp, Re, Pr, xls, xts, OD):
     kmax = max(kt, kb)  # maximum spacing ratio
 
     # St4000 correlation
-    St4000 = (
-        (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2)
-        / (kmin * xls) ** 0.35
-        / Pr ** (2 / 3)
-    )
+    St4000 = (0.002499 + 0.008261 * (xlxt - 1) - 0.000145 * (xlxt - 1) ** 2) / (kmin * xls) ** 0.35 / Pr ** (2 / 3)
     # St correlation
     St = St4000 * 25.6238 * Re ** (-0.3913)
     # htc
@@ -1095,17 +1013,13 @@ def htc_murray(G, Cp, Re, Pr, xls, xts, OD):
     return h, f
 
 
-def general_hex_j_factor(
-    reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
-) -> float:
+def general_hex_j_factor(reynolds: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
     """
     Calculate j-factor for general heat exchangers.
     From Milten (2024) eqn (15), based on HEx from Kays and London (1984) like LaHaye (1974).
     """
     if show_warnings and (reynolds < 2e3 or reynolds > 2e4):
-        warnings.warn(
-            f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2
-        )
+        warnings.warn(f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2)
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
         warnings.warn(
@@ -1116,17 +1030,13 @@ def general_hex_j_factor(
     return 0.360 * l_s_over_d_h**-0.401 * reynolds**-0.413 + 2.13e-5 * l_s_over_d_h
 
 
-def general_hex_friction_factor(
-    reynolds: float, l_s_over_d_h: float, show_warnings: bool = False
-) -> float:
+def general_hex_friction_factor(reynolds: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
     """
     Calculate friction factor for general heat exchangers.
     From Milten (2024) eqn (16), based on HEx from Kays and London (1984) like LaHaye (1974).
     """
     if show_warnings and (reynolds < 2e3 or reynolds > 2e4):
-        warnings.warn(
-            f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2
-        )
+        warnings.warn(f"Reynolds number {reynolds:.1e} outside correlation range of 2k-20k", stacklevel=2)
 
     if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
         warnings.warn(

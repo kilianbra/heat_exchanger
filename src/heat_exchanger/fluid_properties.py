@@ -6,47 +6,60 @@ from abc import ABC, abstractmethod
 import CoolProp.CoolProp as CP
 import numpy as np
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Configure REFPROP path from environment or common defaults (non-fatal if absent)
-try:
-    # 1) Environment variables take priority
-    refprop_path = os.environ.get("REFPROP_PATH") or os.environ.get("RPPREFIX")
-    candidate_paths = []
+_REFPROP_CONFIGURED = False
 
-    # 2) If not provided, try platform-specific common install locations
-    if not refprop_path:
-        if sys.platform.startswith("win"):
-            candidate_paths = [
-                r"C:\\Program Files\\REFPROP",
-                r"C:\\Program Files (x86)\\REFPROP",
-            ]
-        elif sys.platform == "darwin":
-            candidate_paths = [
-                "/Applications/REFPROP",
-                "/usr/local/REFPROP",
-            ]
-        elif sys.platform.startswith("linux"):
-            candidate_paths = [
-                "/usr/local/share/REFPROP",
-                "/opt/REFPROP",
-            ]
-        for p in candidate_paths:
-            if os.path.isdir(p):
-                refprop_path = p
-                break
 
-    if refprop_path:
-        CP.set_config_string(CP.ALTERNATIVE_REFPROP_PATH, refprop_path)
-        logging.info(f"REFPROP path set to: {CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}")
-    else:
-        logging.debug("REFPROP path not set; using CoolProp defaults.")
-except Exception as e:
-    logging.warning(
-        f"Failed to configure REFPROP path: {e}. Using CoolProp defaults. Current path: "
-        f"{CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH)}"
-    )
+def configure_refprop() -> None:
+    """Configure REFPROP path once; safe to call multiple times."""
+
+    global _REFPROP_CONFIGURED
+    if _REFPROP_CONFIGURED:
+        return
+
+    try:
+        refprop_path = os.environ.get("REFPROP_PATH") or os.environ.get("RPPREFIX")
+        candidate_paths: list[str] = []
+
+        if not refprop_path:
+            if sys.platform.startswith("win"):
+                candidate_paths = [
+                    r"C:\\Program Files\\REFPROP",
+                    r"C:\\Program Files (x86)\\REFPROP",
+                ]
+            elif sys.platform == "darwin":
+                candidate_paths = [
+                    "/Applications/REFPROP",
+                    "/usr/local/REFPROP",
+                ]
+            elif sys.platform.startswith("linux"):
+                candidate_paths = [
+                    "/usr/local/share/REFPROP",
+                    "/opt/REFPROP",
+                ]
+            for candidate in candidate_paths:
+                if os.path.isdir(candidate):
+                    refprop_path = candidate
+                    break
+
+        if refprop_path:
+            CP.set_config_string(CP.ALTERNATIVE_REFPROP_PATH, refprop_path)
+            logger.info(
+                "REFPROP path set to: %s",
+                CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH),
+            )
+        else:
+            logger.debug("REFPROP path not set; using CoolProp defaults.")
+
+    except Exception as exc:  # pragma: no cover - defensive path setup
+        logger.warning(
+            "Failed to configure REFPROP path: %s. Using CoolProp defaults. Current path: %s",
+            exc,
+            CP.get_config_string(CP.ALTERNATIVE_REFPROP_PATH),
+        )
+
+    _REFPROP_CONFIGURED = True
 
 
 class FluidPropertiesStrategy(ABC):
@@ -237,6 +250,7 @@ class RefPropProperties(FluidPropertiesStrategy):
     """
 
     def __init__(self, fluid_name: str):
+        configure_refprop()
         self.fluid = fluid_name
         try:
             # Try to create REFPROP AbstractState
@@ -333,6 +347,7 @@ class MixtureProperties(FluidPropertiesStrategy):
     """
 
     def __init__(self, components: list, mole_fractions: list, prefer_refprop: bool = True):
+        configure_refprop()
         """
         Initialize mixture properties.
 
@@ -388,7 +403,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                     self._init_correlation_states()
 
             except Exception as e:
-                logging.debug(f"REFPROP mixture initialization failed: {e}")
+                logger.debug(f"REFPROP mixture initialization failed: {e}")
                 self.refprop_available = False
 
         # CoolProp fallback initialization
@@ -418,7 +433,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             self.wet_state = self.CP.AbstractState("REFPROP", "WATER")
 
         except Exception as e:
-            logging.debug(f"Warning: Could not initialize correlation states: {e}")
+            logger.debug(f"Warning: Could not initialize correlation states: {e}")
             self.dry_state = None
             self.wet_state = None
 
@@ -427,8 +442,7 @@ class MixtureProperties(FluidPropertiesStrategy):
         # Calculate mass fraction of water for HAPropsSI
         if self.x_H2O > 0:
             total_mass = sum(
-                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97)
-                for i, comp in enumerate(self.components)
+                self.mole_fractions[i] * self.molar_masses.get(comp, 28.97) for i, comp in enumerate(self.components)
             )
             h2o_mass = self.x_H2O * self.molar_masses["H2O"]
             self.w_H2O = h2o_mass / total_mass
@@ -475,7 +489,7 @@ class MixtureProperties(FluidPropertiesStrategy):
             return correlation_vectors
 
         except Exception as e:
-            logging.debug(f"Warning: Correlation calculation failed: {e}")
+            logger.debug(f"Warning: Correlation calculation failed: {e}")
             return np.array([3.5, 3.5])  # Default fallback
 
     def get_transport_properties(self, T: float, P: float) -> tuple:
@@ -591,7 +605,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                 self.mixture_state.update(self.CP.PT_INPUTS, P, T)
                 return self.mixture_state.smass()
             except Exception as e:
-                logging.debug(f"REFPROP entropy calculation failed: {e}")
+                logger.debug(f"REFPROP entropy calculation failed: {e}")
                 # Fall through to CoolProp
 
         # CoolProp fallback
@@ -601,7 +615,7 @@ class MixtureProperties(FluidPropertiesStrategy):
                 s_ha = self.CP.HAPropsSI("Sha", "T", T, "P", P, "W", self.w_H2O)
                 return s_ha / (1 + self.w_H2O)  # Convert to per kg mixture
             except Exception as e:
-                logging.debug(f"HAPropsSI entropy calculation failed: {e}")
+                logger.debug(f"HAPropsSI entropy calculation failed: {e}")
 
         # Final fallback to dry air
         air = self.CP.AbstractState("HEOS", "Air")
@@ -637,6 +651,7 @@ class CombustionProductsProperties(FluidPropertiesStrategy):
 
         # Create underlying mixture properties object
         self.mixture = MixtureProperties(self.components, self.mole_fractions, prefer_refprop)
+        self.mixture_state = getattr(self.mixture, "mixture_state", None)
 
     def _calculate_composition(self):
         """Calculate mole fractions from fuel-air ratio"""
