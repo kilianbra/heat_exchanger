@@ -17,6 +17,23 @@ from heat_exchanger.logging_utils import configure_logging
 logger = logging.getLogger(__name__)
 
 
+def _geometry_with_new_angle(base_geom: RadialSpiralProtocol, inv_angle_deg: float) -> RadialSpiralSpec:
+    """Create a new RadialSpiralSpec with the same parameters as base_geom but with a new involute angle."""
+    return RadialSpiralSpec(
+        tube_outer_diam=base_geom.tube_outer_diam,
+        tube_thick=base_geom.tube_thick,
+        tube_spacing_trv=base_geom.tube_spacing_trv,
+        tube_spacing_long=base_geom.tube_spacing_long,
+        staggered=base_geom.staggered,
+        n_headers=base_geom.n_headers,
+        n_rows_per_header=base_geom.n_rows_per_header,
+        n_tubes_per_row=base_geom.n_tubes_per_row,
+        radius_outer_hex=base_geom.radius_outer_hex,
+        inv_angle_deg=inv_angle_deg,
+        wall_conductivity=base_geom.wall_conductivity,
+    )
+
+
 def _representative_capacity_ratio_and_mixing(geom: RadialSpiralProtocol, inputs) -> tuple[float, str]:
     """Estimate a representative overall C_r and choose fair crossflow mixing type based on which stream is Cmax."""
     # Use inlet cp as a simple, robust proxy for overall capacity rates
@@ -61,19 +78,7 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
     dP_list: list[float] = []
 
     for ang in angles:
-        geom = RadialSpiralSpec(
-            tube_outer_diam=base_geom.tube_outer_diam,
-            tube_thick=base_geom.tube_thick,
-            tube_spacing_trv=base_geom.tube_spacing_trv,
-            tube_spacing_long=base_geom.tube_spacing_long,
-            staggered=base_geom.staggered,
-            n_headers=base_geom.n_headers,
-            n_rows_per_header=base_geom.n_rows_per_header,
-            n_tubes_per_row=base_geom.n_tubes_per_row,
-            radius_outer_hex=base_geom.radius_outer_hex,
-            inv_angle_deg=ang,
-            wall_conductivity=base_geom.wall_conductivity,
-        )
+        geom = _geometry_with_new_angle(base_geom, ang)
         try:
             res = spiral_hex_solver(geom, inputs, method="1d")
             diag = res["diagnostics"]  # type: ignore[assignment]
