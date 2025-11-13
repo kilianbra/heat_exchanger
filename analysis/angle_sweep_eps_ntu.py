@@ -3,51 +3,18 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-from comp_withZeli_involute_cases import (  # type: ignore
-    _initial_guess_two_step_xflow,
-    load_case,
-)
 from matplotlib import pyplot as plt
-from scipy.optimize import root
+from spiral_recup_cases import load_case  # type: ignore
 
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
 from heat_exchanger.geometries.radial_spiral import (
     RadialSpiralProtocol,
     RadialSpiralSpec,
-    compute_overall_performance,
-    rad_spiral_shoot,
+    spiral_hex_solver,
 )
 from heat_exchanger.logging_utils import configure_logging
 
 logger = logging.getLogger(__name__)
-
-
-def _solve_for_geometry(geom: RadialSpiralProtocol, inputs) -> dict:
-    """Run shooting solve and return compute_overall_performance result dict."""
-    # 0D two-step initial guess
-    Th0, Ph_or_None = _initial_guess_two_step_xflow(geom, inputs)
-    Ph_in_known = inputs.Ph_in
-
-    tol_root = 1.0e-2
-    tol_P_pct_of_Ph_in = 0.1
-    Ph_known = Ph_in_known if Ph_in_known is not None else inputs.Ph_out
-    tol_P = tol_P_pct_of_Ph_in / 100 * (Ph_known if Ph_known is not None else 1.0)
-
-    def residuals(x: np.ndarray) -> np.ndarray:
-        raw = rad_spiral_shoot(x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3)
-        if raw.size == 2:
-            scaled = np.array([raw[0], raw[1] * (tol_root / tol_P)], dtype=float)
-        else:
-            scaled = np.array([raw[0]], dtype=float)
-        return scaled
-
-    x0 = np.array([Th0, Ph_or_None], dtype=float) if Ph_in_known is not None else np.array([Th0], dtype=float)
-    sol = root(residuals, x0, method="hybr", tol=tol_root, options={"maxfev": 60})
-
-    result = compute_overall_performance(
-        sol.x, geom, inputs, property_solver_it_max=40, property_solver_tol_T=1e-2, rel_tol_p=1e-3
-    )
-    return result
 
 
 def _representative_capacity_ratio_and_mixing(geom: RadialSpiralProtocol, inputs) -> tuple[float, str]:
@@ -84,13 +51,14 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
 
     # Representative bounds parameters from inlets (stable across the sweep)
     Cr_rep, xflow_mix_type = _representative_capacity_ratio_and_mixing(base_geom, inputs)
-    logger.info("Representative C_r=%.3f, crossflow bound uses '%s'", Cr_rep, xflow_mix_type)
+    logger.info(f"Representative C_r={Cr_rep:.3f}, crossflow bound uses '{xflow_mix_type}'")
 
     # Collect results
     eps_list: list[float] = []
     NTU_list: list[float] = []
     Cr_list: list[float] = []
     ang_list: list[float] = []
+    dP_list: list[float] = []
 
     for ang in angles:
         geom = RadialSpiralSpec(
@@ -102,19 +70,20 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
             n_headers=base_geom.n_headers,
             n_rows_per_header=base_geom.n_rows_per_header,
             n_tubes_per_row=base_geom.n_tubes_per_row,
-            radius_outer_whole_hex=base_geom.radius_outer_whole_hex,
+            radius_outer_hex=base_geom.radius_outer_hex,
             inv_angle_deg=ang,
             wall_conductivity=base_geom.wall_conductivity,
         )
         try:
-            res = _solve_for_geometry(geom, inputs)
+            res = spiral_hex_solver(geom, inputs, method="1d")
             diag = res["diagnostics"]  # type: ignore[assignment]
             eps_list.append(float(diag["epsilon"]))
             NTU_list.append(float(diag["NTU"]))
             Cr_list.append(float(diag["Cr"]))
             ang_list.append(float(ang))
+            dP_list.append(float(diag["dP_hot_pct"]))
             logger.info(
-                "Angle %7.2f deg -> epsilon=%.4f, NTU=%.3f, Cr=%.3f, ΔPh=%.1f %%, ΔPc=%.1f %%%",
+                "Angle %7.2f deg -> epsilon=%.4f, NTU=%.3f, Cr=%.3f, ΔPh=%.1f %%, ΔPc=%.1f %%",
                 ang,
                 diag["epsilon"],
                 diag["NTU"],
@@ -131,7 +100,7 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
 
     NTU_arr = np.array(NTU_list, dtype=float)
     eps_arr = np.array(eps_list, dtype=float)
-    ang_arr = np.array(ang_list, dtype=float)
+    dP_arr = np.array(dP_list, dtype=float)
 
     # Bounds curves (use a representative Cr and appropriate crossflow mixing)
     NTU_grid = np.linspace(0.0, max(1.05 * np.nanmax(NTU_arr), 1.0), 300)
@@ -140,9 +109,9 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
 
     # Plot
     plt.figure(figsize=(7.5, 5.0))
-    sc = plt.scatter(NTU_arr, eps_arr, c=ang_arr, cmap="viridis", s=40, edgecolors="k", linewidths=0.5)
+    sc = plt.scatter(NTU_arr, eps_arr, c=dP_arr, cmap="viridis", s=40, edgecolors="k", linewidths=0.5)
     cbar = plt.colorbar(sc)
-    cbar.set_label("Involute angle (deg)")
+    cbar.set_label("Hot-side pressure drop (%)")
     plt.plot(NTU_grid, eps_counter, "r--", label=f"Counterflow bound (C_r={Cr_rep:.3f})")
     plt.plot(NTU_grid, eps_xflow, "b-.", label=f"Crossflow bound {xflow_mix_type} (C_r={Cr_rep:.3f})")
     plt.xlabel("NTU = UA/C_min (-)")
@@ -155,4 +124,4 @@ def run_sweep(case: str = "ahjeb_toc_k1", fluid_model: str = "CoolProp") -> None
 
 
 if __name__ == "__main__":
-    run_sweep(case="ahjeb_toc_k1", fluid_model="CoolProp")
+    run_sweep(case="ahjeb_toc_k1", fluid_model="PerfectGas")

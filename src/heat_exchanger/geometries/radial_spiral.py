@@ -1241,5 +1241,6 @@ __all__ = [
     "RadialSpiralSpec",
     "rad_spiral_shoot",
     "xflow_guess_0d",
+    "spiral_hex_solver",
     "compute_overall_performance",
 ]

@@ -29,7 +29,7 @@ def _build_geometry(
         n_headers=int(n_h),
         n_rows_per_header=int(n_r_h),
         n_tubes_per_row=int(n_r_a),
-        radius_outer_whole_hex=float(R_o),
+        radius_outer_hex=float(R_o),
         inv_angle_deg=float(inv_angle_deg),
     )
     return geom
@@ -62,7 +62,7 @@ def _flow_angle_deg_at_point(position: np.ndarray, tangent: np.ndarray, eps: flo
 def main():
     # Initial defaults from comp_withZeli_involute_cases.py -> case "ahjeb_mto_k1"
     init = {
-        "R_o": 0.460,  # radius_outer_whole_hex [m]
+        "R_o": 0.460,  # radius_outer_hex [m]
         "n_r_h": 4,  # n_rows_per_header
         "n_r_a": 216,  # n_rows_axial (rounded from 690e-3 / (3.0 * 1.067e-3))
         "n_h": 21,  # n_headers
@@ -78,7 +78,7 @@ def main():
     plt.subplots_adjust(left=0.1, right=0.95, bottom=0.33)
 
     # Plot spiral(s) and boundary circles
-    x_sp_base, y_sp_base = _spiral_xy(geom.radius_inner_whole_hex, geom.radius_outer_whole_hex, geom.inv_angle_deg)
+    x_sp_base, y_sp_base = _spiral_xy(geom.radius_inner_hex, geom.radius_outer_hex, geom.inv_angle_deg)
     lines_spirals: list = []
     for k in range(geom.n_headers):
         phi = 2.0 * np.pi * k / geom.n_headers
@@ -91,18 +91,18 @@ def main():
         lines_spirals.append(lk)
 
     theta_circ = np.linspace(0, 2 * np.pi, 512)
-    x_in = geom.radius_inner_whole_hex * np.cos(theta_circ)
-    y_in = geom.radius_inner_whole_hex * np.sin(theta_circ)
-    x_out = geom.radius_outer_whole_hex * np.cos(theta_circ)
-    y_out = geom.radius_outer_whole_hex * np.sin(theta_circ)
+    x_in = geom.radius_inner_hex * np.cos(theta_circ)
+    y_in = geom.radius_inner_hex * np.sin(theta_circ)
+    x_out = geom.radius_outer_hex * np.cos(theta_circ)
+    y_out = geom.radius_outer_hex * np.sin(theta_circ)
     (line_inner,) = ax.plot(x_in, y_in, "k--", alpha=0.6, label="Inner radius")
     (line_outer,) = ax.plot(x_out, y_out, "k--", alpha=0.6, label="Outer radius")
     # Header points on inner/outer circles
     thetas_hdr = np.linspace(0.0, 2.0 * np.pi, geom.n_headers, endpoint=False)
-    x_hdr_in = geom.radius_inner_whole_hex * np.cos(thetas_hdr)
-    y_hdr_in = geom.radius_inner_whole_hex * np.sin(thetas_hdr)
-    x_hdr_out = geom.radius_outer_whole_hex * np.cos(thetas_hdr)
-    y_hdr_out = geom.radius_outer_whole_hex * np.sin(thetas_hdr)
+    x_hdr_in = geom.radius_inner_hex * np.cos(thetas_hdr)
+    y_hdr_in = geom.radius_inner_hex * np.sin(thetas_hdr)
+    x_hdr_out = geom.radius_outer_hex * np.cos(thetas_hdr)
+    y_hdr_out = geom.radius_outer_hex * np.sin(thetas_hdr)
     (pts_inner,) = ax.plot(
         x_hdr_in,
         y_hdr_in,
@@ -123,7 +123,7 @@ def main():
     )
 
     ax.set_aspect("equal", adjustable="box")
-    rmax = geom.radius_outer_whole_hex * 1.05
+    rmax = geom.radius_outer_hex * 1.05
     ax.set_xlim(-rmax, rmax)
     ax.set_ylim(-rmax, rmax)
     ax.grid(True, alpha=0.25)
@@ -265,7 +265,7 @@ def main():
         )
         try:
             # Recompute spiral base and circles
-            x_sp, y_sp = _spiral_xy(g.radius_inner_whole_hex, g.radius_outer_whole_hex, g.inv_angle_deg)
+            x_sp, y_sp = _spiral_xy(g.radius_inner_hex, g.radius_outer_hex, g.inv_angle_deg)
             # Ensure correct number of spiral lines equals n_headers
             nonlocal lines_spirals
             # Remove extra
@@ -285,24 +285,24 @@ def main():
                 ln.set_data(xk, yk)
                 ln.set_color("red" if k == 0 else "black")
 
-            x_in = g.radius_inner_whole_hex * np.cos(theta_circ)
-            y_in = g.radius_inner_whole_hex * np.sin(theta_circ)
-            x_out = g.radius_outer_whole_hex * np.cos(theta_circ)
-            y_out = g.radius_outer_whole_hex * np.sin(theta_circ)
+            x_in = g.radius_inner_hex * np.cos(theta_circ)
+            y_in = g.radius_inner_hex * np.sin(theta_circ)
+            x_out = g.radius_outer_hex * np.cos(theta_circ)
+            y_out = g.radius_outer_hex * np.sin(theta_circ)
             line_inner.set_data(x_in, y_in)
             line_outer.set_data(x_out, y_out)
             # Update header points
             thetas_hdr = np.linspace(0.0, 2.0 * np.pi, g.n_headers, endpoint=False)
             pts_inner.set_data(
-                g.radius_inner_whole_hex * np.cos(thetas_hdr),
-                g.radius_inner_whole_hex * np.sin(thetas_hdr),
+                g.radius_inner_hex * np.cos(thetas_hdr),
+                g.radius_inner_hex * np.sin(thetas_hdr),
             )
             pts_outer.set_data(
-                g.radius_outer_whole_hex * np.cos(thetas_hdr),
-                g.radius_outer_whole_hex * np.sin(thetas_hdr),
+                g.radius_outer_hex * np.cos(thetas_hdr),
+                g.radius_outer_hex * np.sin(thetas_hdr),
             )
 
-            rmax_local = g.radius_outer_whole_hex * 1.05
+            rmax_local = g.radius_outer_hex * 1.05
             ax.set_xlim(-rmax_local, rmax_local)
             ax.set_ylim(-rmax_local, rmax_local)
 
