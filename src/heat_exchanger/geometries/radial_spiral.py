@@ -187,7 +187,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
 
     @cached_property
     def tube_spacing_diag(self) -> float:
-        return float(np.sqrt(self.tube_spacing_trv**2 + (0.5 * self.tube_spacing_long) ** 2))
+        return float(np.sqrt((self.tube_spacing_trv / 2) ** 2 + (self.tube_spacing_long) ** 2))
 
     @cached_property
     def sigma_outer(self) -> float:

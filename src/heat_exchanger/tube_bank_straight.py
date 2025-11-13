@@ -40,9 +40,8 @@ class TubeBankStraightGeometry:
             D_i = self.row_width() / np.pi
             D_o = np.sqrt(D_i**2 + self.frontal_area_outer / np.pi)
             return (D_o - D_i) / 2
-        else:
-            W = self.row_width()
-            return self.frontal_area_outer / W
+        else:  # It is the same as tube length for box
+            return self.tube_length
 
     @property
     def axial_length(self) -> float:
