@@ -707,6 +707,8 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
         )
         logger.debug(
             "Total Q_hot=%.2f MW, Q_cold=%.2f MW",
+            final_diag.get("Q_hot", float("nan")) / 1e6,
+            final_diag.get("Q_cold", float("nan")) / 1e6,
         )
         logger.warning(
             "for case %20s, NTU=%5.2f, eps=%.2f %%, dP_hot=%5.1f %%, C_r=%.3f, eps_xflow=%.2f %%",

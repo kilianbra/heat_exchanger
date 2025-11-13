@@ -702,7 +702,7 @@ def main_table():
                     "cp [J/kg-K]": None,
                     "mu [Pa·s]": None,
                     "Pr [-]": None,
-                    "γ [-]": None,
+                    "gamma [-]": None,
                     "error": props["error"],
                 }
             )
@@ -723,7 +723,7 @@ def main_table():
                     "cp [J/kg-K]": None,
                     "mu [Pa·s]": None,
                     "Pr [-]": None,
-                    "γ [-]": None,
+                    "gamma [-]": None,
                     "error": props["error"],
                 }
             )
