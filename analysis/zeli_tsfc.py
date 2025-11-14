@@ -67,6 +67,7 @@ Tc_inlet_real = 300  # coolant preheated before entering HX to avoid frosting
 Pc_inlet = 150e5
 Pc_outlet = 150e5 * 0.9
 
+
 # HX performance
 eps = 0.90
 dP = 0.85
@@ -83,7 +84,7 @@ s4h2 = PropsSI("S", "T", T4h2, "P", p4h2, fluid_h)
 print(f"T4h2: {T4h2:.0f} K, p4h2: {p4h2:.0f} Pa, s4h2: {s4h2:.2f} J/kgK")
 
 # isobar curves
-qT = np.linspace(100, 2000, 100)  # 0-2000 K queries
+qT = np.linspace(100, 2000, 100)  # 100-2000 K queries
 qS0 = PropsSI("S", "T", qT, "P", p0, fluid_h)
 qS1 = PropsSI("S", "T", qT, "P", p1, fluid_h)
 qS2 = PropsSI("S", "T", qT, "P", p2, fluid_h)
@@ -158,8 +159,8 @@ tsfc_baseline_core = fuel_massflow / Fnet_baseline
 tsfc_baseline_total = fuel_massflow / Fnet_total_baseline
 
 # preheated
-H2_q = Tc_outlet * PropsSI("C", "T", Tc_outlet, "P", Pc_outlet, fluid_c) - Tc_inlet * PropsSI(
-    "C", "T", Tc_inlet, "P", Pc_inlet, fluid_c
+H2_q = PropsSI("Hmass", "T", Tc_outlet, "P", Pc_outlet, fluid_c) - PropsSI(
+    "Hmass", "T", Tc_inlet, "P", Pc_inlet, fluid_c
 )
 fuel_massflow_preheated = heat_addition / (fuel_LHV + H2_q)  # mf*LCV = m_combustor*heat_addition, tf mf in kg/s
 heat_frac = H2_q / fuel_LHV
@@ -316,6 +317,30 @@ def plot_ts_diagram():
 # Uncomment the line below to generate the T-s diagram
 # plot_ts_diagram()
 
+# Calculate ideal 0% pressure drop line
+# For 0% pressure drop, p4h2 = p4, but T4h2 still varies with effectiveness
+eps_ideal = np.linspace(eps_min, eps_max, n_samples)
+eps_cold_ideal = np.zeros(n_samples)
+lost_thrust_ideal = np.zeros(n_samples)
+
+for jj in range(n_samples):
+    current_eps = eps_ideal[jj]
+    # Recalculate heat capacity rates
+    C_hot_current = m_split_hx * PropsSI("C", "T", T4, "P", p4, fluid_h)
+    C_cold_current = m_split_hx_coolant * PropsSI("C", "T", Tc_inlet_real, "P", Pc_inlet, fluid_c)
+    C_min_current = min(C_hot_current, C_cold_current)
+    # Convert to H2 effectiveness
+    eps_cold_ideal[jj] = current_eps * C_min_current / C_cold_current
+    # Calculate heat transfer and temperatures (no pressure drop, so p4h2 = p4)
+    qmax_current = C_min_current * (T4 - Tc_inlet_real)
+    q_current = current_eps * qmax_current
+    T4h2_ideal = T4 - q_current / C_hot_current
+    # Calculate velocity with no pressure drop (p4h2 = p4)
+    V4h2_ideal = calc_vjet(p4, T4h2_ideal)[0]
+    dVel_ideal = V4h2_ideal - V0
+    qFnet_HX_ideal = m_split_hx * dVel_ideal
+    lost_thrust_ideal[jj] = baseline_HX_thrust - qFnet_HX_ideal
+
 # COMBINED SENSITIVITY - CONTOUR PLOTS
 # Create 2D contour plots with H2 Effectiveness (eps_cold) vs Lost Thrust of HX
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
@@ -372,10 +397,21 @@ contour1 = ax1.contour(
     alpha=0.8,
 )
 ax1.clabel(contour1, inline=True, fontsize=9, fmt="%g%%")
+# Add ideal 0% pressure drop line
+ax1.plot(
+    eps_cold_ideal * 100,
+    lost_thrust_ideal,
+    color="red",
+    linestyle="--",
+    linewidth=2,
+    label="0% Pressure Drop (Ideal)",
+    zorder=10,
+)
 ax1.set_title("Pressure Drop [%] vs H2 Effectiveness & Lost Thrust")
 ax1.set_xlabel("H2 Effectiveness [%]")
 ax1.set_ylabel("Lost Thrust of HX [N]")
 ax1.grid(True, alpha=0.3)
+ax1.legend(loc="best", fontsize=9)
 
 # Right plot: TSFC Change contours as colormap
 norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=0.5)
