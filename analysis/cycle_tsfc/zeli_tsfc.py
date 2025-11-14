@@ -151,6 +151,7 @@ def calculate_cycle_tsfc(
     dFnet_total = 1 - Fnet_total_preheated / Fnet_total_baseline
 
     # Baseline fuel calculations
+    # KB: not true baseline as neglecting heat needed to preheat fuel
     heat_addition = m_combustor * (state_3.h - state_2.h)
     fuel_massflow = heat_addition / fuel_LHV
     fuel_massflow_frac = fuel_massflow / m_combustor
@@ -249,7 +250,8 @@ def main():
     fraction_core_to_hex = 0.2
     m_split_core = (1 - fraction_core_to_hex) * m_core
     m_split_hx = fraction_core_to_hex * m_core
-    m_split_hx_coolant = 0.063 * m_split_hx  # chosen to get C_ratio = 1, no relationship to fuel reqd
+    m_split_hx_coolant = 0.063 * m_split_hx  # chosen to get C_ratio = 1, no relationship to fuel req
+    # KB: according to my cp numbers, need 0.078 - 0.075 to get C_ratio = 1
 
     # Fluid models
     f_h = PerfectGasFluid.from_name("air")
