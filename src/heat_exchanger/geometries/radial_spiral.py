@@ -1205,6 +1205,9 @@ def compute_overall_performance(
         "Tc_out": float(Tc_out),
         "Ph_out": float(Ph_out),
         "Pc_out": float(Pc_out),
+        "cp_h_avg": float(cp_h_avg),
+        "cp_c_avg": float(cp_c_avg),
+        "C_min": float(C_min),
     }
 
     # Store non-dimensional groups and supporting quantities
