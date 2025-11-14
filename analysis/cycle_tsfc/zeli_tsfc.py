@@ -8,6 +8,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 from scipy.interpolate import griddata
 
+from heat_exchanger.fluids.protocols import PerfectGasFluid, FluidInputs
+
 os.system("cls")
 
 # mflow splits
@@ -25,6 +27,8 @@ m_split_core = 0.8 * m_core
 m_split_hx = 0.2 * m_core
 m_split_hx_coolant = 0.063 * m_split_hx
 fluid_h = "air"
+f_h = PerfectGasFluid.from_name("air")
+f_c = PerfectGasFluid.from_name("parahydrogen")
 
 # Example: Set flight altitude in feet and convert to meters
 flight_altitude_ft = 39000  # flight altitude in feet
@@ -58,7 +62,8 @@ p3 = p2  # assume no combustor losses
 s3 = PropsSI("S", "T", T3, "P", p3, fluid_h)
 T4 = 575
 p4 = 0.368e5
-s4 = PropsSI("S", "T", T4, "P", p4, fluid_h)
+sh_4 = f_h.state(T4, p4)
+s4 = sh_4.s
 
 # Hydrogen coolant conditions
 fluid_c = "parahydrogen"
@@ -66,14 +71,15 @@ Tc_inlet = 40
 Tc_inlet_real = 300  # coolant preheated before entering HX to avoid frosting
 Pc_inlet = 150e5
 Pc_outlet = 150e5 * 0.9
+sc_inlet = f_c.state(Tc_inlet, Pc_inlet)
 
 
 # HX performance
 eps = 0.90
 dP = 0.85
 # Coolant side
-C_hot = m_split_hx * PropsSI("C", "T", T4, "P", p4, fluid_h)
-C_cold = m_split_hx_coolant * PropsSI("C", "T", Tc_inlet_real, "P", Pc_inlet, fluid_c)
+C_hot = m_split_hx * sh_4.cp
+C_cold = m_split_hx_coolant * sc_inlet.cp
 qmax = min(C_hot, C_cold) * (T4 - Tc_inlet_real)
 q = eps * qmax
 Tc_outlet = Tc_inlet_real + q / C_cold
@@ -85,7 +91,7 @@ print(f"T4h2: {T4h2:.0f} K, p4h2: {p4h2:.0f} Pa, s4h2: {s4h2:.2f} J/kgK")
 
 # isobar curves
 qT = np.linspace(100, 2000, 100)  # 100-2000 K queries
-qS0 = PropsSI("S", "T", qT, "P", p0, fluid_h)
+qS0 = PropsSI("S", "T", qT, "P", p0, fluid_h)  # KB: PropsSI is vectorised!
 qS1 = PropsSI("S", "T", qT, "P", p1, fluid_h)
 qS2 = PropsSI("S", "T", qT, "P", p2, fluid_h)
 # cycle curve
@@ -194,7 +200,7 @@ print(
 )
 
 # pressure drop sensitivity study, constant T4h2, vary p4h2 and plot dV (V4-V0)
-n_samples = 20
+n_samples = 100
 qp4h2 = np.zeros(n_samples)
 qV4h2 = np.zeros(n_samples)
 for jj in range(n_samples):
@@ -354,6 +360,8 @@ EpsCold_grid, LostThrust_grid = np.meshgrid(eps_cold_grid, lost_thrust_grid)
 
 # Prepare data points for interpolation (flatten the arrays)
 # The data is organized as [i_dp, i_eps], so we need to create points correctly
+thrust_normalisation = Fnet_baseline
+
 eps_cold_points = []
 lost_thrust_points = []
 dp_points = []
@@ -389,7 +397,7 @@ tsfc_interp = griddata(
 # Left plot: Pressure drop contours as black lines
 contour1 = ax1.contour(
     EpsCold_grid,
-    LostThrust_grid,
+    LostThrust_grid / thrust_normalisation,
     dp_interp,
     levels=10,
     colors="black",
@@ -400,7 +408,7 @@ ax1.clabel(contour1, inline=True, fontsize=9, fmt="%g%%")
 # Add ideal 0% pressure drop line
 ax1.plot(
     eps_cold_ideal * 100,
-    lost_thrust_ideal,
+    lost_thrust_ideal / thrust_normalisation,
     color="red",
     linestyle="--",
     linewidth=2,
@@ -415,8 +423,18 @@ ax1.legend(loc="best", fontsize=9)
 
 # Right plot: TSFC Change contours as colormap
 norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=0.5)
-contour2 = ax2.contourf(EpsCold_grid, LostThrust_grid, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2)
-ax2.contour(EpsCold_grid, LostThrust_grid, tsfc_interp, levels=10, colors="black", alpha=0.3, linewidths=0.5)
+contour2 = ax2.contourf(
+    EpsCold_grid, LostThrust_grid / thrust_normalisation, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2
+)
+ax2.contour(
+    EpsCold_grid,
+    LostThrust_grid / thrust_normalisation,
+    tsfc_interp,
+    levels=10,
+    colors="black",
+    alpha=0.3,
+    linewidths=0.5,
+)
 ax2.set_title("TSFC Change [%] vs H2 Effectiveness & Lost Thrust")
 ax2.set_xlabel("H2 Effectiveness [%]")
 ax2.set_ylabel("Lost Thrust of HX [N]")
@@ -445,13 +463,13 @@ design_B_dp = 4.2
 # Find lost thrust for design points by interpolating
 design_A_lost_thrust = griddata(
     (eps_cold_points, dp_points),
-    lost_thrust_points,
+    lost_thrust_points / thrust_normalisation,
     (design_A_eps_cold * 100, design_A_dp),
     method="linear",
 )
 design_B_lost_thrust = griddata(
     (eps_cold_points, dp_points),
-    lost_thrust_points,
+    lost_thrust_points / thrust_normalisation,
     (design_B_eps_cold * 100, design_B_dp),
     method="linear",
 )
