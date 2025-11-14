@@ -1,7 +1,5 @@
 """Importing public libraries"""
 
-import os
-
 import numpy as np
 from CoolProp.CoolProp import PropsSI
 from matplotlib import pyplot as plt
@@ -55,8 +53,8 @@ def calculate_cycle_tsfc(
     m_split_hx,
     m_split_hx_coolant,
     # Coolant conditions
-    Tc_inlet,
-    Tc_inlet_real,
+    Tc_pump_exit,
+    Tc_hex_inlet,
     Pc_inlet,
     # HX performance
     eps,
@@ -98,14 +96,14 @@ def calculate_cycle_tsfc(
     s4 = state_4.s
 
     # Create coolant state objects
-    cold_in = f_c.state(Tc_inlet_real, Pc_inlet)  # Use real inlet temp for calculations
+    cold_in = f_c.state(Tc_hex_inlet, Pc_inlet)  # Use real inlet temp for calculations
 
     # HX performance calculations
     C_hot = m_split_hx * state_4.cp
     C_cold = m_split_hx_coolant * cold_in.cp
-    qmax = min(C_hot, C_cold) * (T4 - Tc_inlet_real)
+    qmax = min(C_hot, C_cold) * (T4 - Tc_hex_inlet)
     q = eps * qmax
-    Tc_outlet = Tc_inlet_real + q / C_cold
+    Tc_outlet = Tc_hex_inlet + q / C_cold
     Pc_outlet = Pc_inlet * (1 - dp_c_pct_of_in / 100)
 
     # Hot side HEx exit
@@ -123,7 +121,7 @@ def calculate_cycle_tsfc(
         cold=f_c,
         m_dot_hot=m_split_hx,
         m_dot_cold=m_split_hx_coolant,
-        Tc_in=Tc_inlet_real,
+        Tc_in=Tc_hex_inlet,
         Pc_in=Pc_inlet,
         Th_in=T4,
         Ph_in=p4,
@@ -160,8 +158,8 @@ def calculate_cycle_tsfc(
     tsfc_baseline_total = fuel_massflow / Fnet_total_baseline
 
     # Preheated fuel calculations
-    cold_in_ref = f_c.state(Tc_inlet, Pc_inlet)  # Reference state at actual inlet temp
-    H2_q = cold_out.h - cold_in_ref.h
+    cold_pump_exit = f_c.state(Tc_pump_exit, Pc_inlet)  # Reference state at actual inlet temp
+    H2_q = cold_out.h - cold_pump_exit.h
     fuel_massflow_preheated = heat_addition / (fuel_LHV + H2_q)
     heat_frac = H2_q / fuel_LHV
     fuel_massflow_preheated_frac = fuel_massflow_preheated / m_combustor
@@ -232,7 +230,8 @@ def calculate_cycle_tsfc(
         "C_min": C_min,
         "T4": T4,
         "p4": p4,
-        "Tc_inlet_real": Tc_inlet_real,
+        "Tc_pump_exit": Tc_pump_exit,
+        "Tc_hex_inlet": Tc_hex_inlet,
         "Pc_outlet": Pc_outlet,
     }
 
@@ -250,7 +249,7 @@ def main():
     fraction_core_to_hex = 0.2
     m_split_core = (1 - fraction_core_to_hex) * m_core
     m_split_hx = fraction_core_to_hex * m_core
-    m_split_hx_coolant = 0.063 * m_split_hx
+    m_split_hx_coolant = 0.063 * m_split_hx  # chosen to get C_ratio = 1, no relationship to fuel reqd
 
     # Fluid models
     f_h = PerfectGasFluid.from_name("air")
@@ -281,8 +280,8 @@ def main():
     p4 = 0.368e5
 
     # Hydrogen coolant conditions
-    Tc_inlet = 40
-    Tc_inlet_real = 300  # coolant preheated before entering HX to avoid frosting
+    Tc_pump_exit = 40
+    Tc_hex_inlet = 275  # coolant preheated before entering HX to avoid frosting
     Pc_inlet = 150e5
 
     # HX performance
@@ -320,8 +319,8 @@ def main():
         m_split_core=m_split_core,
         m_split_hx=m_split_hx,
         m_split_hx_coolant=m_split_hx_coolant,
-        Tc_inlet=Tc_inlet,
-        Tc_inlet_real=Tc_inlet_real,
+        Tc_pump_exit=Tc_pump_exit,
+        Tc_hex_inlet=Tc_hex_inlet,
         Pc_inlet=Pc_inlet,
         eps=eps,
         dp_h_pct_of_in=dp_h_pct_of_in,
@@ -351,10 +350,10 @@ def main():
         f"Change in thrust, core only (exc. bypass): {results['dFnet_core'] * 100:.0f}%, total (inc. bypass): {results['dFnet_total'] * 100:.0f}%"
     )
     print(
-        f"fuel/air: {results['fuel_massflow_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_baseline_core']:.2f} kg/s/N, tsfc_baseline_total: {results['tsfc_baseline_total']:.2f} kg/s/N"
+        f"fuel/air: {results['fuel_massflow_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_baseline_core']:.1e} kg/s/N, tsfc_baseline_total: {results['tsfc_baseline_total']:.1e} kg/s/N"
     )
     print(
-        f"fuel/air: {results['fuel_massflow_preheated_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow_preheated']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_preheated_core']:.2f} kg/s/N, tsfc_baseline_total: {results['tsfc_preheated_total']:.2f} kg/s/N"
+        f"fuel/air: {results['fuel_massflow_preheated_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow_preheated']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_preheated_core']:.1e} kg/s/N, tsfc_baseline_total: {results['tsfc_preheated_total']:.1e} kg/s/N"
     )
     print(f"fraction of sensible heat pick up to fuel LHV: {results['heat_frac'] * 100:.2f}%")
     print(
@@ -408,8 +407,8 @@ def main():
                 m_split_core=m_split_core,
                 m_split_hx=m_split_hx,
                 m_split_hx_coolant=m_split_hx_coolant,
-                Tc_inlet=Tc_inlet,
-                Tc_inlet_real=Tc_inlet_real,
+                Tc_pump_exit=Tc_pump_exit,
+                Tc_hex_inlet=Tc_hex_inlet,
                 Pc_inlet=Pc_inlet,
                 eps=current_eps,
                 dp_h_pct_of_in=current_dp_h_pct,
@@ -465,8 +464,8 @@ def main():
             m_split_core=m_split_core,
             m_split_hx=m_split_hx,
             m_split_hx_coolant=m_split_hx_coolant,
-            Tc_inlet=Tc_inlet,
-            Tc_inlet_real=Tc_inlet_real,
+            Tc_pump_exit=Tc_pump_exit,
+            Tc_hex_inlet=Tc_hex_inlet,
             Pc_inlet=Pc_inlet,
             eps=current_eps,
             dp_h_pct_of_in=0.0,  # 0% pressure drop
@@ -528,7 +527,7 @@ def main():
 
     # COMBINED SENSITIVITY - CONTOUR PLOTS
     # Create 2D contour plots with H2 Effectiveness (eps_cold) vs Lost Thrust of HX
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), gridspec_kw={"width_ratios": [1, 2]})
 
     # Create regular grid for interpolation: H2 effectiveness (x) vs lost thrust (y)
     eps_cold_min = eps_cold_both.min()
@@ -538,7 +537,7 @@ def main():
     EpsCold_grid, LostThrust_grid = np.meshgrid(eps_cold_grid, lost_thrust_grid)
 
     # Prepare data points for interpolation (flatten the arrays)
-    thrust_normalisation = Fnet_baseline
+    thrust_normalisation = Fnet_baseline / 100
 
     eps_cold_points = []
     lost_thrust_points = []
@@ -595,29 +594,30 @@ def main():
     )
     ax1.set_title("Pressure Drop [%] vs H2 Effectiveness & Lost Thrust")
     ax1.set_xlabel("H2 Effectiveness [%]")
-    ax1.set_ylabel("Lost Thrust of HX [N]")
+    ax1.set_ylabel("Lost Thrust due to HEx [% of core thrust]")
     ax1.grid(True, alpha=0.3)
     ax1.legend(loc="best", fontsize=9)
 
-    # Right plot: TSFC Change contours as colormap
-    norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=0.5)
-    contour2 = ax2.contourf(
+    # Right plot: TSFC Change contours as colormap with overlay lines
+    norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=2.0)
+    contour2_filled = ax2.contourf(
         EpsCold_grid, LostThrust_grid / thrust_normalisation, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2
     )
-    ax2.contour(
+    # Overlay specific contour lines at 1%, 0%, -1%, -2%, -3%
+    contour2_lines = ax2.contour(
         EpsCold_grid,
         LostThrust_grid / thrust_normalisation,
         tsfc_interp,
-        levels=10,
+        levels=[-3, -2, -1, 0, 1],
         colors="black",
-        alpha=0.3,
-        linewidths=0.5,
+        linewidths=1.5,
+        alpha=0.8,
     )
+    ax2.clabel(contour2_lines, inline=True, fontsize=9, fmt="%g%%")
     ax2.set_title("TSFC Change [%] vs H2 Effectiveness & Lost Thrust")
     ax2.set_xlabel("H2 Effectiveness [%]")
-    ax2.set_ylabel("Lost Thrust of HX [N]")
     ax2.grid(True, alpha=0.3)
-    cbar2 = fig.colorbar(contour2, ax=ax2, shrink=0.8)
+    cbar2 = fig.colorbar(contour2_filled, ax=ax2, shrink=0.8)
     cbar2.set_label("TSFC Change [%]")
     # Invert the TSFC colorbar so negative values (better efficiency) are green
     cbar2.ax.invert_yaxis()
