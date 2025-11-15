@@ -414,6 +414,11 @@ class _PerfectGasState:
         m = self._model
         return np.sqrt(m.gamma * m.R_specific * self.T)
 
+    @cached_property
+    def gamma(self) -> float:
+        """Ratio of specific heats gamma = cp / cv."""
+        return self._model.gamma
+
 
 class CoolPropFluid:
     """
@@ -521,6 +526,12 @@ class _CoolPropState:
     def a(self) -> float:
         """Speed of sound a [m/s] from CoolProp."""
         return self._AS.speed_sound()
+
+    @cached_property
+    def gamma(self) -> float:
+        """Ratio of specific heats gamma = cp / cv."""
+        cv = self._AS.cvmass()
+        return self.cp / cv
 
 
 class RefPropFluid:

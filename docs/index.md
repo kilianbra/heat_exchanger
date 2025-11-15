@@ -1,4 +1,4 @@
-# Welcome to  "Heat Exchanger Model"
+# Welcome to "Heat Exchanger Model"
 
 A simple heat exchanger model.
 

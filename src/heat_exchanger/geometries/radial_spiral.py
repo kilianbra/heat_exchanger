@@ -26,6 +26,9 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor as _bank_corr,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p as _get_mach_from_mdot_area_p
+from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p0 as _get_mach_from_mdot_area_p0
+from heat_exchanger.fluids.protocols import FluidInputs as FluidInputs
 from heat_exchanger.fluids.protocols import FluidInputsProtocol as _FluidInputs
 
 logger = logging.getLogger(__name__)
@@ -94,6 +97,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
     # Orientation flag: True=inboard (external flow inward), False=outboard (external flow outward)
     ext_fluid_flows_radially_inwards: bool = True
+    # Inclination angle of the HEx in x-r plane
 
     # ---------- Cached-style 0D properties (default implementations) ----------
     @cached_property
@@ -160,6 +164,10 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     @cached_property
     def frontal_area_outer(self) -> float:
         return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
+
+    @cached_property
+    def frontal_area_inner(self) -> float:
+        return 2.0 * np.pi * self.radius_inner_hex * self.n_tubes_per_row * self.tube_inner_diam * self.tube_spacing_trv
 
     @cached_property
     def area_heat_transfer_outer_total(self) -> float:
@@ -294,12 +302,107 @@ def spiral_hex_solver(
     geom: RadialSpiralProtocol,
     f_in: _FluidInputs,
     method: str = "0d",
+    stag_inlets: bool = False,
 ) -> dict[str, object]:
     """Solve the radial spiral heat exchanger.
     Method can be "0d" for 0D guess assuming counterflow HEx, or "1d" for 1D marching.
     """
 
     logger = logging.getLogger(__name__ + ".spiral_hex_solver")
+
+    if geom.ext_fluid_flows_radially_inwards:
+        A_first_throat = geom.frontal_area_outer * geom.sigma_outer
+    else:
+        A_first_throat = geom.frontal_area_inner * geom.sigma_outer
+
+    if stag_inlets:
+        stag_in_cold = f_in.cold.state(f_in.Tc_in, f_in.Pc_in)
+        cp_c_approx = stag_in_cold.cp
+        gamma_c_approx = stag_in_cold.gamma
+        M_c_in = _get_mach_from_mdot_area_p0(
+            f_in.m_dot_cold,
+            A_first_throat,
+            f_in.Tc_in,
+            f_in.Pc_in,
+            c_p=cp_c_approx,
+            gamma=gamma_c_approx,
+        )
+        M_func_c = 1.0 + (gamma_c_approx - 1.0) / 2.0 * M_c_in**2
+        T_c_in_calc = stag_in_cold.T / M_func_c
+        P_c_in_calc = stag_in_cold.P / M_func_c ** (gamma_c_approx / (gamma_c_approx - 1.0))
+
+        if f_in.Ph_in is not None:  # know P_h_stag_in and T_h_stag_in and mdot.
+            stag_in_hot = f_in.hot.state(f_in.Th_in, f_in.Ph_in)
+            cp_h_approx = stag_in_hot.cp
+            gamma_h_approx = stag_in_hot.gamma
+            M_h_in = _get_mach_from_mdot_area_p0(
+                f_in.m_dot_hot,
+                A_first_throat,
+                f_in.Th_in,
+                f_in.Ph_in,
+                c_p=cp_h_approx,
+                gamma=gamma_h_approx,
+            )
+            M_func_h = 1.0 + (gamma_h_approx - 1.0) / 2.0 * M_h_in**2
+            T_h_in_calc = stag_in_hot.T / M_func_h
+            P_h_in_calc = stag_in_hot.P / M_func_h ** (gamma_h_approx / (gamma_h_approx - 1.0))
+
+        else:  # know static Ph_out, Th_stag_in and mdot.
+            hot_in_approx = f_in.hot.state(f_in.Th_in, f_in.Ph_out)  # uses hot static exit pressure and inlet stag temp
+            cp_h_approx = hot_in_approx.cp
+            gamma_h_approx = hot_in_approx.gamma
+            M_h_in = _get_mach_from_mdot_area_p(
+                f_in.m_dot_hot,
+                A_first_throat,
+                f_in.Th_in,
+                f_in.Ph_out,
+                c_p=cp_h_approx,
+                gamma=gamma_h_approx,
+            )
+            M_func_h = 1.0 + (gamma_h_approx - 1.0) / 2.0 * M_h_in**2
+            T_h_in_calc = hot_in_approx.T / M_func_h
+            # keep P_h_out as is
+
+        f_stag_in = f_in  # keep original stag f_in for later use
+        if f_in.Ph_in is not None:
+            f_in = FluidInputs(
+                hot=f_in.hot,
+                cold=f_in.cold,
+                m_dot_hot=f_in.m_dot_hot,
+                m_dot_cold=f_in.m_dot_cold,
+                Tc_in=T_c_in_calc,
+                Pc_in=P_c_in_calc,
+                Th_in=T_h_in_calc,
+                Ph_in=P_h_in_calc,
+                Ph_out=None,
+            )
+        else:
+            f_in = FluidInputs(
+                hot=f_in.hot,
+                cold=f_in.cold,
+                m_dot_hot=f_in.m_dot_hot,
+                m_dot_cold=f_in.m_dot_cold,
+                Tc_in=T_c_in_calc,
+                Pc_in=P_c_in_calc,
+                Th_in=T_h_in_calc,
+                Ph_in=None,
+                Ph_out=f_in.Ph_out,
+            )
+        logger.debug("Difference in stagnation and static inlet conditions:")
+        if f_stag_in.Ph_in is not None:
+            logger.debug(
+                "Th_in_calc - Th_in = %.1e K, Ph_in_calc - Ph_in = %.1e Pa",
+                T_h_in_calc - f_stag_in.Th_in,
+                P_h_in_calc - f_stag_in.Ph_in,
+            )
+        else:
+            logger.debug("Th_in_calc - Th_in = %.1e K", T_h_in_calc - f_stag_in.Th_in)
+
+        logger.debug(
+            "Tc_in_calc - Tc_in = %.1e K, Pc_in_calc - Pc_in = %.1e Pa",
+            T_c_in_calc - f_stag_in.Tc_in,
+            P_c_in_calc - f_stag_in.Pc_in,
+        )
 
     logger.info(
         "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
