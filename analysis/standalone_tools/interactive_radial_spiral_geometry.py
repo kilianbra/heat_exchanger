@@ -75,7 +75,7 @@ def main():
     geom = _build_geometry(**init)
     # Prepare figure
     fig, ax = plt.subplots(figsize=(9, 8))
-    plt.subplots_adjust(left=0.1, right=0.95, bottom=0.33)
+    plt.subplots_adjust(left=0.1, right=0.75, bottom=0.1)
 
     # Plot spiral(s) and boundary circles
     x_sp_base, y_sp_base = _spiral_xy(geom.radius_inner_hex, geom.radius_outer_hex, geom.inv_angle_deg)
@@ -139,7 +139,7 @@ def main():
 
     def _areas_title(g: RadialSpiralSpec):
         A_q, A_ff_i, A_ff_o = _areas_values(g)
-        return f"A_q={A_q:.3e} m^2  |  A_ff_i={A_ff_i:.3e} m^2  |  A_ff_o={A_ff_o:.3e} m^2"
+        return f"A_q={A_q:.1e} m^2  |  A_ff_i={A_ff_i:.1e} m^2  |  A_ff_o={A_ff_o:.1e} m^2"
 
     # Baseline (defaults) for normalization
     baseline_A_q, baseline_A_ff_i, baseline_A_ff_o = _areas_values(geom)
@@ -158,7 +158,7 @@ def main():
     set_title_for_geometry(geom)
 
     # Button to toggle normalization
-    ax_btn = plt.axes([0.82, 0.34, 0.12, 0.04])
+    ax_btn = plt.axes([0.77, 0.02, 0.20, 0.04])
     btn_norm = Button(ax_btn, "Normalized: OFF")
     btn_norm.ax.set_facecolor("#f0f0f0")
 
@@ -176,7 +176,7 @@ def main():
                 Xt_star=sl_Xt.val,
                 Xl_star=sl_Xl.val,
                 inv_angle_deg=sl_angle.val,
-                tube_OD=sl_OD.val,
+                tube_OD=sl_OD.val / 1000.0,  # Convert from mm to m
             )
         )
         fig.canvas.draw_idle()
@@ -209,15 +209,22 @@ def main():
         bbox=dict(boxstyle="round", facecolor="white", alpha=0.7, edgecolor="gray"),
     )
 
-    # Slider axes (stacked bottom)
+    # Slider axes (stacked on right side)
     axcolor = "0.95"
-    s_Ro = plt.axes([0.10, 0.26, 0.80, 0.03], facecolor=axcolor)
-    s_n_r_h = plt.axes([0.10, 0.22, 0.80, 0.03], facecolor=axcolor)
-    s_n_r_a = plt.axes([0.10, 0.18, 0.80, 0.03], facecolor=axcolor)
-    s_n_h = plt.axes([0.10, 0.14, 0.80, 0.03], facecolor=axcolor)
-    s_Xt = plt.axes([0.10, 0.10, 0.80, 0.03], facecolor=axcolor)
-    s_Xl = plt.axes([0.10, 0.06, 0.80, 0.03], facecolor=axcolor)
-    s_angle = plt.axes([0.10, 0.02, 0.80, 0.03], facecolor=axcolor)
+    slider_width = 0.20
+    slider_height = 0.03
+    slider_spacing = 0.04
+    right_margin = 0.77
+    top_start = 0.8
+
+    s_Ro = plt.axes([right_margin, top_start - slider_spacing * 0, slider_width, slider_height], facecolor=axcolor)
+    s_n_r_h = plt.axes([right_margin, top_start - slider_spacing * 1, slider_width, slider_height], facecolor=axcolor)
+    s_n_r_a = plt.axes([right_margin, top_start - slider_spacing * 2, slider_width, slider_height], facecolor=axcolor)
+    s_n_h = plt.axes([right_margin, top_start - slider_spacing * 3, slider_width, slider_height], facecolor=axcolor)
+    s_Xt = plt.axes([right_margin, top_start - slider_spacing * 4, slider_width, slider_height], facecolor=axcolor)
+    s_Xl = plt.axes([right_margin, top_start - slider_spacing * 5, slider_width, slider_height], facecolor=axcolor)
+    s_angle = plt.axes([right_margin, top_start - slider_spacing * 6, slider_width, slider_height], facecolor=axcolor)
+    s_OD = plt.axes([right_margin, top_start - slider_spacing * 7, slider_width, slider_height], facecolor=axcolor)
 
     sl_Ro = Slider(s_Ro, "R_o [m]", 0.05, 1.50, valinit=init["R_o"], valstep=0.001)
     sl_n_r_h = Slider(s_n_r_h, "n_r_h", 1, 40, valinit=init["n_r_h"], valstep=1)
@@ -226,17 +233,14 @@ def main():
     sl_Xt = Slider(s_Xt, "Xt*", 1.05, 5.0, valinit=init["Xt_star"], valstep=0.01)
     sl_Xl = Slider(s_Xl, "Xl*", 1.00, 4.0, valinit=init["Xl_star"], valstep=0.01)
     sl_angle = Slider(s_angle, "inv_angle [deg]", 30.0, 720.0, valinit=init["inv_angle_deg"], valstep=None)
-
-    # Put tube OD slider on the right side to save vertical space
-    s_OD = plt.axes([0.82, 0.40, 0.12, 0.45], facecolor=axcolor)
+    # tube_OD slider in mm (convert to m when using)
     sl_OD = Slider(
         s_OD,
-        "tube_OD [m]",
-        0.2e-3,
-        5.0e-3,
-        valinit=init["tube_OD"],
-        valstep=0.001e-3,
-        orientation="vertical",
+        "tube_OD [mm]",
+        0.2,
+        5.0,
+        valinit=init["tube_OD"] * 1000.0,  # Convert from m to mm
+        valstep=0.001,
     )
 
     def _snap_inv_angle_to_headers() -> None:
@@ -261,7 +265,7 @@ def main():
             Xt_star=sl_Xt.val,
             Xl_star=sl_Xl.val,
             inv_angle_deg=sl_angle.val,
-            tube_OD=sl_OD.val,
+            tube_OD=sl_OD.val / 1000.0,  # Convert from mm to m
         )
         try:
             # Recompute spiral base and circles
