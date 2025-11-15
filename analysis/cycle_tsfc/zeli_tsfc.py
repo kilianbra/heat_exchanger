@@ -152,16 +152,22 @@ def calculate_cycle_tsfc(
 
     # Baseline fuel calculations
     # KB: not true baseline as neglecting heat needed to preheat fuel
+    cold_pump_exit = f_c.state(Tc_pump_exit, Pc_inlet)  # Reference state at actual inlet temp
     heat_addition = m_combustor * (state_3.h - state_2.h)
-    fuel_massflow = heat_addition / fuel_LHV
+    cold_comb = f_c.state(T3, p3)
+    H2_q_baseline = cold_comb.h - cold_pump_exit.h  # KB: assume pressure of H2 is that of air
+    # H2_q_baseline = 0
+    fuel_massflow = heat_addition / (fuel_LHV - H2_q_baseline)  # KB: burning fuel to heat fuel
     fuel_massflow_frac = fuel_massflow / m_combustor
     tsfc_baseline_core = fuel_massflow / Fnet_baseline
     tsfc_baseline_total = fuel_massflow / Fnet_total_baseline
 
     # Preheated fuel calculations
-    cold_pump_exit = f_c.state(Tc_pump_exit, Pc_inlet)  # Reference state at actual inlet temp
-    H2_q = cold_out.h - cold_pump_exit.h
-    fuel_massflow_preheated = heat_addition / (fuel_LHV + H2_q)
+    frac_recirculation = 0.0  # KB: no recirculation of H2 for now
+
+    # H2_q = H2_q_baseline - (cold_out.h - cold_in.h) * (1 + frac_recirculation)
+    H2_q = cold_out.h - cold_pump_exit.h  # KB: enthalpy rise from pump to HEx exit
+    fuel_massflow_preheated = heat_addition / (fuel_LHV + H2_q)  # KB:now accounts for recirculation of H2
     heat_frac = H2_q / fuel_LHV
     fuel_massflow_preheated_frac = fuel_massflow_preheated / m_combustor
     tsfc_preheated_core = fuel_massflow_preheated / Fnet_preheated
@@ -258,9 +264,9 @@ def main():
     f_c = PerfectGasFluid.from_name("parahydrogen")
 
     # Flight conditions
-    flight_altitude_ft = 39000  # flight altitude in feet
-    flight_altitude_m = flight_altitude_ft * 0.3048  # convert feet to meters
-    flight_altitude_m = 11000
+    # flight_altitude_ft = 39000  # flight altitude in feet
+    # flight_altitude_m = flight_altitude_ft * 0.3048  # convert feet to meters
+    flight_altitude_m = 11000  # 11000 m = 36089.2 ft i.e. FL360
     # Calculate reference environment temperature (T0) based on altitude
     if flight_altitude_m <= 11000:
         T0 = 288.15 - 0.0065 * flight_altitude_m
@@ -288,7 +294,7 @@ def main():
 
     # HX performance
     eps = 0.90
-    dp_h_pct_of_in = 15  # % drop
+    dp_h_pct_of_in = 5  # % drop
     dp_c_pct_of_in = 10  # % drop
 
     # Flight conditions
@@ -355,7 +361,7 @@ def main():
         f"fuel/air: {results['fuel_massflow_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_baseline_core']:.1e} kg/s/N, tsfc_baseline_total: {results['tsfc_baseline_total']:.1e} kg/s/N"
     )
     print(
-        f"fuel/air: {results['fuel_massflow_preheated_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow_preheated']:.2f} kg/s, tsfc_baseline_core: {results['tsfc_preheated_core']:.1e} kg/s/N, tsfc_baseline_total: {results['tsfc_preheated_total']:.1e} kg/s/N"
+        f"fuel/air: {results['fuel_massflow_preheated_frac'] * 100:.2f}%, fuel mass flow: {results['fuel_massflow_preheated']:.2f} kg/s, tsfc_preheated_core: {results['tsfc_preheated_core']:.1e} kg/s/N, tsfc_preheated_total: {results['tsfc_preheated_total']:.1e} kg/s/N"
     )
     print(f"fraction of sensible heat pick up to fuel LHV: {results['heat_frac'] * 100:.2f}%")
     print(
@@ -369,7 +375,7 @@ def main():
     V0 = results["V0"]
 
     # ========== SENSITIVITY STUDIES ==========
-    n_samples = 20
+    n_samples = 100
     eps_min = 0.3
     eps_max = 1
 
@@ -601,7 +607,7 @@ def main():
     ax1.legend(loc="best", fontsize=9)
 
     # Right plot: TSFC Change contours as colormap with overlay lines
-    norm2 = TwoSlopeNorm(vmin=-4.5, vcenter=0, vmax=2.0)
+    norm2 = TwoSlopeNorm(vmin=-2.5, vcenter=0, vmax=5.0)
     contour2_filled = ax2.contourf(
         EpsCold_grid, LostThrust_grid / thrust_normalisation, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2
     )
@@ -610,7 +616,7 @@ def main():
         EpsCold_grid,
         LostThrust_grid / thrust_normalisation,
         tsfc_interp,
-        levels=[-3, -2, -1, 0, 1],
+        levels=[-1, 0, 1, 2, 3, 4],
         colors="black",
         linewidths=1.5,
         alpha=0.8,

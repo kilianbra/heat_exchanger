@@ -49,8 +49,8 @@ temp_cold_in = 287  # K
 p_hot_in = 0.368e5  # Pa
 p_cold_in = 150e5  # Pa
 
-total_diameter_outer = 0.871  # m
-total_diameter_inner = 0.541  # m
+total_diameter_outer = 2 * 0.871  # m
+total_diameter_inner = 2 * 0.541  # m
 spacing_trans = 3.0  # out of correlation, overruled correlation checks
 spacing_long = 1.5
 
@@ -69,7 +69,7 @@ n_tubes_per_pass = n_tubes_per_row * n_rows / n_passes_cold
 
 print(f"Axial length: {n_rows * spacing_long * tube_diameter_outer:.2f} m (N_tubes = {n_tubes_per_row * n_rows})")
 
-area_frontal = 2 * area_frontal_bank(total_diameter_outer, total_diameter_inner)
+area_frontal = area_frontal_bank(total_diameter_outer, total_diameter_inner)
 
 sigma = sigma_tube_bank(spacing_trans)
 print(

@@ -178,8 +178,8 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         return np.pi * self.tube_inner_diam * self.spiral_length * self.n_tubes_total
 
     @cached_property
-    def frontal_area_outer_total(self) -> float:
-        return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
+    def volume_total(self) -> float:
+        return np.pi * (self.radius_outer_hex**2 - self.radius_inner_hex**2) * self.axial_length
 
     @cached_property
     def n_rows(self) -> int:
