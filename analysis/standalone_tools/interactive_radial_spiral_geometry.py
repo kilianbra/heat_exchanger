@@ -135,22 +135,26 @@ def main():
         A_q = float(np.sum(c["area_ht_hot"])) * g.n_headers
         A_ff_i = float(c["area_free_hot"][0]) * g.n_headers
         A_ff_o = float(c["area_free_hot"][-1]) * g.n_headers
-        return A_q, A_ff_i, A_ff_o
+        L_tube = g.spiral_length
+        return A_q, A_ff_i, A_ff_o, L_tube
 
     def _areas_title(g: RadialSpiralSpec):
-        A_q, A_ff_i, A_ff_o = _areas_values(g)
-        return f"A_q={A_q:.1e} m^2  |  A_ff_i={A_ff_i:.1e} m^2  |  A_ff_o={A_ff_o:.1e} m^2"
+        A_q, A_ff_i, A_ff_o, L_tube = _areas_values(g)
+        return f"A_q={A_q:.1e}  |  A_ff_i={A_ff_i:.1e}  |  A_ff_o={A_ff_o:.1e} m² | L_tube={L_tube:.1e} m"
 
     # Baseline (defaults) for normalization
-    baseline_A_q, baseline_A_ff_i, baseline_A_ff_o = _areas_values(geom)
+    baseline_A_q, baseline_A_ff_i, baseline_A_ff_o, _ = _areas_values(geom)
     normalize = False
 
     def _title_normalized(g: RadialSpiralSpec):
-        A_q, A_ff_i, A_ff_o = _areas_values(g)
+        A_q, A_ff_i, A_ff_o, L_tube = _areas_values(g)
         pct_q = 100.0 * A_q / baseline_A_q if baseline_A_q > 0 else float("nan")
         pct_i = 100.0 * A_ff_i / baseline_A_ff_i if baseline_A_ff_i > 0 else float("nan")
         pct_o = 100.0 * A_ff_o / baseline_A_ff_o if baseline_A_ff_o > 0 else float("nan")
-        return f"A_q={pct_q:.0f}%  |  A_ff_i={pct_i:.0f}%  |  A_ff_o={pct_o:.0f}%"
+        # Baseline length is pi D_mid as this is what alistair uses
+        baseline_L_tube = 2.0 * np.pi * (g.radius_outer_hex + g.radius_inner_hex) / 2.0
+        pct_L = 100.0 * L_tube / baseline_L_tube if baseline_L_tube > 0 else float("nan")
+        return f"A_q={pct_q:.0f}%  |  A_ff_i={pct_i:.0f}%  |  A_ff_o={pct_o:.0f}% | L_tube={pct_L:.0f}%"
 
     def set_title_for_geometry(g: RadialSpiralSpec):
         ax.set_title(_title_normalized(g) if normalize else _areas_title(g))
