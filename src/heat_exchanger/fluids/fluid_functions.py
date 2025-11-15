@@ -81,7 +81,7 @@ def get_mach_from_mdot_area_p0(
         )
         return float("nan")
 
-    elif y < 0.5:
+    elif y < 0.5:  # for small Mach, approx y = c * M
         M_guess = y / c
 
     def residual(M_arr: np.ndarray) -> np.ndarray:
