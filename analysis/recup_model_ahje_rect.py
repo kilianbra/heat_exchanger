@@ -193,6 +193,44 @@ thermal_expansion_coefficient_wall = 16e-6  # K^-1
 # (high temperature strentgh from -200 C to 870 C) i.e. from 73.15 K to 1143.15 K
 conductivity_wall = 14  # W/m.K https://www.azom.com/properties.aspx?ArticleID=965
 
+# Tube stress and expansion during take-off
+p_cold_MTO = 70e5 # Pa
+p_hot_MTO = 1.26e5 # Pa
+T_hot_MTO = 718 # K
+T_base = 290 # K
+delta_T_takeoff = T_hot_MTO - T_base
+thermal_strain_takeoff = thermal_expansion_coefficient_wall * delta_T_takeoff
+delta_length_tube_takeoff = thermal_strain_takeoff * tube_length
+
+print(
+    f"Tube axial thermal expansion from {T_base:.0f} K to {T_hot_MTO:.0f} K: "
+    f"{thermal_strain_takeoff * 100:.2f}% "
+    f"(ΔL ≈ {delta_length_tube_takeoff:.4f} m for tube length {tube_length:.2f} m)"
+)
+
+# Thin-walled tube hoop stress check at take-off
+# σ_hoop ≈ p * r_i / t  =>  t_required = p * r_i / σ_yield
+delta_p_takeoff = p_cold_MTO  # Pa, external pressure neglected
+inner_radius = tube_diameter_inner / 2
+t_required_hoop = delta_p_takeoff * inner_radius / sigma_yield_wall
+
+print(
+    f"Required wall thickness for hoop stress at {delta_p_takeoff/1e5:.1f} bar: "
+    f"{t_required_hoop*1e3:.3f} mm"
+)
+
+if t_tubes >= t_required_hoop:
+    print(
+        f"Actual wall thickness {t_tubes*1e3:.3f} mm is sufficient; "
+        f"margin over required thickness: {(t_tubes/t_required_hoop - 1)*100:.1f}%."
+    )
+else:
+    print(
+        f"Actual wall thickness {t_tubes*1e3:.3f} mm is INSUFFICIENT; "
+        f"requires at least {t_required_hoop*1e3:.3f} mm."
+    )
+
+
 wall_volume = n_rows * n_tubes_per_row * np.pi * (tube_diameter_outer**2 - tube_diameter_inner**2) * tube_length / 4
 wall_mass = wall_volume * rho_wall
 
