@@ -47,6 +47,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Ignore `T201` (print statements) in all `analysis/*.py` files.
 "analysis/*.py" = ["T201"]
+# Ignore `N816` (function names with capital letters in global scope) in `cycle_tsfc` folder.
+"analysis/cycle_tsfc/*.py" = ["N816"]
 
 
 [build-system]

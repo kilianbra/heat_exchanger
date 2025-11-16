@@ -1,7 +1,7 @@
 """Importing public libraries"""
 
-import sys
 import os
+import sys
 
 # Add the path to the directory containing hex_basic.py
 sys.path.append(
@@ -12,16 +12,10 @@ sys.path.append(
     )
 )
 # Now you can import the functions from hex_basic.py
-from matplotlib import pyplot as plt
-from matplotlib import colormaps
-import matplotlib
 import numpy as np
-import pandas as pd
-import CoolProp as CP
-from CoolProp.Plots import PropertyPlot, Common
 from CoolProp.CoolProp import PropsSI
-from CoolProp.CoolProp import PhaseSI
-from CoolProp.CoolProp import AbstractState
+from matplotlib import pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 
 os.system("cls")
 
@@ -379,9 +373,7 @@ ax3.grid(True, color="red")  # Add grid lines to the third axis and make them re
 plt.tight_layout()
 
 # COMBINED SENSITIVITY - CONTOUR PLOTS
-from matplotlib import cm
-from matplotlib.colors import TwoSlopeNorm
-import matplotlib.patches as mpatches
+
 
 # Create 2D contour plots to show optimal combinations
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))

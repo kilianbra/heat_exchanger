@@ -159,8 +159,8 @@ def main():
         line_coolprop.set_data(T_cout, recirc_coolprop)
 
         # Update y-axis limits to fit the data
-        all_values = np.concatenate([recirc_cp_const, recirc_coolprop])
-        valid_values = all_values[np.isfinite(all_values)]
+        # all_values = np.concatenate([recirc_cp_const, recirc_coolprop])
+        # valid_values = all_values[np.isfinite(all_values)]
 
         ax.set_ylim(0.1, 10.0)
 

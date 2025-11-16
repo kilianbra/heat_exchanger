@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-import warnings
 
 import numpy as np
 from scipy.optimize import root
-
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ def get_mach_from_mdot_area_p0(
         the choked (M=1) value.
     """
     if mdot <= 0.0 or A <= 0.0:
-        warnings.warn("Non-positive mass flow or area; returning Mach = 0.0.", RuntimeWarning)
+        logger.warning("Non-positive mass flow or area; returning Mach = 0.0.")
         return 0.0
 
     if T0 <= 0.0 or p0 <= 0.0:
@@ -163,7 +161,7 @@ def get_mach_from_mdot_area_p(
         the maximum subsonic value (M=1).
     """
     if mdot <= 0.0 or A <= 0.0:
-        warnings.warn("Non-positive mass flow or area; returning Mach = 0.0.", RuntimeWarning)
+        logger.warning("Non-positive mass flow or area; returning Mach = 0.0.")
         return 0.0
 
     if T0 <= 0.0 or p <= 0.0:

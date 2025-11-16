@@ -163,7 +163,7 @@ def calculate_cycle_tsfc(
     tsfc_baseline_total = fuel_massflow / Fnet_total_baseline
 
     # Preheated fuel calculations
-    frac_recirculation = 0.0  # KB: no recirculation of H2 for now
+    # frac_recirculation = 0.0  # KB: no recirculation of H2 for now
 
     # H2_q = H2_q_baseline - (cold_out.h - cold_in.h) * (1 + frac_recirculation)
     H2_q = cold_out.h - cold_pump_exit.h  # KB: enthalpy rise from pump to HEx exit
