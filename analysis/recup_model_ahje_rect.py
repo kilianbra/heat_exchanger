@@ -51,7 +51,7 @@ p_cold_in = 150e5  # Pa
 
 total_diameter_outer = 2 * 0.871  # m
 total_diameter_inner = 2 * 0.541  # m
-spacing_trans = 3.0  # out of correlation, overruled correlation checks
+spacing_trans = 2.5  # out of correlation, overruled correlation checks
 spacing_long = 1.5
 
 tube_diameter_outer = 1.067e-3  # m - 4.78 mm
