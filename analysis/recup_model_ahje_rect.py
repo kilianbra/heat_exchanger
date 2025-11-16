@@ -13,6 +13,9 @@ from heat_exchanger.logging_utils import configure_logging
 configure_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Suppress INFO messages from tube_bank_normal module
+logging.getLogger("heat_exchanger.geometries.tube_bank_normal").setLevel(logging.WARNING)
+
 
 def solve_ahje_recuperator(
     n_rows: int,
@@ -125,14 +128,14 @@ def solve_ahje_recuperator(
         total_diameter_outer=total_diameter_outer,
     )
 
-    logger.info(
-        "Geometry: n_rows=%d, n_passes=%d, n_tubes_per_row=%d, axial_length=%.2f m, n_tubes_total=%d",
-        n_rows,
-        n_passes_cold,
-        n_tubes_per_row,
-        geom.axial_length,
-        geom.n_tubes_total,
-    )
+    # logger.info(
+    #     "Geometry: n_rows=%d, n_passes=%d, n_tubes_per_row=%d, axial_length=%.2f m, n_tubes_total=%d",
+    #     n_rows,
+    #     n_passes_cold,
+    #     n_tubes_per_row,
+    #     geom.axial_length,
+    #     geom.n_tubes_total,
+    # )
 
     # Create fluid inputs
     f_in = FluidInputs(
@@ -171,47 +174,21 @@ def solve_ahje_recuperator(
     )
     result["recirc_fraction"] = recirc_fraction[0]
 
-    logger.info("Recirculation fraction: %.2f", recirc_fraction[0])
+    # logger.info("Recirculation fraction: %.2f", recirc_fraction[0])
 
     # Return result with geometry for convenience
     return {"result": result, "geometry": geom}
 
 
 if __name__ == "__main__":
-    # Default parameters
-    n_rows_default = 6
-    n_passes_cold_default = 1
+    # Loop through different n_rows values
+    print("n_rows | Effectiveness [%] | dP_hot [%] | Axial length [cm] | A_ht_hot [m²]")
+    print("-" * 70)
 
-    # Run with default parameters
-    output = solve_ahje_recuperator(
-        n_rows=n_rows_default,
-        n_passes_cold=n_passes_cold_default,
-    )
-    result = output["result"]
-    geom = output["geometry"]
-
-    logger.info("=" * 60)
-    logger.info("Results summary:")
-    logger.info("Effectiveness: %.2f%%", result["epsilon"] * 100)
-    logger.info("Hot pressure drop: %.2f%%", result["dP_hot_pct"])
-    logger.info("Axial length: %.2f m", geom.axial_length)
-    logger.info("Outer heat transfer area: %.2f m²", geom.area_heat_transfer_outer_total)
-
-    # # Future code: Loop through different n_rows values
-    # logger.info("=" * 60)
-    # logger.info("Sweeping n_rows from 1 to 10:")
-    # logger.info("n_rows | Effectiveness [%%] | dP_hot [%%] | Axial length [m] | A_ht_hot [m²]")
-    # logger.info("-" * 70)
-    #
-    # for n_rows in range(1, 11):
-    #     output = solve_ahje_recuperator(n_rows=n_rows, n_passes_cold=1)
-    #     result = output["result"]
-    #     geom = output["geometry"]
-    #     logger.info(
-    #         "%6d | %15.2f | %11.2f | %15.2f | %12.2f",
-    #         n_rows,
-    #         result["epsilon"] * 100,
-    #         result["dP_hot_pct"],
-    #         geom.axial_length,
-    #         geom.area_heat_transfer_outer_total,
-    #     )
+    for n_rows in range(1, 11):
+        output = solve_ahje_recuperator(n_rows=n_rows, n_passes_cold=1)
+        result = output["result"]
+        geom = output["geometry"]
+        print(
+            f"{n_rows:6d} | {result['epsilon'] * 100:15.2f} | {result['dP_hot_pct']:11.2f} | {geom.axial_length*100:15.2f} | {geom.area_heat_transfer_outer_total:12.2f}"
+        )
