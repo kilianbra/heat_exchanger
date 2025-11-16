@@ -113,7 +113,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
                 f"Invalid geometry: too many rows in axial section for given outer radius: "
                 f"{outer_radius_span:.2f} m > {self.radius_outer_hex:.2f} m for "
                 f"{n_rows_per_axial_section} rows of tubes spaced by "
-                f"{self.tube_spacing_long * self.tube_outer_diam:.2f} m"
+                f"{(self.tube_spacing_long * self.tube_outer_diam)*1e3:.2f} mm"
             )
         elif outer_radius_span <= 0:
             raise ValueError(

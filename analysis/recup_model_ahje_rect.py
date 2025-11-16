@@ -29,7 +29,7 @@ def solve_ahje_recuperator(
     p_cold_in: float = 25e5,
     total_diameter_outer: float = 2 * 0.871,
     total_diameter_inner: float = 2 * 0.541,
-    spacing_trans: float = 2.5,
+    spacing_trans: float = 6.0,
     spacing_long: float = 1.5,
     tube_diameter_outer: float = 1.0e-3 + 2 * 0.040e-3,
     t_tubes: float = 0.040e-3,
