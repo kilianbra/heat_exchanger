@@ -277,7 +277,9 @@ def main():
         exit()
     P0 = 101325 * (1 - 0.0065 * flight_altitude_m / 288.15) ** 5.2561
 
-    # Cycle state temperatures and pressures
+    # KB: P0 and T0 are static! International Standard Atmosphere (ISA)
+
+    # Cycle state temperatures and pressures # kb: is this stagnation? 
     T1 = 248
     p1 = 0.362e5
     T2 = 907

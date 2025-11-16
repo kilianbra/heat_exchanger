@@ -58,6 +58,10 @@ def calculate_recirc_fraction_coolprop(T_pe: float, T_cin: float, T_cout: np.nda
     np.ndarray
         Recirculation fraction
     """
+    # if Tcout is just a single value, need to convert to array
+    if isinstance(T_cout, float):
+        T_cout = np.array([T_cout])
+
     P_pa = P_bar * BAR_TO_PA
     h2_fluid = CoolPropFluid("ParaHydrogen")
 
