@@ -69,8 +69,8 @@ geom = TubeBankNormalSpec(
     n_tubes_per_row=n_tubes_per_row,
     frontal_area_outer=area_frontal,
     annular_not_box=True,
-    total_diameter_inner=total_diameter_inner,  # Use actual inner diameter for accurate tube length
-    total_diameter_outer=total_diameter_outer,  # Use actual outer diameter for accurate tube length
+    #total_diameter_inner=total_diameter_inner,  # Use actual inner diameter for accurate tube length
+    #total_diameter_outer=total_diameter_outer,  # Use actual outer diameter for accurate tube length
 )
 
 logger.info(

@@ -100,10 +100,10 @@ class TubeBankNormalProtocol(TubeBankCorrelationGeometry, Protocol):
                 D_o = self.total_diameter_outer
             elif self.total_diameter_inner is not None:
                 D_i = self.total_diameter_inner
-                D_o = np.sqrt(D_i**2 + self.frontal_area_outer / np.pi)
+                D_o = np.sqrt(D_i**2 + 4.0 * self.frontal_area_outer / np.pi)
             else:
                 D_i = self.row_width / np.pi
-                D_o = np.sqrt(D_i**2 + self.frontal_area_outer / np.pi)
+                D_o = np.sqrt(D_i**2 + 4.0 * self.frontal_area_outer / np.pi)
             return D_i / 4 * ((D_o / D_i) ** 2 - 1)
         else:
             W = self.row_width

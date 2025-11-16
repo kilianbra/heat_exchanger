@@ -124,8 +124,8 @@ def solve_ahje_recuperator(
         n_tubes_per_row=n_tubes_per_row,
         frontal_area_outer=area_frontal,
         annular_not_box=True,
-        total_diameter_inner=total_diameter_inner,
-        total_diameter_outer=total_diameter_outer,
+        #total_diameter_inner=total_diameter_inner,
+        #total_diameter_outer=total_diameter_outer,
     )
 
     # logger.info(
