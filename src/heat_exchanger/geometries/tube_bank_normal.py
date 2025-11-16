@@ -14,12 +14,16 @@ import numpy as np
 
 from heat_exchanger.correlations import (
     circular_pipe_friction_factor as _circ_fric,
+)
+from heat_exchanger.correlations import (
     circular_pipe_nusselt as _circ_nu,
+)
+from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor as _bank_corr,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
-from heat_exchanger.hex_basic import dp_tube_bank, ntu as _ntu_func
 from heat_exchanger.fluids.protocols import FluidInputsProtocol as _FluidInputs
+from heat_exchanger.hex_basic import dp_tube_bank
 
 logger = logging.getLogger(__name__)
 
@@ -207,10 +211,8 @@ def tube_bank_normal_0d_solver(
     f_in: _FluidInputs,
     tube_bank_correction_factor_hot: float = 1.0,
     *,
-    p_cold_MTO: float | None = None,
-    p_hot_MTO: float | None = None,
-    T_hot_MTO: float | None = None,
-    T_base: float | None = None,
+    p_cold_max: float | None = None,
+    T_hot_max: float | None = None,
     sigma_yield_wall: float = 205e6,
     thermal_expansion_coefficient_wall: float = 16e-6,
     rho_wall: float = WALL_DENSITY_304_SS,
@@ -228,16 +230,12 @@ def tube_bank_normal_0d_solver(
         Fluid inputs including hot and cold fluid states, mass flow rates, and inlet conditions.
     tube_bank_correction_factor_hot : float, optional
         Correction factor for hot-side tube bank correlations (default: 1.0).
-    p_cold_MTO : float, optional
+    p_cold_max : float, optional
         Cold-side pressure at maximum take-off (MTO) conditions (Pa). If provided,
         thermal expansion and thickness calculations will be performed.
-    p_hot_MTO : float, optional
-        Hot-side pressure at MTO conditions (Pa). Defaults to cruise Ph_in if not provided.
-    T_hot_MTO : float, optional
-        Hot-side temperature at MTO conditions (K). Defaults to cruise Th_in if not provided.
-    T_base : float, optional
-        Base/reference temperature for thermal expansion calculations (K). Defaults to
-        cruise Tc_in if not provided.
+    T_hot_max : float, optional
+        Hot-side temperature at maximum take-off (MTO) conditions (K). If provided,
+        thermal expansion and thickness calculations will be performed.
     sigma_yield_wall : float, optional
         Yield strength of wall material (Pa). Default: 205e6 Pa for 304 SS.
     thermal_expansion_coefficient_wall : float, optional
@@ -266,7 +264,6 @@ def tube_bank_normal_0d_solver(
     logger = logging.getLogger(__name__ + ".tube_bank_normal_0d_solver")
 
     # Geometry calculations
-    area_frontal = geom.frontal_area_outer
     sigma = geom.sigma_outer
     area_free_flow_hot = geom.area_free_flow_outer
     tube_length = geom.tube_length
@@ -494,29 +491,19 @@ def tube_bank_normal_0d_solver(
     }
 
     # MTO conditions and thermal expansion/thickness calculations
-    if p_cold_MTO is not None:
+    if p_cold_max is not None:
         # Use MTO conditions if provided, otherwise default to cruise conditions
-        p_hot_mto = p_hot_MTO if p_hot_MTO is not None else Ph_in
-        T_hot_mto = T_hot_MTO if T_hot_MTO is not None else f_in.Th_in
-        T_base_mto = T_base if T_base is not None else f_in.Tc_in
-
-        logger.info(
-            "MTO conditions: p_cold_MTO=%.2e Pa, p_hot_MTO=%.2e Pa, T_hot_MTO=%.2f K, T_base=%.2f K",
-            p_cold_MTO,
-            p_hot_mto,
-            T_hot_mto,
-            T_base_mto,
-        )
+        T_base = 290.0 #K Hardcoded for now
 
         # Thermal expansion calculation
-        delta_T_takeoff = T_hot_mto - T_base_mto
+        delta_T_takeoff = T_hot_max - T_base
         thermal_strain_takeoff = thermal_expansion_coefficient_wall * delta_T_takeoff
         delta_length_tube_takeoff = thermal_strain_takeoff * tube_length
 
         logger.info(
             "Tube axial thermal expansion from %.0f K to %.0f K: %.2f%% (ΔL ≈ %.4f m for tube length %.2f m)",
-            T_base_mto,
-            T_hot_mto,
+            T_base,
+            T_hot_max,
             thermal_strain_takeoff * 100,
             delta_length_tube_takeoff,
             tube_length,
@@ -538,7 +525,7 @@ def tube_bank_normal_0d_solver(
 
         # Thin-walled tube hoop stress check at take-off
         # σ_hoop ≈ p * r_i / t  =>  t_required = p * r_i / σ_yield
-        delta_p_takeoff = p_cold_MTO  # Pa, external pressure neglected
+        delta_p_takeoff = p_cold_max  # Pa, external pressure neglected
         inner_radius = geom.tube_inner_diam / 2
         t_required_hoop = delta_p_takeoff * inner_radius / sigma_yield_wall
 

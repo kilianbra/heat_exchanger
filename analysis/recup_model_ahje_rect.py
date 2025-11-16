@@ -3,8 +3,8 @@
 import logging
 
 import numpy as np
-
 from fluid_files.H2_recirc import calculate_recirc_fraction_coolprop
+
 from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.tube_bank_normal import TubeBankNormalSpec, tube_bank_normal_0d_solver
 from heat_exchanger.logging_utils import configure_logging
@@ -34,9 +34,9 @@ def solve_ahje_recuperator(
     tube_diameter_outer: float = 1.0e-3 + 2 * 0.040e-3,
     t_tubes: float = 0.040e-3,
     tube_bank_correction_factor_hot: float = 1.0,
-    p_cold_MTO: float | None = 70e5,
-    p_hot_MTO: float | None = 1.26e5,
-    T_hot_MTO: float | None = 718.0,
+    p_cold_max_takeoff: float | None = 70e5,
+    p_hot_max_takeoff: float | None = 1.26e5,
+    T_hot_max_takeoff: float | None = 718.0,
     T_base: float | None = 290.0,
 ) -> dict[str, object]:
     """Solve the AHJE rectangular recuperator for given geometry parameters.
@@ -75,11 +75,11 @@ def solve_ahje_recuperator(
         Tube wall thickness in m (default: 0.040e-3).
     tube_bank_correction_factor_hot : float, optional
         Correction factor for hot-side tube bank correlations (default: 1.0).
-    p_cold_MTO : float | None, optional
+    p_cold_max_takeoff : float | None, optional
         Cold-side pressure at MTO conditions in Pa (default: 70e5).
-    p_hot_MTO : float | None, optional
+    p_hot_max_takeoff : float | None, optional
         Hot-side pressure at MTO conditions in Pa (default: 1.26e5).
-    T_hot_MTO : float | None, optional
+    T_hot_max_takeoff : float | None, optional
         Hot-side temperature at MTO conditions in K (default: 718.0).
     T_base : float | None, optional
         Base temperature for thermal expansion in K (default: 290.0).
@@ -159,10 +159,8 @@ def solve_ahje_recuperator(
         geom=geom,
         f_in=f_in,
         tube_bank_correction_factor_hot=tube_bank_correction_factor_hot,
-        p_cold_MTO=p_cold_MTO,
-        p_hot_MTO=p_hot_MTO,
-        T_hot_MTO=T_hot_MTO,
-        T_base=T_base,
+        p_cold_max=p_cold_max_takeoff,
+        T_hot_max=T_hot_max_takeoff,
         sigma_yield_wall=sigma_yield_wall,
         thermal_expansion_coefficient_wall=thermal_expansion_coefficient_wall,
         rho_wall=rho_wall,

@@ -4,7 +4,7 @@ import logging
 
 import numpy as np
 
-from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid, RefPropFluid
+from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid  #, RefPropFluid
 from heat_exchanger.geometries.tube_bank_normal import TubeBankNormalSpec, tube_bank_normal_0d_solver
 from heat_exchanger.logging_utils import configure_logging
 
@@ -21,8 +21,9 @@ model = "PG"  # "CP", "PG", or "RP"
 
 match model:
     case "RP":
-        hot_air = CombustionProductsProperties(fuel_type="H2", FAR_mass=9.95 / (1144 - 9.95), prefer_refprop=True)
-        cold_hydrogen = RefPropProperties(fluid_name="PARAHYDROGEN")
+        raise NotImplementedError("RP model not yet implemented")
+        #hot_air = CombustionProductsProperties(fuel_type="H2", FAR_mass=9.95 / (1144 - 9.95), prefer_refprop=True)
+        #cold_hydrogen = RefPropProperties(fluid_name="PARAHYDROGEN")
     case "CP":
         hot_air = CoolPropFluid("Air")
         cold_hydrogen = CoolPropFluid("Hydrogen")
@@ -105,9 +106,9 @@ f_in = FluidInputs(
 tube_bank_correction_factor_hot = 0.048 / 0.1374
 
 # MTO conditions for thermal expansion and thickness calculations
-p_cold_MTO = None  # Pa - set if MTO conditions are available
-p_hot_MTO = None  # Pa
-T_hot_MTO = None  # K
+p_cold_max_takeoff = None  # Pa - set if MTO conditions are available
+p_hot_max_takeoff = None  # Pa
+T_hot_max_takeoff = None  # K
 T_base = None  # K
 
 # Material properties for wall calculations
@@ -120,10 +121,8 @@ result = tube_bank_normal_0d_solver(
     geom=geom,
     f_in=f_in,
     tube_bank_correction_factor_hot=tube_bank_correction_factor_hot,
-    p_cold_MTO=p_cold_MTO,
-    p_hot_MTO=p_hot_MTO,
-    T_hot_MTO=T_hot_MTO,
-    T_base=T_base,
+    p_cold_max=p_cold_max_takeoff,
+    T_hot_max=T_hot_max_takeoff,
     sigma_yield_wall=sigma_yield_wall,
     thermal_expansion_coefficient_wall=thermal_expansion_coefficient_wall,
     rho_wall=rho_wall,
