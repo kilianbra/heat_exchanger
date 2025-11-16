@@ -26,7 +26,7 @@ from heat_exchanger.hex_basic import dp_tube_bank, ntu
 mdot_hot = 1144 / 60  # 19.07  # kg/s
 mdot_cold = 9.95 / 60  # 0.166  # kg/s
 
-model = "RP"  # "CP" or "PG"
+model = "CP"  # "CP" or "PG"
 
 match model:
     case "RP":
@@ -87,7 +87,7 @@ reynolds_cold_in = (
 )
 
 print(f"reynolds numbers hot & cold: {reynolds_hot_in:.2e} & {reynolds_cold_in:.2e}")
-tube_bank_correction_factor_hot = 1  # 0.05 / 0.13
+tube_bank_correction_factor_hot =  0.05 / 0.13
 print(f"tube bank correction factor hot: {tube_bank_correction_factor_hot}")
 nusselt_hot, f_hot = tube_bank_nusselt_number_and_friction_factor(
     reynolds_hot_in, spacing_long, spacing_trans, prandtl=0.7, inline=True, n_rows=n_rows
