@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-from scipy.optimize import root
+from scipy.optimize import least_squares
 
 from heat_exchanger.fluids.protocols import FluidModel
 
@@ -48,17 +48,19 @@ def update_static_properties(
     # ------------------------------------------------------------
     # 1) Initial Guesses for T_non_a assumes no pressure drop for c_p
     # ------------------------------------------------------------
+    # Get cp at reference state (T_a, p_b) for scaling
+    state_ref = fluid.state(T_a, p_b)
+    cp_ref = state_ref.cp
+
     # Could improve guess by then using c_p(T_avg) to get T_guess
     if a_is_in:
         T_in = T_a
-        cp_in = fluid.state(T_in, p_b).cp
-        T_initial_guess = T_in + dh0 / cp_in if cp_in != 0 else T_in
-        tol_dh0 = cp_in * tol_T
+        T_initial_guess = T_in + dh0 / cp_ref if cp_ref != 0 else T_in
+        tol_dh0 = cp_ref * tol_T
     else:
         T_out = T_a
-        cp_out = fluid.state(T_out, p_b).cp
-        T_initial_guess = T_out - dh0 / cp_out if cp_out != 0 else T_out
-        tol_dh0 = cp_out * tol_T
+        T_initial_guess = T_out - dh0 / cp_ref if cp_ref != 0 else T_out
+        tol_dh0 = cp_ref * tol_T
 
     # For p_guess, a naive shift by dFA is typical (neglect density change)
     p_initial_guess = p_b - tau_dA_over_A_c if b_is_in else p_b + tau_dA_over_A_c
@@ -66,16 +68,42 @@ def update_static_properties(
     tol_dFA = rel_tol_p / 100 * p_b
 
     # ------------------------------------------------------------
-    # 2) Helper function: compute R1, R2 for a given guess of (T, p_unknown)
+    # 2) Variable scaling for better numerical behavior
     # ------------------------------------------------------------
-    def fluid_residuals(x: np.ndarray) -> np.ndarray:
+    # Scale variables to O(1) to help the solver
+    # Temperature scale: use a typical temperature change scale
+    T_scale = max(abs(dh0 / cp_ref) if cp_ref != 0 else 100.0, 100.0)  # K
+    # Pressure scale: use a typical pressure change scale (e.g., 10% of p_b)
+    p_scale = max(abs(tau_dA_over_A_c), p_b * 0.1)  # Pa
+
+    # Reference values for scaling
+    T_ref = T_a
+    p_ref = p_b
+
+    # Scaled initial guess
+    x0_scaled = np.array(
+        [
+            (T_initial_guess - T_ref) / T_scale,
+            (p_initial_guess - p_ref) / p_scale,
+        ],
+        dtype=float,
+    )
+
+    # ------------------------------------------------------------
+    # 3) Helper function: compute scaled residuals
+    # ------------------------------------------------------------
+    def fluid_residuals_scaled(x_scaled: np.ndarray) -> np.ndarray:
         """
-        Returns R1, R2 given the current guess of T, p
+        Returns dimensionless scaled residuals [F1, F2] given scaled variables.
+        Both residuals are scaled to be O(1) at convergence.
         """
-        T_guess, p_guess = x
+        # Unscale variables
+        T_guess = x_scaled[0] * T_scale + T_ref
+        p_guess = x_scaled[1] * p_scale + p_ref
+
         # Guard against non-physical states that would break the fluid model.
         if T_guess <= 0 or p_guess <= 0:
-            large_residual = 1e12
+            large_residual = 1e6  # Large but not extreme for least_squares
             return np.array([large_residual, large_residual], dtype=float)
 
         # Build local variables for both sides to avoid scoping issues
@@ -107,45 +135,60 @@ def update_static_properties(
         h0_in = h_in + 0.5 * (G / rho_in_loc) ** 2
         h0_out = h_out + 0.5 * (G / rho_out_loc) ** 2
 
-        # Residuals
-        R1 = (h0_out - h0_in) - dh0
-        R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + tau_dA_over_A_c
+        # Physical residuals
+        R1 = (h0_out - h0_in) - dh0  # J/kg
+        R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + tau_dA_over_A_c  # Pa
 
-        R2_scaled = R2 / tol_dFA * tol_dh0
+        # Scale residuals to be dimensionless and O(1) at convergence
+        F1 = R1 / tol_dh0  # Dimensionless, should be < 1 at convergence
+        F2 = R2 / tol_dFA  # Dimensionless, should be < 1 at convergence
 
-        return np.array([R1, R2_scaled], dtype=float)
+        return np.array([F1, F2], dtype=float)
 
-    # Note: Different methods have different convergence criteria:
-    # - "hybr": checks if ||x_new - x_old|| < tol * (||x|| + tol) (NOT if ||F|| < tol directly!)
-    # - "df-sane": minimizes max(|F_i|) (infinity norm) - better for mixed scales
-    # - "lm": Levenberg-Marquardt - minimizes ||F||^2 with better convergence control
-    #
-    # Using hybr with increased iterations and tighter tolerance to handle scaling
-    sol = root(
-        fluid_residuals,
-        np.array([T_initial_guess, p_initial_guess], dtype=float),
-        method="hybr",
-        tol=tol_dh0,
-        options={"maxfev": max_iter},
+    # ------------------------------------------------------------
+    # 4) Solve using least_squares with proper scaling
+    # ------------------------------------------------------------
+    # Use x_scale to help the solver understand variable scales
+    x_scale = np.array([1.0, 1.0], dtype=float)  # Variables are already scaled to O(1)
+
+    # Tolerance for scaled residuals (both should be < 1.0 for convergence)
+    ftol = 1e-6  # Function tolerance: stop when max(|F_i|) < ftol
+    xtol = 1e-8  # Variable tolerance: stop when relative change in x < xtol
+
+    sol = least_squares(
+        fluid_residuals_scaled,
+        x0_scaled,
+        method="lm",  # Levenberg-Marquardt is robust for small problems
+        ftol=ftol,
+        xtol=xtol,
+        max_nfev=max_iter,
+        x_scale=x_scale,
     )
 
-    x_sol = sol.x
+    # Unscale solution
+    x_sol_scaled = sol.x
+    T_solution = x_sol_scaled[0] * T_scale + T_ref
+    p_solution = x_sol_scaled[1] * p_scale + p_ref
 
     # Recompute residuals at solution to verify convergence
-    # R1_final, R2_final_scaled = fluid_residuals(x_sol)
-    R1_final, R2_final_scaled = sol.fun
-    converged = sol.success and abs(R1_final) < tol_dh0 and abs(R2_final_scaled) < tol_dh0
+    F1_final, F2_final = fluid_residuals_scaled(x_sol_scaled)
+    R1_final = F1_final * tol_dh0
+    R2_final = F2_final * tol_dFA
+
+    # Check convergence: both scaled residuals should be < 1.0
+    converged = sol.success and abs(F1_final) < 1.0 and abs(F2_final) < 1.0
 
     if not converged:
         logger.debug(
             (
-                "Fluid step is not within desired tolerances: "
-                "Individual residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "
-                "\nState: (T_a=%.1f K, p_b=%.2e Pa) |  Inputs: (G=%.1f kg/m²s, dh0=%.2e J/kg, tau_dA_over_A_c=%.2e)"
+                "Fluid not conv after %d it: "
+                "Residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "
+                "State: (T_a=%.1f K, p_b=%.2e Pa) | Inputs: (G=%.1f kg/m²s, dh0=%.2e J/kg, tau_dA_over_A_c=%.2e)"
             ),
+            sol.nfev,
             abs(R1_final),
             tol_dh0,
-            abs(R2_final_scaled * tol_dFA / tol_dh0),
+            abs(R2_final),
             tol_dFA,
             T_a,
             p_b,
@@ -153,8 +196,5 @@ def update_static_properties(
             dh0,
             tau_dA_over_A_c,
         )
-
-    T_solution = x_sol[0]
-    p_solution = x_sol[1]
 
     return T_solution, p_solution
