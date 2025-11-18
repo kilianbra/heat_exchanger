@@ -113,7 +113,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
                 f"Invalid geometry: too many rows in axial section for given outer radius: "
                 f"{outer_radius_span:.2f} m > {self.radius_outer_hex:.2f} m for "
                 f"{n_rows_per_axial_section} rows of tubes spaced by "
-                f"{(self.tube_spacing_long * self.tube_outer_diam)*1e3:.2f} mm"
+                f"{(self.tube_spacing_long * self.tube_outer_diam) * 1e3:.2f} mm"
             )
         elif outer_radius_span <= 0:
             raise ValueError(
@@ -498,11 +498,13 @@ def spiral_hex_solver(
             if f_in.Ph_in is not None
             else final_diag.get("dP_hot_pct", float("nan"))
         )
+        dP_cold_pct = (1 - final_diag.get("Pc_out", float("nan")) / f_in.Pc_in) * 100.0
         logger.info(
-            "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+            "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%, ΔPc/Pc_in=%.1f %%",
             eval_state["count"],
             bound_converged[0],
             dP_P_in,
+            dP_cold_pct,
         )
 
         if final_raw.size == 2:
@@ -652,6 +654,13 @@ def xflow_guess_0d(
         Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
         f_c = _circ_fric(Re_c, 0)
 
+        logger.info(
+            "0D guess tube flow for Re_c=%5.2e: St_c=%5.2f, f_c=%5.2e",
+            Re_c,
+            Nu_c / Re_c / Pr_c,
+            f_c,
+        )
+
         h_h = Nu_h * sh.k / geom.tube_outer_diam
         h_c = Nu_c * sc.k / geom.tube_inner_diam
 
@@ -703,6 +712,9 @@ def xflow_guess_0d(
             tol_T=1e-2,
             rel_tol_p=1e-2,
         )
+        if Pc_out < 0:
+            logger.warning(f"Pc_out {Pc_out:.1e} <0, for {tau_c:.1e} setting to 0.1e5 Pa")
+            Pc_out = 0.1e5
 
         return Th_out, Tc_out, Ph_not_b, Pc_out
 

@@ -141,7 +141,7 @@ def update_static_properties(
             (
                 "Fluid step is not within desired tolerances: "
                 "Individual residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "
-                "State: (T_a=%.1f K, p_b=%.2e Pa) | "
+                "\nState: (T_a=%.1f K, p_b=%.2e Pa) |  Inputs: (G=%.1f kg/m²s, dh0=%.2e J/kg, tau_dA_over_A_c=%.2e)"
             ),
             abs(R1_final),
             tol_dh0,
@@ -149,6 +149,9 @@ def update_static_properties(
             tol_dFA,
             T_a,
             p_b,
+            G,
+            dh0,
+            tau_dA_over_A_c,
         )
 
     T_solution = x_sol[0]
