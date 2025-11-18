@@ -208,6 +208,10 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
             return min(sigma_main, sigma_diag)
         return sigma_main
 
+    @cached_property
+    def area_free_flow_in_tubes_total(self) -> float:
+        return np.pi / 4.0 * self.tube_inner_diam**2 * self.n_tubes_total
+
     # ---------- 1D arrays (computed on demand for a single hot-sector) ----------
     def _1d_arrays_for_one_sector(self) -> dict[str, np.ndarray | float]:
         """Compute and return geometry arrays of length n_headers for 1D marching in one sector.
