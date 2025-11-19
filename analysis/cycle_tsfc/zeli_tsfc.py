@@ -156,16 +156,16 @@ def calculate_cycle_tsfc(
     heat_addition = m_combustor * (state_3.h - state_2.h)
     cold_comb = f_c.state(T3, p3)
     H2_q_baseline = cold_comb.h - cold_pump_exit.h  # KB: assume pressure of H2 is that of air
-    # H2_q_baseline = 0
+    H2_q_baseline = 0
     fuel_massflow = heat_addition / (fuel_LHV - H2_q_baseline)  # KB: burning fuel to heat fuel
     fuel_massflow_frac = fuel_massflow / m_combustor
     tsfc_baseline_core = fuel_massflow / Fnet_baseline
     tsfc_baseline_total = fuel_massflow / Fnet_total_baseline
 
     # Preheated fuel calculations
-    # frac_recirculation = 0.0  # KB: no recirculation of H2 for now
+    frac_recirculation = 0.0  # KB: no recirculation of H2 for now
 
-    # H2_q = H2_q_baseline - (cold_out.h - cold_in.h) * (1 + frac_recirculation)
+    H2_q = H2_q_baseline - (cold_out.h - cold_in.h) * (1 + frac_recirculation)
     H2_q = cold_out.h - cold_pump_exit.h  # KB: enthalpy rise from pump to HEx exit
     fuel_massflow_preheated = heat_addition / (fuel_LHV + H2_q)  # KB:now accounts for recirculation of H2
     heat_frac = H2_q / fuel_LHV
@@ -279,7 +279,7 @@ def main():
 
     # KB: P0 and T0 are static! International Standard Atmosphere (ISA)
 
-    # Cycle state temperatures and pressures # kb: is this stagnation? 
+    # Cycle state temperatures and pressures # kb: is this stagnation?
     T1 = 248
     p1 = 0.362e5
     T2 = 907
@@ -609,7 +609,7 @@ def main():
     ax1.legend(loc="best", fontsize=9)
 
     # Right plot: TSFC Change contours as colormap with overlay lines
-    norm2 = TwoSlopeNorm(vmin=-2.5, vcenter=0, vmax=5.0)
+    norm2 = TwoSlopeNorm(vmin=-4, vcenter=0, vmax=3.0)
     contour2_filled = ax2.contourf(
         EpsCold_grid, LostThrust_grid / thrust_normalisation, tsfc_interp, levels=50, cmap="coolwarm", norm=norm2
     )
@@ -618,7 +618,7 @@ def main():
         EpsCold_grid,
         LostThrust_grid / thrust_normalisation,
         tsfc_interp,
-        levels=[-1, 0, 1, 2, 3, 4],
+        levels=[-3, -2, -1, 0, 1, 2, 3, 4],
         colors="black",
         linewidths=1.5,
         alpha=0.8,
