@@ -18,12 +18,12 @@ CASE = 1
 geom_case1 = RadialSpiralSpec(
     tube_outer_diam=0.00108,
     tube_thick=0.00004,
-    tube_spacing_trv=6.0,
+    tube_spacing_trv=4.0,  # chg from 6 to 4 for H2 slower
     tube_spacing_long=1.5,
     staggered=False,
     n_headers=13,
     n_rows_per_header=1,
-    n_tubes_per_row=113,
+    n_tubes_per_row=170,  # chg from 113 to 170 for H2 slower
     radius_outer_hex=0.65,
     inv_angle_deg=360.0,
     wall_conductivity=14.0,
@@ -41,7 +41,7 @@ f_in_case1 = FluidInputs(
     hot=PerfectGasFluid.from_name("Air"),
     cold=PerfectGasFluid.from_name("Para_Hydrogen"),
     m_dot_hot=64.327297380,
-    m_dot_cold=0.76633099552 / 10,
+    m_dot_cold=0.76633099552,
     Tc_in=275.0,
     Pc_in=2790000.0,
     Th_in=574.3318,
@@ -73,16 +73,17 @@ geom_case2 = RadialSpiralSpec(
 # area_heat_transfer_outer_total=9.324776e+00
 # volume_total=2.885051e-02
 
-f_in_case2 = FluidInputs(
-    hot=PerfectGasFluid.from_name("Air"),
-    cold=PerfectGasFluid.from_name("Para_Hydrogen"),
-    m_dot_hot=64.336045634,
-    m_dot_cold=0.78194734443,
-    Tc_in=275.0,
-    Pc_in=2790000.0,
-    Th_in=574.3318,
-    Ph_out=22631.0,
-)
+f_in_case2 = f_in_case1  # same
+# FluidInputs(
+#     hot=PerfectGasFluid.from_name("Air"),
+#     cold=PerfectGasFluid.from_name("Para_Hydrogen"),
+#     m_dot_hot=64.336045634,
+#     m_dot_cold=0.78194734443,
+#     Tc_in=275.0,
+#     Pc_in=2790000.0,
+#     Th_in=574.3318,
+#     Ph_out=22631.0,
+# )
 
 # ============================================================================
 # RUN SELECTED CASE

@@ -31,9 +31,11 @@ dh0_total = 3.08e6  # J/kg (total)
 tau_dA_over_A_c_total = 6.98e6  # Pa (total)
 
 # Divide by 100 for sequential steps
-n_steps = 200
+n_steps = 1
 dh0_step = dh0_total / n_steps  # J/kg per step
-tau_dA_over_A_c_step = tau_dA_over_A_c_total / n_steps  # Pa per step
+tau_dA_over_A_c_step = tau_dA_over_A_c_total / n_steps / 5.75  # Pa per step
+
+M_lim = 0.95
 
 # Create fluid model (likely Para_Hydrogen based on full_flow.py)
 fluid = PerfectGasFluid.from_name("Para_Hydrogen")
@@ -42,12 +44,15 @@ fluid_in = fluid.state(T_a_initial, p_b_initial)
 
 expected_dT = dh0_total / fluid_in.cp
 expected_T_final = T_a_initial + expected_dT
+f_init = fluid.state(T_a_initial, p_b_initial)
+V_init = G / f_init.rho
+Mach_init = V_init / f_init.a
 
 print("Fluid: Para-Hydrogen")
 print("Input parameters:")
 print(f"  T_a_initial = {T_a_initial:.1f} K")
 print(f"  p_b_initial = {p_b_initial:.2e} Pa ({p_b_initial / 1e5:.2f} bar)")
-print(f"  G = {G:.1f} kg/m²s")
+print(f"  G = {G:.1f} kg/m²s (Mach = {Mach_init:.2f})")
 print(f"  dh0_total = {dh0_total:.2e} J/kg (i.e. dT0_total = {dh0_total / fluid_in.cp:.2f} K)")
 print(f"  tau_dA_over_A_c_total = {tau_dA_over_A_c_total:.2e} Pa ")
 print()
@@ -90,35 +95,39 @@ try:
             print(f"Step {step:3d}: WARNING - Non-physical solution: T={T_current:.2f} K, p={p_current:.2e} Pa")
 
         # Print progress every 10 steps
-        if step % 5 == 0 or step == n_steps:
+        if step % 1 == 0 or step == n_steps:
             dT = T_current - T_a_initial
             dp = p_current - p_b_initial
             f_current = fluid.state(T_current, p_current)
             V_current = G / f_current.rho
             Mach_current = V_current / f_current.a
             print(
-                f"Step {step:3d}: M={Mach_current:.2f}, T = {T_current:.2f} K (ΔT = {dT:+6.2f} K), p = {p_current:.2e} Pa (Δp = {dp / p_b_initial * 100:6.2f} % inlet)"
+                f"Step {step:3d}: M={Mach_current:.2f}, T = {T_current:.2f} K (ΔT = {dT:+7.2f} K), p = {p_current:.2e} Pa (Δp = {dp / p_b_initial * 100:6.2f} % inlet)"
             )
             if T_current > expected_T_final:
                 print("Aborting due to T_current > expected_T_final")
                 n_final = step
                 break
-            elif Mach_current > 0.6:
-                print("Aborting due to Mach_current > 0.6")
+            elif Mach_current > M_lim:
+                print(f"Aborting due to Mach_current > {M_lim:.1f}")
                 n_final = step
                 break
     # Make sure n_taken is always defined after the loop
     n_taken = n_final if n_final is not None else n_steps
+    f_current = fluid.state(T_current, p_current)
+    V_current = G / f_current.rho
+    Mach_current = V_current / f_current.a
     print()
     print(f"Final state after {n_taken} of {n_steps} steps:")
     print(f"  T_final = {T_current:.2f} K (ΔT_total = {T_current - T_a_initial:+.2f} K)")
     print(f"  p_final = {p_current:.2e} Pa (Δp_total/p_in = {100 * (p_current - p_b_initial) / p_b_initial:.2f} %)")
+    print(f"  M_final = {Mach_current:.2f} ")
 
     # Calculate expected final state (approximate, assuming constant cp)
     if n_final is None:
         print()
         print(f"Expected final T (assuming constant cp): {expected_T_final:.2f} K")
-        print(f"Difference from expected: {T_current - expected_T_final:.2f} K")
+        print(f"Difference from 0D step: {T_current - expected_T_final:.2f} K")
     else:
         print(f"Transfered {n_taken / n_steps * 100:.2f}% of the total heat and pressure drop")
 
