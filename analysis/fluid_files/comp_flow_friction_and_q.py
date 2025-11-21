@@ -59,7 +59,7 @@ def plot_mach_vs_ksi():
 
         # Calculate V_0 once for this k value
         try:
-            V_0 = calculate_V0_from_M0(M_in, gamma, k, ksi_0=0.0)
+            V_0 = calculate_V0_from_M0(M_in, k, ksi_0=0.0, gamma=gamma)
         except Exception as e:
             print(f"Warning: Could not calculate V_0 for k={k}: {e}")
             continue
@@ -82,7 +82,7 @@ def plot_mach_vs_ksi():
         for ksi in ksi_array:
             try:
                 # Solve for V and M from ksi
-                V, M = solve_M_from_ksi(ksi, M_in, gamma, k, V_guess=V_guess)
+                V, M = solve_M_from_ksi(ksi, M_in, k, gamma=gamma, V_guess=V_guess)
 
                 # Update guess for next iteration
                 V_guess = V
@@ -105,7 +105,7 @@ def plot_mach_vs_ksi():
 
                             # Calculate actual M at interpolated ksi
                             try:
-                                V_interp, M_interp = solve_M_from_ksi(ksi_interp, M_in, gamma, k, V_guess=V_guess)
+                                V_interp, M_interp = solve_M_from_ksi(ksi_interp, M_in, k, gamma=gamma, V_guess=V_guess)
                                 ksi_valid.append(ksi_interp)
                                 M_valid.append(M_interp)
                                 is_choked = True
@@ -242,32 +242,32 @@ def test_equations_6_7_13():
     print()
 
     # Step 1: Calculate V_0 from inlet Mach number (equation 7)
-    V_0 = calculate_V0_from_M0(M_0, gamma, k, ksi_0=0.0)
+    V_0 = calculate_V0_from_M0(M_0, k, ksi_0=0.0, gamma=gamma)
     print(f"Step 1: V_0 = {V_0:.6f} (from equation 7)")
 
     # Step 2: Test equation 13 - calculate ksi for a given V
     V_test = V_0 * 1.2  # Test with V slightly less than V_0
-    ksi_calc = ksi_from_V_V0(V_test, V_0, gamma, k)
+    ksi_calc = ksi_from_V_V0(V_test, V_0, k, gamma=gamma)
     print(f"Step 2: For V = {V_test:.6f}, ksi = {ksi_calc:.6f} (from equation 13)")
 
     # Step 3: Solve inverse problem - find V from ksi
     ksi_target = 0.1
-    V_solved = solve_V_from_ksi(ksi_target, V_0, gamma, k, V_guess=V_0)
+    V_solved = solve_V_from_ksi(ksi_target, V_0, k, gamma=gamma, V_guess=V_0)
     print(f"Step 3: For ksi = {ksi_target:.6f}, solved V = {V_solved:.6f} (inverse of equation 13)")
 
     # Step 4: Calculate M from V and tau (equation 6)
     tau = 1 + k * ksi_target
-    M_squared = M_squared_from_V_tau(V_solved, gamma, tau)
+    M_squared = M_squared_from_V_tau(V_solved, tau, gamma=gamma)
     M = np.sqrt(M_squared)
     print(f"Step 4: For V = {V_solved:.6f}, tau = {tau:.6f}, M = {M:.6f} (from equation 6)")
 
     # Step 5: Complete solution using solve_M_from_ksi
-    V_complete, M_complete = solve_M_from_ksi(ksi_target, M_0, gamma, k)
+    V_complete, M_complete = solve_M_from_ksi(ksi_target, M_0, k, gamma=gamma)
     print(f"Step 5: Complete solution for ksi = {ksi_target:.6f}: V = {V_complete:.6f}, M = {M_complete:.6f}")
     print()
 
     # Verify: Check that we can recover ksi from the solved V
-    ksi_verify = ksi_from_V_V0(V_complete, V_0, gamma, k)
+    ksi_verify = ksi_from_V_V0(V_complete, V_0, k, gamma=gamma)
     print(f"Verification: ksi from solved V = {ksi_verify:.6f} (target was {ksi_target:.6f})")
     print(f"Error: {abs(ksi_verify - ksi_target):.2e}")
 
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     gamma = 1.4
 
     # Easy to add test cases: just (M_in, k) pairs
-    test_cases = [(0.15, 0.1), (0.15, -0.3), (0.6, 0.1), (0.9, 0.5), (0.02, 1.5)]
+    test_cases = [(0.15, 0.1), (0.15, -0.3), (0.6, 0.1), (0.9, 0.5), (0.02, 1.5), (0.22, 0.75)]
 
     # Suppress warnings during tests
     with warnings.catch_warnings():
@@ -293,13 +293,13 @@ if __name__ == "__main__":
             k_str = f"{k:+.2f}"  # + sign for positive, - for negative
             print(f"M_in = {M_in:.2f}, k = {k_str} (γ = {gamma}):", end=" ")
             try:
-                ksi_lim, M_at_ksi_lim = find_ksi_lim_adaptive(M_in, gamma, k)
+                ksi_lim, M_at_ksi_lim = find_ksi_lim_adaptive(M_in, k, gamma=gamma)
                 if np.isnan(ksi_lim):
                     print("Failed to find ksi_lim")
                 else:
                     # Verify by calculating M at ksi_lim
                     try:
-                        _, M_verify = solve_M_from_ksi(ksi_lim, M_in, gamma, k)
+                        _, M_verify = solve_M_from_ksi(ksi_lim, M_in, k, gamma=gamma)
                         diff = abs(M_verify - M_at_ksi_lim)
 
                         if diff > 1e-3:
