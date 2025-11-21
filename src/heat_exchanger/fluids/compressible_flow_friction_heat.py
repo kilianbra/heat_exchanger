@@ -537,7 +537,7 @@ def solve_ksi_lim_from_M_in(M_in, k, ksi_bracket=None, gamma=1.4):
 
         # Check if we can find a valid bracket
         try:
-            M_low, _ = solve_M_from_ksi(ksi_low, M_in, k, gamma=gamma)
+            _, M_low = solve_M_from_ksi(ksi_low, M_in, k, gamma=gamma)
             if M_low >= 1.0:
                 # Already choked at ksi=0, return 0
                 return 0.0
@@ -548,7 +548,7 @@ def solve_ksi_lim_from_M_in(M_in, k, ksi_bracket=None, gamma=1.4):
         max_iter = 50
         for _ in range(max_iter):
             try:
-                M_high, _ = solve_M_from_ksi(ksi_high, M_in, k, gamma=gamma)
+                _, M_high = solve_M_from_ksi(ksi_high, M_in, k, gamma=gamma)
                 if M_high > 1.0:
                     break
                 ksi_high *= 2.0
