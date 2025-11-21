@@ -22,11 +22,11 @@ def update_static_properties(
     a_is_in=True,
     b_is_in=True,
     max_iter=50,
-    tol_T=1e-4,  # K tolerance for stagnation temperature change
+    tol_T=1e-4,  # K tolerance for temperature change
     rel_tol_p=1e-3,  # % tolerance for pressure drop (strictly speaking of p + G^2/rho)
 ):
     r"""
-    Solve simultaneously for T_not_a and p_not_b so that:
+    Solve simultaneously for static temperature T_not_a and static pressure p_not_b so that:
       1) Energy/stagnation enthalpy: (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
       2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = - tau * dA / A_c
 
