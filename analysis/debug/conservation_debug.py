@@ -13,6 +13,8 @@ import numpy as np
 from heat_exchanger.conservation import update_static_properties
 from heat_exchanger.fluids.compressible_flow_friction_heat import (
     find_ksi_lim_adaptive as max_friction,
+)
+from heat_exchanger.fluids.compressible_flow_friction_heat import (
     p_static_over_p_static_in,
     solve_M_from_ksi,
 )
