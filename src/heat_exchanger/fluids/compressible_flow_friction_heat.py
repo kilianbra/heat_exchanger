@@ -14,7 +14,52 @@ import numpy as np
 from scipy.optimize import brentq, fsolve
 
 
-def p_static_limiting_over_p_stag_in(M_0, gamma, k, ksi):
+def p_static_over_p_static_in(M_0, M, k, ksi, gamma=1.4):
+    """
+    Calculate pressure ratio p/p_0 (static pressure at exit / stagnation pressure at inlet).
+    Sturas 1971 equation 18.
+
+    Parameters
+    ----------
+    M_0 : float
+        Inlet Mach number
+    M : float
+        Exit Mach number
+    k : float
+        Parameter k
+    ksi : float or array
+        Parameter ξ (ksi)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
+
+    Returns
+    -------
+    float or array
+        Pressure ratio p/p_0 (static pressure at exit / static pressure at inlet)
+    """
+    # Check that (1 + k*ksi) > 0 for valid solution
+    term = 1 + k * ksi
+    if np.any(term <= 0):
+        raise ValueError(f"Invalid: (1 + k*ksi) must be > 0. Got k={k}, ksi={ksi}")
+
+    # Check that M > 0
+    if np.any(M <= 0):
+        raise ValueError(f"Invalid: M must be > 0. Got M={M}")
+
+    # Calculate the ratio term: (1 + (gamma - 1)/2 * M_0^2) / (1 + (gamma - 1)/2 * M^2)
+    numerator = 1 + (gamma - 1) / 2 * M_0**2
+    denominator = 1 + (gamma - 1) / 2 * M**2
+
+    # Calculate the expression inside the square bracket
+    bracket_term = (numerator / denominator) * term
+
+    # Calculate pressure ratio: p/p_0 = (M_0 / M) * sqrt(bracket_term)
+    p_over_p0 = (M_0 / M) * np.sqrt(bracket_term)
+
+    return p_over_p0
+
+
+def p_static_limiting_over_p_stag_in(M_0, k, ksi, gamma=1.4):
     """
     Calculate pressure ratio p_l/p_0.
     Sturas 1971 equation 24.
@@ -23,12 +68,12 @@ def p_static_limiting_over_p_stag_in(M_0, gamma, k, ksi):
     ----------
     M_0 : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
     ksi : float or array
         Parameter ξ (ksi)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -53,7 +98,7 @@ def p_static_limiting_over_p_stag_in(M_0, gamma, k, ksi):
     return p_static_limiting_over_p_stag_in
 
 
-def V_squared_from_M_tau(M, gamma, tau):
+def V_squared_from_M_tau(M, tau, gamma=1.4):
     """
     Calculate V^2 from Mach number and tau using equation 7.
     Sturas 1971 equation 7.
@@ -62,10 +107,10 @@ def V_squared_from_M_tau(M, gamma, tau):
     ----------
     M : float
         Mach number
-    gamma : float
-        Ratio of specific heats
     tau : float
         Parameter τ = 1 + k*ksi
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -78,7 +123,7 @@ def V_squared_from_M_tau(M, gamma, tau):
     return V_squared
 
 
-def M_squared_from_V_tau(V, gamma, tau):
+def M_squared_from_V_tau(V, tau, gamma=1.4):
     """
     Calculate M^2 from V and tau using equation 6.
     Sturas 1971 equation 6.
@@ -87,10 +132,10 @@ def M_squared_from_V_tau(V, gamma, tau):
     ----------
     V : float
         Dimensionless flow parameter
-    gamma : float
-        Ratio of specific heats
     tau : float
         Parameter τ = 1 + k*ksi
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -107,7 +152,7 @@ def M_squared_from_V_tau(V, gamma, tau):
     return M_squared
 
 
-def ksi_from_V_V0(V, V_0, gamma, k):
+def ksi_from_V_V0(V, V_0, k, gamma=1.4):
     """
     Calculate ksi (ξ) from V and V_0 using equation 13.
     Sturas 1971 equation 13.
@@ -118,10 +163,10 @@ def ksi_from_V_V0(V, V_0, gamma, k):
         Dimensionless flow parameter at distance x
     V_0 : float
         Dimensionless flow parameter at inlet
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -163,7 +208,7 @@ def ksi_from_V_V0(V, V_0, gamma, k):
     return ksi
 
 
-def solve_V_from_ksi(ksi, V_0, gamma, k, V_guess=None):
+def solve_V_from_ksi(ksi, V_0, k, gamma=1.4, V_guess=None):
     """
     Solve for V given ksi using equation 13.
     This is an inverse problem: given ksi, find V.
@@ -174,10 +219,10 @@ def solve_V_from_ksi(ksi, V_0, gamma, k, V_guess=None):
         Parameter ξ (ksi)
     V_0 : float
         Dimensionless flow parameter at inlet
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
     V_guess : float, optional
         Initial guess for V (default: V_0)
 
@@ -192,7 +237,7 @@ def solve_V_from_ksi(ksi, V_0, gamma, k, V_guess=None):
     def residual(V_val):
         """Residual function: ksi_calculated - ksi_target"""
         try:
-            ksi_calc = ksi_from_V_V0(V_val, V_0, gamma, k)
+            ksi_calc = ksi_from_V_V0(V_val, V_0, k, gamma)
             return ksi_calc - ksi
         except (ValueError, ZeroDivisionError):
             # Return a large residual if V is invalid
@@ -204,7 +249,7 @@ def solve_V_from_ksi(ksi, V_0, gamma, k, V_guess=None):
     return V_solution
 
 
-def calculate_V0_from_M0(M_0, gamma, k, ksi_0=0.0):
+def calculate_V0_from_M0(M_0, k, ksi_0=0.0, gamma=1.4):
     """
     Calculate V_0 from inlet Mach number M_0.
     At inlet, ksi_0 = 0, so tau_0 = 1 + k*ksi_0 = 1.
@@ -213,12 +258,12 @@ def calculate_V0_from_M0(M_0, gamma, k, ksi_0=0.0):
     ----------
     M_0 : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k (not used for inlet calculation but kept for consistency)
     ksi_0 : float, optional
         ksi at inlet (default: 0.0)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -226,12 +271,12 @@ def calculate_V0_from_M0(M_0, gamma, k, ksi_0=0.0):
         V_0 (dimensionless flow parameter at inlet)
     """
     tau_0 = 1 + k * ksi_0  # At inlet, ksi_0 = 0, so tau_0 = 1
-    V_0_squared = V_squared_from_M_tau(M_0, gamma, tau_0)
+    V_0_squared = V_squared_from_M_tau(M_0, tau_0, gamma)
     V_0 = np.sqrt(V_0_squared)
     return V_0
 
 
-def solve_M_from_ksi(ksi, M_0, gamma, k, V_guess=None):
+def solve_M_from_ksi(ksi, M_0, k, gamma=1.4, V_guess=None):
     """
     Complete solution: given ksi and inlet Mach number, solve for V and then M.
 
@@ -241,10 +286,10 @@ def solve_M_from_ksi(ksi, M_0, gamma, k, V_guess=None):
         Parameter ξ (ksi) at distance x
     M_0 : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
     V_guess : float, optional
         Initial guess for V (default: None, will use V_0)
 
@@ -254,25 +299,25 @@ def solve_M_from_ksi(ksi, M_0, gamma, k, V_guess=None):
         (V, M) where V is dimensionless flow parameter and M is Mach number
     """
     # Step 1: Calculate V_0 from inlet conditions
-    V_0 = calculate_V0_from_M0(M_0, gamma, k, ksi_0=0.0)
+    V_0 = calculate_V0_from_M0(M_0, k, ksi_0=0.0, gamma=gamma)
 
     # Step 2: Solve for V from ksi using equation 13
     if V_guess is None:
         V_guess = V_0
 
-    V = solve_V_from_ksi(ksi, V_0, gamma, k, V_guess=V_guess)
+    V = solve_V_from_ksi(ksi, V_0, k, gamma=gamma, V_guess=V_guess)
 
     # Step 3: Calculate tau at distance x
     tau = 1 + k * ksi
 
     # Step 4: Calculate M from V and tau using equation 6
-    M_squared = M_squared_from_V_tau(V, gamma, tau)
+    M_squared = M_squared_from_V_tau(V, tau, gamma)
     M = np.sqrt(M_squared)
 
     return V, M
 
 
-def calculate_ksi_lim(M_0, gamma, k, max_p_ratio=10.0):
+def calculate_ksi_lim(M_0, k, max_p_ratio=10.0, gamma=1.4):
     """
     Calculate ksi_lim such that the pressure ratio doesn't exceed max_p_ratio.
 
@@ -280,12 +325,12 @@ def calculate_ksi_lim(M_0, gamma, k, max_p_ratio=10.0):
     ----------
     M_0 : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
     max_p_ratio : float, optional
         Maximum allowed pressure ratio (default: 10.0)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -312,7 +357,7 @@ def calculate_ksi_lim(M_0, gamma, k, max_p_ratio=10.0):
     return max(ksi_lim, 0.0)
 
 
-def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_threshold=1e-6):
+def find_ksi_lim_adaptive(M_in, k, ksi_start=0.01, ksi_max=50.0, dM_threshold=1e-6, gamma=1.4):
     """
     Find ksi_lim (where M reaches maximum < 1.0) using adaptive stepping.
     Steps gradually, slowing down as M approaches 1.0, and stops when M decreases
@@ -322,8 +367,6 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
     ----------
     M_in : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
     ksi_start : float, optional
@@ -332,6 +375,8 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
         Maximum ksi to search (default: 50.0)
     dM_threshold : float, optional
         Threshold for detecting M decrease (default: 1e-6)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -344,7 +389,7 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
 
     # Calculate V_0 once
     try:
-        V_0 = calculate_V0_from_M0(M_in, gamma, k, ksi_0=0.0)
+        V_0 = calculate_V0_from_M0(M_in, k, ksi_0=0.0, gamma=gamma)
     except Exception:
         return np.nan, np.nan
 
@@ -373,7 +418,7 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
 
         try:
             # Solve for M at current ksi
-            V, M = solve_M_from_ksi(ksi, M_in, gamma, k, V_guess=V_guess)
+            V, M = solve_M_from_ksi(ksi, M_in, k, gamma=gamma, V_guess=V_guess)
             V_guess = V
 
             # Check if M exceeded 1.0
@@ -383,7 +428,7 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
                     ksi_interp = ksi_prev + (1.0 - M_prev) * (ksi - ksi_prev) / (M - M_prev)
                     # Calculate actual M at interpolated ksi
                     try:
-                        V_interp, M_interp = solve_M_from_ksi(ksi_interp, M_in, gamma, k, V_guess=V_guess)
+                        V_interp, M_interp = solve_M_from_ksi(ksi_interp, M_in, k, gamma=gamma, V_guess=V_guess)
                         if M_interp < 1.0:
                             return ksi_interp, M_interp
                     except Exception:
@@ -453,7 +498,7 @@ def find_ksi_lim_adaptive(M_in, gamma, k, ksi_start=0.01, ksi_max=50.0, dM_thres
     return ksi_max_M, M_max
 
 
-def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
+def solve_ksi_lim_from_M_in(M_in, k, ksi_bracket=None, gamma=1.4):
     """
     Solve for ksi_lim where Mach number reaches 1.0 (choked flow).
     Uses brentq since M(ksi) is monotonically increasing.
@@ -462,12 +507,12 @@ def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
     ----------
     M_in : float
         Inlet Mach number
-    gamma : float
-        Ratio of specific heats
     k : float
         Parameter k
     ksi_bracket : tuple, optional
         Bracket (ksi_low, ksi_high) for brentq (default: None, will be found automatically)
+    gamma : float, optional
+        Ratio of specific heats (default: 1.4)
 
     Returns
     -------
@@ -478,7 +523,7 @@ def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
     def residual(ksi_val):
         """Residual function: M(ksi) - 1.0"""
         try:
-            _, M = solve_M_from_ksi(ksi_val, M_in, gamma, k)
+            _, M = solve_M_from_ksi(ksi_val, M_in, k, gamma=gamma)
             return M - 1.0
         except (ValueError, RuntimeError, ZeroDivisionError):
             # Return NaN to signal invalid ksi
@@ -492,7 +537,7 @@ def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
 
         # Check if we can find a valid bracket
         try:
-            M_low, _ = solve_M_from_ksi(ksi_low, M_in, gamma, k)
+            M_low, _ = solve_M_from_ksi(ksi_low, M_in, k, gamma=gamma)
             if M_low >= 1.0:
                 # Already choked at ksi=0, return 0
                 return 0.0
@@ -503,7 +548,7 @@ def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
         max_iter = 50
         for _ in range(max_iter):
             try:
-                M_high, _ = solve_M_from_ksi(ksi_high, M_in, gamma, k)
+                M_high, _ = solve_M_from_ksi(ksi_high, M_in, k, gamma=gamma)
                 if M_high > 1.0:
                     break
                 ksi_high *= 2.0
@@ -518,7 +563,7 @@ def solve_ksi_lim_from_M_in(M_in, gamma, k, ksi_bracket=None):
     try:
         ksi_lim = brentq(residual, ksi_bracket[0], ksi_bracket[1], xtol=1e-10, maxiter=100)
         # Verify the solution
-        _, M_check = solve_M_from_ksi(ksi_lim, M_in, gamma, k)
+        _, M_check = solve_M_from_ksi(ksi_lim, M_in, k, gamma=gamma)
         if abs(M_check - 1.0) > 1e-5:
             # Solution didn't converge properly
             return np.nan
