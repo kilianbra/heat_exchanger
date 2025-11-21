@@ -314,12 +314,13 @@ def spiral_hex_solver(
 
     logger = logging.getLogger(__name__ + ".spiral_hex_solver")
 
-    if geom.ext_fluid_flows_radially_inwards:
-        A_first_throat = geom.frontal_area_outer * geom.sigma_outer
-    else:
-        A_first_throat = geom.frontal_area_inner * geom.sigma_outer
-
+    # Block of code to convert stagnation/total properties at inlet to static
     if stag_inlets:
+        # Need to determine inlet throat area to get Mach and convert stag to static
+        if geom.ext_fluid_flows_radially_inwards:
+            A_first_throat = geom.frontal_area_outer * geom.sigma_outer
+        else:
+            A_first_throat = geom.frontal_area_inner * geom.sigma_outer
         stag_in_cold = f_in.cold.state(f_in.Tc_in, f_in.Pc_in)
         cp_c_approx = stag_in_cold.cp
         gamma_c_approx = stag_in_cold.gamma
@@ -409,7 +410,7 @@ def spiral_hex_solver(
         )
 
     logger.info(
-        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
+        "Hot inlet (static) parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
         f_in.Th_in,
         f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out,
         "inlet" if f_in.Ph_in is not None else "outlet",
