@@ -4,7 +4,7 @@ Compressible flow relations for constant area flow with both friction and heat t
 Based on Sturas 1971 equations for compressible flow with friction and heat addition.
 https://ntrs.nasa.gov/api/citations/19720004565/downloads/19720004565.pdf
 
-ksi = 4fx/d_h = f A_w / A_o is the friction -distance parameter and assumes average friction factor
+ksi = 4fx/d_h = f A_w / A_o is the friction-distance or friction-area parameter and assumes average friction factor
 f = tau_w / (0.5 * rho * V^2) is the friction factor
 """
 
