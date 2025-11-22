@@ -16,7 +16,7 @@ def update_static_properties(
     fluid: FluidModel,
     G,
     dh0,
-    tau_dA_over_A_c,
+    f_dA_over_A_c,
     T_a,
     p_b,
     a_is_in=True,
@@ -29,6 +29,12 @@ def update_static_properties(
     Solve simultaneously for static temperature T_not_a and static pressure p_not_b so that:
       1) Energy/stagnation enthalpy: (h_out + 0.5*(G^2/rho_out^2)) - (h_in + 0.5*(G^2/rho_in^2)) = dh0
       2) Momentum/impulse:           (p_out + G^2/rho_out) - (p_in + G^2/rho_in) = - tau * dA / A_c
+
+      Problem: this bakes in tau = f(Re) * G^2 / rho where rho is evaluated at some fixed state (inlet)
+      First order solution is how much rho varies, next order would be also how much f varies (Re changes due to mu(T))
+      So should replace tau with (tau_in+tau_out)/2 = f * G^2 * (1/rho_in + 1/rho_out)/2
+      Or instead could modify the equation to be 
+      ((p_out + G^2/rho_out) - (p_in + G^2/rho_in)) / (1/rho_in + 1/rho_out) = - (f * G^2 /2) * dA / A_c
 
     a can either be in (if a_is_in is True) or out (if a_is_in is False) of the heat exchanger.
     b can either be in (if b_is_in is True) or out (if b_is_in is False) of the heat exchanger.
@@ -63,7 +69,9 @@ def update_static_properties(
         tol_dh0 = cp_ref * tol_T
 
     # For p_guess, a naive shift by dFA is typical (neglect density change)
-    p_initial_guess = p_b - tau_dA_over_A_c if b_is_in else p_b + tau_dA_over_A_c
+    rho_guess = fluid.state(T_a, p_b).rho
+    dp_initial_guess = f_dA_over_A_c * G ** 2 / (2 * rho_guess)
+    p_initial_guess = p_b - dp_initial_guess if b_is_in else p_b + dp_initial_guess
 
     tol_dFA = rel_tol_p / 100 * p_b
 
@@ -74,7 +82,7 @@ def update_static_properties(
     # Temperature scale: use a typical temperature change scale
     T_scale = max(abs(dh0 / cp_ref) if cp_ref != 0 else 100.0, 100.0)  # K
     # Pressure scale: use a typical pressure change scale (e.g., 10% of p_b)
-    p_scale = max(abs(tau_dA_over_A_c), p_b * 0.1)  # Pa
+    p_scale = max(abs(dp_initial_guess), p_b * 0.1)  # Pa
 
     # Reference values for scaling
     T_ref = T_a
@@ -137,7 +145,7 @@ def update_static_properties(
 
         # Physical residuals
         R1 = (h0_out - h0_in) - dh0  # J/kg
-        R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + tau_dA_over_A_c  # Pa
+        R2 = (p_out_loc + G**2 / rho_out_loc) - (p_in_loc + G**2 / rho_in_loc) + f_dA_over_A_c * G ** 2 * ( 1/rho_in_loc + 1/rho_out_loc) / 2  # Pa
 
         # Scale residuals to be dimensionless and O(1) at convergence
         F1 = R1 / tol_dh0  # Dimensionless, should be < 1 at convergence
@@ -194,7 +202,7 @@ def update_static_properties(
             p_b,
             G,
             dh0,
-            tau_dA_over_A_c,
+            f_dA_over_A_c,
         )
 
     return T_solution, p_solution
