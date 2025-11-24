@@ -43,11 +43,8 @@ tau_dA_over_A_c_total = 6.98e6 / 7  # Pa (total)
 fluid = PerfectGasFluid.from_name("Para_Hydrogen")
 # fluid = CoolPropFluid("ParaHydrogen")
 fluid_in = fluid.state(T_in, p_in)
-rho_in = fluid_in.rho
 
-f_dA_over_A_c_total = tau_dA_over_A_c_total / (0.5 * G**2 / rho_in)
-
-ksi = f_dA_over_A_c_total
+ksi = tau_dA_over_A_c_total / (0.5 * G**2 / fluid_in.rho)
 
 
 expected_dT = dh0_total / fluid_in.cp
@@ -70,10 +67,10 @@ print(
 )
 
 
-# Divide by n_steps for sequential steps
+# Divide by 100 for sequential steps
 n_steps = 1
 dh0_step = dh0_total / n_steps  # J/kg per step
-f_dA_over_A_c_step = f_dA_over_A_c_total / n_steps  # dimensionless per step
+tau_dA_over_A_c_step = tau_dA_over_A_c_total / n_steps  # Pa per step
 
 M_lim = 0.95
 
@@ -87,7 +84,7 @@ print(f"  tau_dA_over_A_c_total = {tau_dA_over_A_c_total:.2e} Pa ")
 print()
 print(f"Applying in {n_steps} sequential steps:")
 print(f"  dh0_step = {dh0_step:.2e} J/kg per step (i.e. dT0_step = {dh0_step / fluid_in.cp:.2f} K)")
-print(f"  f_dA_over_A_c_step = {f_dA_over_A_c_step:.2e} per step")
+print(f"  tau_dA_over_A_c_step = {tau_dA_over_A_c_step:.2e} Pa per step")
 print()
 
 
@@ -108,7 +105,7 @@ try:
             fluid,
             G,
             dh0_step,
-            f_dA_over_A_c_step,
+            tau_dA_over_A_c_step,
             T_current,
             p_current,
             a_is_in=True,
@@ -219,20 +216,13 @@ def calculate_mach_solver(ksi_val, fluid, T_in, p_in, G, dh0_total, ksi_ref, tau
 
     For a given ksi_val, scales dh0_total and tau_dA_over_A_c_total by ksi_val/ksi_ref.
     """
-    # Get inlet density for tau to f conversion
-    fluid_in = fluid.state(T_in, p_in)
-    rho_in = fluid_in.rho
-    
     # Scale heat addition and friction by ksi_val/ksi_ref
     dh0_scaled = dh0_total * ksi_val / ksi_ref
     tau_dA_over_A_c_scaled = tau_dA_over_A_c_total * ksi_val / ksi_ref
-    
-    # Convert tau to f: tau = f * G^2 / (2 * rho), so f = tau * 2 * rho / G^2
-    f_dA_over_A_c_scaled = tau_dA_over_A_c_scaled * 2 * rho_in / G**2
 
     # Divide into steps
     dh0_step = dh0_scaled / n_steps
-    f_dA_over_A_c_step = f_dA_over_A_c_scaled / n_steps
+    tau_dA_over_A_c_step = tau_dA_over_A_c_scaled / n_steps
 
     # Initialize state
     T_current = T_in
@@ -244,7 +234,7 @@ def calculate_mach_solver(ksi_val, fluid, T_in, p_in, G, dh0_total, ksi_ref, tau
                 fluid,
                 G,
                 dh0_step,
-                f_dA_over_A_c_step,
+                tau_dA_over_A_c_step,
                 T_current,
                 p_current,
                 a_is_in=True,
