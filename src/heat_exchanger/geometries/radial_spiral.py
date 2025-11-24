@@ -26,6 +26,9 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor as _bank_corr,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.compressible_flow_friction_heat import (
+    find_ksi_lim_adaptive as _find_ksi_lim,
+)
 from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p as _get_mach_from_mdot_area_p
 from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p0 as _get_mach_from_mdot_area_p0
 from heat_exchanger.fluids.protocols import FluidInputs as FluidInputs
@@ -528,7 +531,7 @@ def spiral_hex_solver(
             final_diag.get("epsilon", float("nan")),
             final_diag.get("NTU", float("nan")),
             final_diag.get("Cr", float("nan")),
-            final_diag.get("Q_total", float("nan")) / 1e6,
+            final_diag.get("Q_total", float("nan")) / 1e6,  # Q_total is defined as Q_hot
             final_diag.get("Q_cold", float("nan")) / 1e6,
         )
         logger.info(
@@ -690,6 +693,36 @@ def xflow_guess_0d(
 
         dh0_h = -Q / f_in.m_dot_hot
         dh0_c = Q / f_in.m_dot_cold
+
+        ksi_h = f_h * (A_total_hot0 / Aff_hot_mid)
+        ksi_c = f_c * (A_total_cold0 / Aff_cold_total)
+        k_h = dh0_h / (sh.h * ksi_h)
+        k_c = dh0_c / (sc.h * ksi_c)
+        M_in_h = G_h0 / sh.rho / sh.a
+        M_in_c = G_c0 / sc.rho / sc.a
+
+        # Check for choking limit
+        if abs(k_h) > 1e-10:  # Avoid division by zero
+            ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
+            if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
+                logger.warning(
+                    "Hot fluid choking risk: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_h,
+                    ksi_lim_h,
+                    M_in_h,
+                    k_h,
+                )
+        if abs(k_c) > 1e-10:  # Avoid division by zero
+            ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
+            if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
+                logger.warning(
+                    "Cold fluid choking risk: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_c,
+                    ksi_lim_c,
+                    M_in_c,
+                    k_c,
+                )
+
         Th_out, Ph_not_b = _upd_stat_prop(
             f_in.hot,
             G_h0,
@@ -1182,7 +1215,7 @@ def compute_overall_performance(
     epsilon = Q_hot / Q_max if Q_max > 0 else 0.0
 
     dP_hot = Ph_in - Ph_out
-    dP_cold = Pc_out - float(fluids.Pc_in)
+    dP_cold = float(fluids.Pc_in) - Pc_out
     dP_hot_pct = 100.0 * dP_hot / Ph_in if Ph_in > 0 else 0.0
     dP_cold_pct = 100.0 * dP_cold / float(fluids.Pc_in) if float(fluids.Pc_in) > 0 else 0.0
 
