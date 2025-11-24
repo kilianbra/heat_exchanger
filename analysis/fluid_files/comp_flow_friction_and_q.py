@@ -317,12 +317,17 @@ if __name__ == "__main__":
     print("=" * 60)
 
     # Create the plots
-    # fig1, ax1 = plot_mach_vs_ksi()
+    fig1, ax1 = plot_mach_vs_ksi()
     # fig2, ax2 = plot_ksi_lim_vs_M_in()
+
+    # Save the figure
+    # import os
+
+    # plot_dir = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "assets")
+    # os.makedirs(plot_dir, exist_ok=True)
+    # plot_filename = os.path.join(plot_dir, "mach_vs_ksi.png")
+    # fig1.savefig(plot_filename, dpi=300, bbox_inches="tight")
+    # print(f"Plot saved to: {plot_filename}")
 
     # Show the plots
     # plt.show()
-
-    # Optionally save the figures
-    # fig1.savefig('mach_vs_ksi.png', dpi=300, bbox_inches='tight')
-    # fig2.savefig('ksi_lim_vs_M_in.png', dpi=300, bbox_inches='tight')

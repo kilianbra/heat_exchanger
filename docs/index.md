@@ -12,6 +12,8 @@ Click [here](./0Dmodel.md) to view more details about the basic 0D heat exchange
 
 Click [here](./eps_ntu.md) for details about the effectiveness-NTU method and the $P_n(y)$ polynomial
 
+Click [here](./choking_flow_friction_heat.md) for details about choking flow with friction and heat transfer, including the theory behind $\xi_\text{lim}$ and comparison with the current implementation
+
 ## Cycle Analysis Documentation
 
 Click [here](./cycle_tsfc_documentation.md) for comprehensive documentation of the TSFC cycle analysis script (`zeli_og.py`)

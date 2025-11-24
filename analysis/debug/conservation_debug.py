@@ -6,6 +6,7 @@ State: (T_a=275.0 K, p_b=2.79e+06 Pa) | Inputs: (G=664.2 kg/m²s, dh0=3.08e+06 J
 """
 
 import logging
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -408,7 +409,9 @@ else:
 plt.tight_layout()
 
 # Save plot
-plot_filename = "mach_out_vs_ksi_comparison.png"
+# plot_dir = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "assets")
+# os.makedirs(plot_dir, exist_ok=True)
+# plot_filename = os.path.join(plot_dir, "mach_out_vs_ksi_comparison.png")
 # plt.savefig(plot_filename, dpi=300, bbox_inches="tight")
 # print(f"Plot saved to: {plot_filename}")
 
