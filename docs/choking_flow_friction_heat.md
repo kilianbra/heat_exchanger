@@ -137,26 +137,14 @@ The relationship between Mach number and $\xi$ depends strongly on the heat addi
 
 ### Positive $k$ (Heating)
 
-For positive $k$ (heat addition):
+For positive $k$ (heat addition) and negative $k$ (cooling):
 
 - The Mach number initially increases with $\xi$
-- There is a maximum Mach number at $\xi_\text{lim}$
-- Beyond $\xi_\text{lim}$, the solution jumps to a supersonic branch where $M$ decreases
 - The flow chokes when $M$ reaches 1.0
 
 ![Mach number vs ksi for different k values](assets/mach_vs_ksi.png)
 
-The figure above shows how Mach number varies with $\xi$ for different $k$ values. Positive $k$ values (solid lines) show the characteristic behavior with a maximum Mach number before choking.
-
-### Negative $k$ (Cooling)
-
-For negative $k$ (heat removal):
-
-- The Mach number increases monotonically with $\xi$
-- The flow chokes when $M = 1.0$
-- There is no supersonic branch
-
-Negative $k$ values (dashed lines in the figure) show monotonic increase to choking.
+The figure above shows how Mach number varies with $\xi$ for different $k$ values. Positive $k$ values (solid lines) and negative $k$ values (dashed lines in the figure) both show monotonic increase to choking.
 
 ## Comparison with Current Implementation
 
@@ -185,22 +173,25 @@ The main difference between the compressible flow theory and the current `update
 **Current `update_static_properties` Implementation:**
 
 - Solves conservation equations for finite steps
-- Does not explicitly account for the change in $\tau$ within a segment
-- As density decreases significantly (Mach → 1, pressure drops), the stagnation temperature ratio $\tau$ changes within the segment, but this is not explicitly tracked
+- Does not explicitly account for the change in $\tau_0$ (wall shear stress) within a segment
+- As density decreases significantly (Mach → 1, pressure drops), the wall shear stress $\tau_0$ changes within the segment due to changing velocity and density, but this is not explicitly tracked
 - The step-wise approach can lead to discrepancies near choking conditions where the flow properties change rapidly
+
+**Potential Solution:** The issue with $\tau_0$ not being properly accounted for could be addressed by dividing each segment into multiple sub-segments and calling `update_static_properties` on each sub-segment with the correct density (and thus velocity) as input. This would allow $\tau_0$ to be updated based on the local flow conditions. However, this approach causes problems when performing a 0D analysis of the whole flow, as it requires marching through the flow path rather than solving the entire heat exchanger as a single 0D unit. The 0D approach relies on being able to treat each segment independently without needing to know intermediate flow states, which would be lost with sub-segmentation.
 
 ![Comparison of theory vs solver](assets/mach_out_vs_ksi_comparison.png)
 
-The figure above compares the theoretical solution (red line) with the `update_static_properties` solver (blue line). The solver generally follows the theory well but may diverge near choking conditions where the rapid changes in density and pressure require accounting for the continuous change in $\tau$ within each segment.
+The figure above compares the theoretical solution (red line) with the `update_static_properties` solver (blue line). The solver generally follows the theory well but may diverge near choking conditions where the rapid changes in density and pressure require accounting for the continuous change in $\tau_0$ (wall shear stress) within each segment. As velocity increases and density decreases, the wall shear stress $\tau_0$ changes, but the step-wise approach treats it as constant within each segment.
 
 ### Implications
 
 When the flow approaches choking:
 
 1. Density decreases significantly as pressure drops
-2. The stagnation temperature ratio $\tau$ changes continuously within the segment
-3. The step-wise approach in `update_static_properties` may not fully capture this effect
-4. This can lead to:
+2. Velocity increases as the flow accelerates toward Mach 1
+3. The wall shear stress $\tau_0$ changes continuously within the segment due to changing velocity and density, but the step-wise approach treats it as constant
+4. The step-wise approach in `update_static_properties` may not fully capture this effect
+5. This can lead to:
    - Convergence issues
    - Inaccurate predictions near choking
    - Underestimation of the maximum achievable $\xi$ before choking

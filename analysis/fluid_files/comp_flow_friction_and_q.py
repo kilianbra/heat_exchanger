@@ -27,9 +27,9 @@ def plot_mach_vs_ksi():
     For k > 0: Detects supersonic branch (M decreasing) and stops at maximum M.
     """
     # Fixed parameters
-    M_in = 0.15
+    M_in = 0.22
     gamma = 1.4
-    k_values = [-0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+    k_values = [-0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.05, 0.07, 0.1, 0.15, 0.2, 0.25, 0.3]
 
     # ksi range: 0 to 16
     ksi_max = 16.0
@@ -213,7 +213,7 @@ def plot_mach_vs_ksi():
     # Use raw LaTeX for xi and Gamma, and print their values in the title
     title = (
         rf"Mach Number vs $\xi$ ($M_{{\rm in}} = {M_in}$, $\gamma = {gamma}$) for different $k$ values"
-        + r"   $\dot{Q} = k\cdot  \dot{m} c_p T_{\rm stag,in}$"
+        + r"   $\dot{Q} = k\cdot \xi \cdot  \dot{m} c_p T_{\rm stag,in}$"
     )
     ax.set_title(title, fontsize=14)
     ax.grid(True, alpha=0.3)
@@ -321,13 +321,13 @@ if __name__ == "__main__":
     # fig2, ax2 = plot_ksi_lim_vs_M_in()
 
     # Save the figure
-    # import os
+    import os
 
-    # plot_dir = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "assets")
-    # os.makedirs(plot_dir, exist_ok=True)
-    # plot_filename = os.path.join(plot_dir, "mach_vs_ksi.png")
-    # fig1.savefig(plot_filename, dpi=300, bbox_inches="tight")
-    # print(f"Plot saved to: {plot_filename}")
+    plot_dir = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "assets")
+    os.makedirs(plot_dir, exist_ok=True)
+    plot_filename = os.path.join(plot_dir, "mach_vs_ksi.png")
+    fig1.savefig(plot_filename, dpi=300, bbox_inches="tight")
+    print(f"Plot saved to: {plot_filename}")
 
     # Show the plots
-    # plt.show()
+    plt.show()
