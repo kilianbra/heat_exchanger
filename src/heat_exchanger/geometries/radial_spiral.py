@@ -1088,6 +1088,8 @@ def compute_overall_performance(
     mdot_c = fluids.m_dot_cold / geometry.n_headers
 
     UA_sum = 0.0
+    fA_cold_sum = 0.0
+    fA_hot_sum = 0.0
     for j in range(geometry.n_headers - 1):
         sh = fluids.hot.state(Th[j], Ph[j])
         sc = fluids.cold.state(Tc[j], Pc[j])
@@ -1118,7 +1120,7 @@ def compute_overall_performance(
         Pr_c = mu_c * sc.cp / k_c
         Re_h_od = G_h * geometry.tube_outer_diam / mu_h
         Re_c = G_c * geometry.tube_inner_diam / mu_c
-        Nu_h, _ = _bank_corr(
+        Nu_h, f_h = _bank_corr(
             Re_h_od,
             geometry.tube_spacing_long,
             geometry.tube_spacing_trv,
@@ -1127,6 +1129,7 @@ def compute_overall_performance(
             n_rows=geometry.n_rows_per_header * geometry.n_headers,
         )
         Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+        f_c = _circ_fric(Re_c, 0)
         h_h = Nu_h * k_h / geometry.tube_outer_diam
         h_c = Nu_c * k_c / geometry.tube_inner_diam
         wall_term = (
@@ -1136,6 +1139,8 @@ def compute_overall_performance(
         )
         U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
         UA_sum += U_hot * area_ht_hot[j] * geometry.n_headers
+        fA_hot_sum += f_h * area_ht_hot[j] * geometry.n_headers
+        fA_cold_sum += f_c * area_ht_cold[j] * geometry.n_headers
 
         Th[j + 1], Ph[j + 1] = _upd_stat_prop(
             fluids.hot,
@@ -1200,6 +1205,39 @@ def compute_overall_performance(
     h_stag_out_hot = state_h_out.h + 0.5 * (G_h_out / state_h_out.rho) ** 2
     h_stag_in_cold = state_c_in.h + 0.5 * (G_c_total / state_c_in.rho) ** 2
     h_stag_out_cold = state_c_out.h + 0.5 * (G_c_total / state_c_out.rho) ** 2
+
+    ksi_h = fA_hot_sum / (area_free_hot_in + area_free_hot_out) * 2
+    ksi_c = fA_cold_sum / (area_free_cold_total)
+    k_h = (h_stag_in_hot - h_stag_out_hot) / (h_stag_in_hot * ksi_h)
+    k_c = (h_stag_out_cold - h_stag_in_cold) / (h_stag_in_cold * ksi_c)
+    M_in_h = G_h_in / state_h_in.rho / state_h_in.a
+    M_in_c = G_c_total / state_c_in.rho / state_c_in.a
+    ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
+    ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
+    if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
+        logger.warning(
+            "Hot fluid choking: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
+            ksi_h,
+            ksi_lim_h,
+            M_in_h,
+            k_h,
+        )
+    else:
+        logger.info(
+            "Hot fluid not choking: ksi_h=%.1e <= ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)", ksi_h, ksi_lim_h, M_in_h, k_h
+        )
+    if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
+        logger.warning(
+            "Cold fluid choking: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
+            ksi_c,
+            ksi_lim_c,
+            M_in_c,
+            k_c,
+        )
+    else:
+        logger.info(
+            "Cold fluid not choking: ksi_c=%.1e <= ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)", ksi_c, ksi_lim_c, M_in_c, k_c
+        )
 
     Q_hot = fluids.m_dot_hot * (h_stag_in_hot - h_stag_out_hot)
     Q_cold = fluids.m_dot_cold * (h_stag_out_cold - h_stag_in_cold)

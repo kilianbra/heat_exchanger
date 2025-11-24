@@ -7,6 +7,7 @@ from heat_exchanger.logging_utils import configure_logging
 # Configure logging
 configure_logging(logging.INFO)
 
+
 # ============================================================================
 # SELECT CASE: Change this to 1 or 2 to switch between cases
 # ============================================================================
@@ -41,7 +42,7 @@ f_in_case1 = FluidInputs(
     hot=PerfectGasFluid.from_name("Air"),
     cold=PerfectGasFluid.from_name("Para_Hydrogen"),
     m_dot_hot=64.327297380,
-    m_dot_cold=0.76633099552 / 2,
+    m_dot_cold=0.76633099552 / 3,
     Tc_in=275.0,
     Pc_in=2790000.0,
     Th_in=574.3318,
