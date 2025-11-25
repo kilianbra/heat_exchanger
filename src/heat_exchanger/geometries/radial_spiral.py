@@ -705,7 +705,7 @@ def xflow_guess_0d(
         if abs(k_h) > 1e-10:  # Avoid division by zero
             ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
             if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
-                logger.warning(
+                logger.info(
                     "Hot fluid choking risk: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
                     ksi_h,
                     ksi_lim_h,
@@ -715,7 +715,7 @@ def xflow_guess_0d(
         if abs(k_c) > 1e-10:  # Avoid division by zero
             ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
             if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
-                logger.warning(
+                logger.info(
                     "Cold fluid choking risk: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
                     ksi_c,
                     ksi_lim_c,
