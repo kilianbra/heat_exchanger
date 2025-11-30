@@ -616,8 +616,8 @@ def _plot_tube_bank_interactive():
     layout_radio = RadioButtons(rax_layout, ("Inline", "Staggered"), active=0)
 
     # Sliders - will be updated based on layout selection
-    xt_slider = Slider(sax_xt, "Xt*", 1.25, 6.0, valinit=default_xt, valstep=0.01)
-    xl_slider = Slider(sax_xl, "Xl*", 1.2, 3.0, valinit=default_xl, valstep=0.01)
+    xt_slider = Slider(sax_xt, "Xt*", 1.25, 6.0, valinit=default_xt, valstep=0.05)
+    xl_slider = Slider(sax_xl, "Xl*", 1.2, 3.0, valinit=default_xl, valstep=0.05)
 
     # Lines
     (line_gg,) = ax.plot([], [], label="Gaddis and Gnielinski", color="#1f77b4", linestyle="-")
