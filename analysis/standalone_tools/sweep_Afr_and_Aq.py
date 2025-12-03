@@ -2,10 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 
-from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import (
-    calculate_pressure_ratio,
     rate_hex_simple,
 )
 

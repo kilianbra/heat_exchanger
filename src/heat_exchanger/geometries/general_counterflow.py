@@ -27,7 +27,7 @@ from heat_exchanger.fluids.compressible_flow_friction_heat import (
     p_static_over_p_static_in,
     solve_M_from_ksi,
 )
-from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+from heat_exchanger.fluids.protocols import FluidInputs
 
 logger = logging.getLogger(__name__)
 

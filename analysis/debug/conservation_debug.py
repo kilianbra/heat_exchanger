@@ -10,7 +10,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
-from heat_exchanger.conservation import update_static_properties, update_s_prop
+from heat_exchanger.conservation import update_s_prop, update_static_properties
 from heat_exchanger.fluids.compressible_flow_friction_heat import (
     find_ksi_lim_adaptive as max_friction,
 )
@@ -98,8 +98,8 @@ def single_stepping(n_steps=1):
 
     try:
         for step in range(0, n_steps):
-            T_prev = T_current
-            p_prev = p_current
+            # T_prev = T_current
+            # p_prev = p_current
 
             T_current, p_current = update_static_properties(
                 fluid,

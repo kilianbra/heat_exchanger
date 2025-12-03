@@ -379,7 +379,7 @@ def update_s_prop(
             (
                 "Fluid not conv after %d it: "
                 "Residuals: |dh_t|=%.2e (want < %.2e), |d(p+G²/ρ)|=%.2e (want < %.2e) | "
-                "State: (T_a=%.1f K, p_b=%.2e Pa) | Inputs: (G=%.1f kg/m²s, dh0=%.2e J/kg, tau_dA_over_A_c=%.2e)"
+                "State: (T_a=%.1f K, p_b=%.2e Pa) | Inputs: (G=%.1f kg/m²s, dh0=%.2e J/kg, f_dA_over_A_c=%.2e)"
             ),
             sol.nfev,
             abs(R1_final),
@@ -390,7 +390,7 @@ def update_s_prop(
             p_b,
             G,
             dh0,
-            tau_dA_over_A_c,
+            f_dA_over_A_c,
         )
 
     return T_solution, p_solution
