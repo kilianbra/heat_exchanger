@@ -15,8 +15,8 @@ from heat_exchanger.correlations import general_hex_friction_factor, general_hex
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import (
     calculate_pressure_ratio,
-    rate_hex_simple,
     rate_hex_compressible_two_stream,
+    rate_hex_simple,
     xflow_guess_0d,
 )
 
@@ -109,48 +109,10 @@ def frontal_area_sweep():
 
     Returns baseline result and all valid results.
     """
-    p_hot_in = F_IN.Ph_in if F_IN.Ph_in else F_IN.Ph_out
-    state_hot_in = F_IN.hot.state(T=F_IN.Th_in, P=p_hot_in)
-    state_cold_in = F_IN.cold.state(T=F_IN.Tc_in, P=F_IN.Pc_in)
-
-    rho_hot_in = state_hot_in.rho
-    rho_cold_in = state_cold_in.rho
-    mu_hot_in = state_hot_in.mu
-    mu_cold_in = state_cold_in.mu
-
-    # Get Prandtl numbers from fluid models
-    Pr_hot = (
-        F_IN.hot.Pr if isinstance(F_IN.hot, PerfectGasFluid) else state_hot_in.cp * state_hot_in.mu / state_hot_in.k
-    )
-    Pr_cold = (
-        F_IN.cold.Pr
-        if isinstance(F_IN.cold, PerfectGasFluid)
-        else state_cold_in.cp * state_cold_in.mu / state_cold_in.k
-    )
-    Pr = 0.5 * (Pr_hot + Pr_cold)  # Average for correlations
-
-    # Calculate capacity ratio
-    cr, c_h_c = _get_capacity_ratio()
-
     # Sweep frontal area from 0.03 to 0.9 m²
-    a_fr_sweep = np.linspace(0.04, 0.20, 10)
-
-    print("\nFrontal area sweep (filtering out dp_hot < 0% or dp_hot > 20%):")
-    header = (
-        f"{'A_fr (m²)':<12} {'eps':<8} {'dp_hot (%)':<12} {'dp_cold (%)':<12} "
-        f"{'Re_hot':<12} {'Re_cold':<12} {'g²_hot':<12} {'g²_cold':<12}"
-    )
-    print(header)
-    print("-" * 100)
+    a_fr_sweep = np.linspace(0.1, 0.5, 10)
 
     results = []
-
-    # Calculate heat transfer areas from total A_q and sigma_w
-    a_c = 2 * AQ_BASELINE / (1 + SIGMA_W)
-    a_h = a_c * SIGMA_W
-
-    # Calculate hydraulic diameters: dh_h/dh_c = sigma_r / sigma_w
-    d_h_h = D_H_C * SIGMA_R / SIGMA_W
 
     for a_fr in a_fr_sweep:
         r_s, r_c, r_xf = run_one_model_example(a_fr, verbose=False)
@@ -195,6 +157,14 @@ def frontal_area_sweep():
                 "g2_cold": g2_cold,
             }
         )
+
+    print("\nFrontal area sweep (filtering out dp_hot < 0% or dp_hot > 20%):")
+    header = (
+        f"{'A_fr (m²)':<12} {'eps':<8} {'dp_hot (%)':<12} {'dp_cold (%)':<12} "
+        f"{'Re_hot':<12} {'Re_cold':<12} {'g²_hot':<12} {'g²_cold':<12}"
+    )
+    print(header)
+    print("-" * 100)
 
     # Check if any valid results were found
     if len(results) == 0:
@@ -567,8 +537,9 @@ def run_one_model_example(a_fr, verbose=True):
         print(f"  NTU: {r_c['ntu']:.2f}")
     else:
         print(
+            f"xflow 0d: Δp_h={(1 - r_xf[2] / F_IN.Ph_in) * 100:.2f}%, Δp_c={(1 - r_xf[3] / F_IN.Pc_in) * 100:.2f}%, eps={(r_xf[1] - F_IN.Tc_in) / (F_IN.Th_in - F_IN.Tc_in):.3f}; "
             f"Simple model: Δp_h={r_s['dp_hot'] * 100:.2f}%, Δp_c={r_s['dp_cold'] * 100:.2f}%, eps={r_s['eps']:.3f}; "
-            f"Compressible: Δp_h={r_c['dp_hot'] * 100:.2f}%, Δp_c={r_c['dp_cold'] * 100:.2f}%, eps={r_c['eps']:.3f}, dp_h_f = {r_c['dp_hot_friction'] * 100:.2f}%, dp_h_heat = {r_c['dp_hot_heat'] * 100:.2f}%; "
+            # f"Compressible: Δp_h={r_c['dp_hot'] * 100:.2f}%, Δp_c={r_c['dp_cold'] * 100:.2f}%, eps={r_c['eps']:.3f}, dp_h_f = {r_c['dp_hot_friction'] * 100:.2f}%, dp_h_heat = {r_c['dp_hot_heat'] * 100:.2f}%; "
             f"M_hot: {r_c['hot']['mach_in']:.3f}->{r_c['hot']['mach_out']:.3f}, ksi_hot={r_c['hot']['ksi']:.4f}; "
             f"M_cold: {r_c['cold']['mach_in']:.3f}->{r_c['cold']['mach_out']:.3f}, ksi_cold={r_c['cold']['ksi']:.4f}"
         )

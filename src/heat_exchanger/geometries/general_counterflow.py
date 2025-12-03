@@ -14,17 +14,20 @@ References:
 from __future__ import annotations
 
 import logging
+
 import numpy as np
-from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+
+from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
 from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
+from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.compressible_flow_friction_heat import (
+    find_ksi_lim_adaptive as _find_ksi_lim,
+)
 from heat_exchanger.fluids.compressible_flow_friction_heat import (
     p_static_over_p_static_in,
     solve_M_from_ksi,
-    find_ksi_lim_adaptive as _find_ksi_lim,
 )
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
-from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
-
 
 logger = logging.getLogger(__name__)
 
@@ -183,20 +186,14 @@ def rate_hex_simple(
     rho_cold_in = state_cold_in.rho
     mu_hot_in = state_hot_in.mu
     mu_cold_in = state_cold_in.mu
+    gamma_hot = state_hot_in.gamma
+    gamma_cold = state_cold_in.gamma
+    gm1og_hot = (gamma_hot - 1) / gamma_hot
+    gm1og_cold = (gamma_cold - 1) / gamma_cold
 
     # Get model-level properties
-    if isinstance(fluid_hot, PerfectGasFluid):
-        Pr_hot = fluid_hot.Pr
-    else:
-        Pr_hot = state_hot_in.cp * state_hot_in.mu / state_hot_in.k  # Pr = mu*cp/k
-
-    if isinstance(fluid_cold, PerfectGasFluid):
-        Pr_cold = fluid_cold.Pr
-    else:
-        Pr_cold = state_cold_in.cp * state_cold_in.mu / state_cold_in.k
-
-    # Use average Pr for correlations (both sides typically similar)
-    Pr = 0.5 * (Pr_hot + Pr_cold)
+    Pr_hot = fluid_hot.Pr
+    Pr_cold = fluid_cold.Pr
 
     # Reference conditions
     T_d = 300.0  # K
@@ -238,8 +235,8 @@ def rate_hex_simple(
     j_cold = general_hex_j_factor(Re_cold, ls_over_dh_cold)
 
     # Calculate Stanton numbers: St = j * Pr^(-2/3)
-    St_hot = j_hot * Pr ** (-2 / 3)
-    St_cold = j_cold * Pr ** (-2 / 3)
+    St_hot = j_hot * Pr_hot ** (-2 / 3)
+    St_cold = j_cold * Pr_cold ** (-2 / 3)
 
     # Calculate A_q/A_o for each side: A_q/A_o = 4*L/d_h
     # Note: L is the same for both sides (physical flow length)
@@ -296,6 +293,31 @@ def rate_hex_simple(
     T_hot_out = T_hot_in * T_o_Ti_hot
     T_cold_out = T_cold_in * T_o_Ti_cold
 
+    # Calculate work potentials with different gamma values for hot and cold
+    # This is Td delta s / cp/Td = delta s / cp
+    log_p_hot = np.log(P_hot_out_P_hot_in)
+    log_p_cold = np.log(P_cold_out_P_cold_in)
+    dW_pot_Ex = (
+        np.log(T_hot_out / T_hot_in) + np.log(T_cold_out / T_cold_in) - gm1og_hot * log_p_hot - gm1og_cold * log_p_cold
+    )
+
+    # Calculate Euergy change with different gamma for hot and cold
+
+    dW_pot_Eu_hot = (
+        (1 / p_h_in_pd) ** gm1og_hot * T_hot_in * (T_hot_out / T_hot_in * (1 / P_hot_out_P_hot_in) ** gm1og_hot - 1)
+    )
+    dW_pot_Eu_cold = (
+        (1 / p_c_in_pd) ** gm1og_cold
+        * T_cold_in
+        * (T_cold_out / T_cold_in * (1 / P_cold_out_P_cold_in) ** gm1og_cold - 1)
+    )
+    dW_pot_Eu = dW_pot_Eu_hot + dW_pot_Eu_cold
+
+    # Normalize by Q_max
+    norm = 1 / (T_hot_in - T_cold_in)
+    dW_pot_Ex_norm = dW_pot_Ex * norm
+    dW_pot_Eu_norm = dW_pot_Eu * norm
+
     return {
         "eps": eps,
         "dp_hot": 1 - P_hot_out_P_hot_in,
@@ -309,6 +331,8 @@ def rate_hex_simple(
         "g2_cold": g2_cold,
         "Aq_over_Ao_c": A_q_over_Ao_c,
         "Aq_over_Ao_h": A_q_over_Ao_h,
+        "dW_pot_Ex_norm": dW_pot_Ex_norm,
+        "dW_pot_Eu_norm": dW_pot_Eu_norm,
     }
 
 

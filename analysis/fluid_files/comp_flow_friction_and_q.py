@@ -15,9 +15,9 @@ from heat_exchanger.fluids.compressible_flow_friction_heat import (
     calculate_V0_from_M0,
     find_ksi_lim_adaptive,
     ksi_from_V_V0,
+    p_static_over_p_static_in,
     solve_M_from_ksi,
     solve_V_from_ksi,
-    p_static_over_p_static_in,
 )
 
 PLOT_P_RATIO = False
