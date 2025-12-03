@@ -272,6 +272,15 @@ class PerfectGasFluid:
             "Pr": 0.69,  # (0.69, 0.68, 0.69, 0.68)
             "cp": 14633.0,  # (14650.4, 14614.6 - both +3% at inlet -0% at exit)
         },
+        "kerocomb_helicopter": {
+            "M": 27.5,
+            "S": 150.0,
+            "T_ref": 350.0,  # Same as h2comb_ahje
+            "mu_ref": 1.12e-5,
+            "gamma": 1.33,  # from textbook
+            "Pr": 0.70,
+            "cp": 1150.0,
+        },
     }
     _PRESET_ALIASES: ClassVar[dict[str, str]] = {}
     _PRESET_DISPLAY_NAMES: ClassVar[dict[str, str]] = {
@@ -290,6 +299,7 @@ class PerfectGasFluid:
         "helium": ("helium", "Helium", "HELIUM", "he", "He", "HE"),
         "h2comb_ahje": ("h2comb_ahje", "H2_Combustion_Products_AHJE"),
         "para_h2": ("para_h2", "Para_Hydrogen", "ParaHydrogen", "Para-Hydrogen", "Para_Hydrogen", "Para-H2", "Para_H2"),
+        "kerocomb_helicopter": ("kerocomb_helicopter", "kero_heli"),
     }
     for _canonical, _aliases in _PRESET_SYNONYMS.items():
         for _alias in _aliases:
@@ -331,7 +341,7 @@ class PerfectGasFluid:
     def available_presets(cls) -> tuple[str, ...]:
         """Tuple of canonical preset names (title case)."""
 
-        return tuple(cls._PRESET_DISPLAY_NAMES[name] for name in sorted(cls._PRESET_LIBRARY))
+        return tuple(cls._PRESET_DISPLAY_NAMES.get(name, name.title()) for name in sorted(cls._PRESET_LIBRARY))
 
     @classmethod
     def from_name(cls, fluid: str) -> PerfectGasFluid:

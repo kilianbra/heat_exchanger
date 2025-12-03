@@ -173,6 +173,9 @@ def ksi_from_V_V0(V, V_0, k, gamma=1.4):
     float
         ksi (ξ) value
     """
+
+    if np.abs(k) < 0.01:
+        return (1 / V_0**2 - 1 / V**2) + (gamma + 1) / 2 / gamma * np.log(V_0**2 / V**2)
     # Term 1: V / V_0
     term1 = V / V_0
 

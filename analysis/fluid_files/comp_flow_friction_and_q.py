@@ -17,7 +17,11 @@ from heat_exchanger.fluids.compressible_flow_friction_heat import (
     ksi_from_V_V0,
     solve_M_from_ksi,
     solve_V_from_ksi,
+    p_static_over_p_static_in,
 )
+
+PLOT_P_RATIO = False
+SKIP_LABEL = False
 
 
 def plot_mach_vs_ksi():
@@ -27,9 +31,10 @@ def plot_mach_vs_ksi():
     For k > 0: Detects supersonic branch (M decreasing) and stops at maximum M.
     """
     # Fixed parameters
-    M_in = 0.22
+    M_in = 0.2
     gamma = 1.4
-    k_values = [-0.3, -0.25, -0.2, -0.15, -0.1, -0.05, 0.05, 0.07, 0.1, 0.15, 0.2, 0.25, 0.3]
+    k_values = [-0.1, -0.04, -0.03, -0.015, -0.011, 0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
+    # [-0.3, -0.25, -0.2, -0.15, -0.1, -0.05, -0.03, 0.03, 0.05, 0.07, 0.1, 0.15, 0.2, 0.25, 0.3]
 
     # ksi range: 0 to 16
     ksi_max = 16.0
@@ -48,14 +53,6 @@ def plot_mach_vs_ksi():
     for k, color in zip(k_values, colors, strict=True):
         ksi_valid = []
         M_valid = []
-
-        # Handle k=0 as special case (equation 13 has division by k)
-        if abs(k) < 1e-10:
-            # For k=0, tau = 1 (constant), so M should remain constant
-            # We can't use equation 13 directly, so we'll skip k=0 for now
-            # or calculate M directly from tau=1
-            print("Note: k=0 case not implemented (equation 13 requires k != 0)")
-            continue
 
         # Calculate V_0 once for this k value
         try:
@@ -90,9 +87,14 @@ def plot_mach_vs_ksi():
                 # Handle k < 0: find first point where M > 1.0
                 if k < 0:
                     if M < 1.0:
+                        p_ratio = p_static_over_p_static_in(M_in, M, k, ksi, gamma=gamma)
+
                         # Still subsonic, add point
                         ksi_valid.append(ksi)
-                        M_valid.append(M)
+                        if PLOT_P_RATIO:
+                            M_valid.append(p_ratio)
+                        else:
+                            M_valid.append(M)
                         ksi_before_M1 = ksi
                         M_before_M1 = M
                     elif M >= 1.0:
@@ -123,7 +125,7 @@ def plot_mach_vs_ksi():
                         break
 
                 # Handle k > 0: detect supersonic branch (M decreasing)
-                elif k > 0:
+                elif k >= 0:
                     # Update maximum M tracking before checking for decrease
                     if max_M < M:
                         max_M = M
@@ -157,8 +159,12 @@ def plot_mach_vs_ksi():
                         break
 
                     # Add valid point
+                    p_ratio = p_static_over_p_static_in(M_in, M, k, ksi, gamma=gamma)
                     ksi_valid.append(ksi)
-                    M_valid.append(M)
+                    if PLOT_P_RATIO:
+                        M_valid.append(p_ratio)
+                    else:
+                        M_valid.append(M)
                     last_M = M
 
             except (ValueError, RuntimeError) as e:
@@ -178,11 +184,12 @@ def plot_mach_vs_ksi():
             ax.plot(ksi_valid, M_valid, label=f"k = {k:.2f}", color=color, linewidth=2, linestyle=linestyle)
 
             # Add label at the end of the curve
+
             if ksi_valid and M_valid:
                 last_ksi = ksi_valid[-1]
                 last_M = M_valid[-1]
 
-                if is_choked:
+                if is_choked and not SKIP_LABEL:
                     # Label above if choked (vertical)
                     ax.text(
                         last_ksi,
@@ -194,7 +201,7 @@ def plot_mach_vs_ksi():
                         color=color,
                         rotation=90,
                     )
-                else:
+                elif not is_choked and not SKIP_LABEL:
                     # Label to the right if not choked (vertical)
                     ax.text(
                         last_ksi,

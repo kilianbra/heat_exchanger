@@ -6,7 +6,6 @@ State: (T_a=275.0 K, p_b=2.79e+06 Pa) | Inputs: (G=664.2 kg/m²s, dh0=3.08e+06 J
 """
 
 import logging
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np

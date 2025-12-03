@@ -1,146 +1,104 @@
 """
-Script to generate publication-quality figure from hex_Afr_isolation.py
-Case B: Air and combustion products heat exchanger
-Black and white, no sliders, saves as SVG
+General counterflow heat exchanger models.
 
-Self-contained version - all functions included for portability.
+This module provides two approaches for modeling counterflow heat exchangers:
+1. Simple model: Uses NTU-effectiveness method with iterative pressure drop
+2. Compressible flow model: Uses Sturas 1971 equations for friction and heat transfer
+
+References:
+- Shah and Sekulic (2003) "Fundamentals of Heat Exchanger Design"
+- Sturas (1971) NASA Technical Report
+- Kays and London (1984) "Compact Heat Exchangers"
 """
 
-import matplotlib.pyplot as plt
+from __future__ import annotations
+
+import logging
 import numpy as np
-from matplotlib.ticker import PercentFormatter, FuncFormatter
+from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
+from heat_exchanger.fluids.compressible_flow_friction_heat import (
+    p_static_over_p_static_in,
+    solve_M_from_ksi,
+    find_ksi_lim_adaptive as _find_ksi_lim,
+)
+from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+from heat_exchanger.conservation import update_static_properties as _upd_stat_prop
 
 
-# ============================================================================
-# CORRELATION FUNCTIONS (from correlations.py)
-# ============================================================================
-def general_hex_j_factor(Re: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
-    """
-    Calculate j-factor for general heat exchangers.
-    From Milten (2024) eqn (15), based on HEx from Kays and London (1984) like LaHaye (1974).
-    """
-    import warnings
-
-    if show_warnings and (Re < 2e3 or Re > 2e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
-
-    if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
-        warnings.warn(f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8")
-
-    return 0.360 * l_s_over_d_h**-0.401 * Re**-0.413 + 2.13e-5 * l_s_over_d_h
-
-
-def general_hex_friction_factor(Re: float, l_s_over_d_h: float, show_warnings: bool = False) -> float:
-    """
-    Calculate friction factor for general heat exchangers.
-    From Milten (2024) eqn (16), based on HEx from Kays and London (1984) like LaHaye (1974).
-    """
-    import warnings
-
-    if show_warnings and (Re < 2e3 or Re > 2e4):
-        warnings.warn(f"Reynolds number {Re:.1e} outside correlation range of 2k-20k")
-
-    if show_warnings and (l_s_over_d_h < 0.645 or l_s_over_d_h > 73.8):
-        warnings.warn(f"l_s_over_d_h ratio {l_s_over_d_h:.2f} outside correlation range of 0.645-73.8")
-
-    return 0.492 * l_s_over_d_h**-0.501 * Re**-0.232
-
+logger = logging.getLogger(__name__)
 
 # ============================================================================
-# HEAT EXCHANGER FUNCTIONS (from use_cases_shared/hex_in_isolation.py)
+# SIMPLE MODEL FUNCTIONS (Incompressible / Low Mach)
 # ============================================================================
-def calculate_temperature_ratio(eps, t, hot_fluid=True, C_h_c=1.0):
+
+
+def calculate_pressure_ratio(
+    aq_over_ao,
+    f,
+    gd2,
+    t_i_td,
+    p_i_pd,
+    eps,
+    t,
+    hot_fluid=True,
+    c_h_c=1.0,
+    max_iter=100,
+    tol=0.001,
+):
     """
-    Calculate the outlet/inlet temperature ratio for a given effectiveness and temperature ratio.
+    Calculate the pressure ratio p_out/p_in using iterative approach.
 
-    Parameters:
-    -----------
-    eps : float or array
-        Heat exchanger effectiveness
-    t : float
-        Temperature ratio T_h_in/T_c_in
-    hot_fluid : bool
-        Whether this is for the hot fluid (True) or cold fluid (False)
-    C_h_c : float
-        Capacity ratio C_hot/C_cold (default 1.0 for balanced exchanger)
+    Accounts for both friction losses and density changes due to heating.
+    Uses the non-dimensional parameter g_d^2 = G^2 / (rho_d * p_d).
 
-    Returns:
-    --------
-    float or array
-        Temperature ratio T_out/T_in
-
-    Notes:
-    ------
-    For a counterflow heat exchanger:
-    if C_hot > C_cold (Cr = 1/C_h_c < 1):
-    - Cold side is C_min: Q = eps * C_cold * (T_h_in - T_c_in)
-    - Hot side temp change: dT_hot = Q / C_hot = eps * (T_h_in - T_c_in) / C_h_c
-    - Cold side temp change: dT_cold = Q / C_cold = eps * (T_h_in - T_c_in)
-    if C_hot < C_cold (Cr = C_h_c < 1):
-    - Hot side is C_min: Q = eps * C_hot * (T_h_in - T_c_in)
-    - Cold side temp change: dT_cold = Q / C_cold = eps * (T_h_in - T_c_in) * C_h_c
-    - Hot side temp change: dT_hot = Q / C_hot = eps * (T_h_in - T_c_in)
-
-    Then convert dT to T_out/T_in
-    for hot_fluid
-    - T_out/T_in = 1 - dT_hot/T_h_in
-    for cold_fluid
-    - T_out/T_in = 1 + dT_cold/T_c_in
-    """
-    if hot_fluid:
-        if C_h_c > 1:  # cold side is C_min
-            return 1 - eps / C_h_c * (1 - 1 / t)
-        else:
-            return 1 - eps * (1 - 1 / t)
-    else:  # cold fluid
-        if C_h_c > 1:  # hot side is C_min
-            return 1 + eps * (t - 1)
-        else:
-            return 1 + eps * C_h_c * (t - 1)
-
-
-def calculate_pressure_ratio(L_dh, f, gd2, T_i_Td, p_i_pd, eps, t, hot_fluid=True, C_h_c=1.0, max_iter=100, tol=0.0001):
-    """
-    Calculate the pressure ratio p_out/p_in using an iterative approach that accounts for
-    both friction losses and density changes due to heating.
-
-    This uses g_d^2 = G^2/rho_d/p_d
-
-    Parameters:
-    -----------
-    L_dh : float or array
-        Length to hydraulic diameter ratio
+    Parameters
+    ----------
+    aq_over_ao : float or array
+        Heat transfer area to free flow area ratio (A_q/A_o = 4*L/d_h)
     f : float or array
-        Friction factor
+        Fanning friction factor
     gd2 : float or array
-        Square of the mass flux parameter (g_d^2 = G^2/rho_d/p_d)
-    T_i_Td : float
-        Inlet temperature ratio (T_in/T_d)
+        Square of dimensionless mass flux: g_d^2 = G^2 / (rho_d * p_d)
+    t_i_td : float
+        Inlet temperature ratio: T_in / T_d (reference temperature)
     p_i_pd : float
-        Inlet pressure ratio (p_in/p_d)
+        Inlet pressure ratio: p_in / p_d (reference pressure)
     eps : float or array
         Heat exchanger effectiveness
     t : float
-        Temperature ratio T_h_in/T_c_in
+        Temperature ratio T_h_in / T_c_in
     hot_fluid : bool
         Whether this is for the hot fluid (True) or cold fluid (False)
-    Cr : float
-        Capacity ratio C_min/C_max (default 1.0)
-    max_iter : int, optional
+    c_h_c : float
+        Capacity ratio C_hot/C_cold (default 1.0)
+    max_iter : int
         Maximum number of iterations (default: 100)
-    tol : float, optional
+    tol : float
         Convergence tolerance (default: 0.0001)
 
-    Returns:
-    --------
+    Returns
+    -------
     float or array
-        Pressure ratio p_out/p_in
+        Pressure ratio p_out / p_in
     """
+    # Convert A_q/A_o to L/d_h: A_q/A_o = 4*L/d_h, so L/d_h = A_q/A_o / 4
+    l_dh = aq_over_ao / 4.0
+
     # Initialize pressure ratio (start with no pressure drop)
-    p_o_pi = np.ones_like(L_dh)
+    p_o_pi = np.ones_like(l_dh)
 
     # Calculate temperature ratio for a given effectiveness
-    T_o_Ti = calculate_temperature_ratio(eps, t, hot_fluid, C_h_c)
+    if hot_fluid:
+        if c_h_c > 1:  # cold side is C_min
+            t_o_ti = 1 - eps / c_h_c * (1 - 1 / t)
+        else:
+            t_o_ti = 1 - eps * (1 - 1 / t)
+    else:  # cold fluid
+        if c_h_c > 1:  # cold side is C_min
+            t_o_ti = 1 + eps * (t - 1)
+        else:
+            t_o_ti = 1 + eps * c_h_c * (t - 1)
 
     # Iterate to find converged pressure ratio
     for _ in range(max_iter):
@@ -148,8 +106,9 @@ def calculate_pressure_ratio(L_dh, f, gd2, T_i_Td, p_i_pd, eps, t, hot_fluid=Tru
         p_o_pi_old = p_o_pi.copy()
 
         # Calculate new pressure ratio using the iteration formula
-        p_o_pi_new = 1 - gd2 * (1 / p_i_pd) ** 2 * (T_i_Td) * (
-            0.5 * f * 4 * L_dh * (1 + T_o_Ti * 1 / p_o_pi) / 2 + (T_o_Ti * 1 / p_o_pi - 1)
+        # Based on momentum equation with friction and density change
+        p_o_pi_new = 1 - gd2 * (1 / p_i_pd) ** 2 * t_i_td * (
+            0.5 * f * 4 * l_dh * (1 + t_o_ti * 1 / p_o_pi) / 2 + (t_o_ti * 1 / p_o_pi - 1)
         )
 
         # Apply relaxation for stability
@@ -162,451 +121,777 @@ def calculate_pressure_ratio(L_dh, f, gd2, T_i_Td, p_i_pd, eps, t, hot_fluid=Tru
     return p_o_pi
 
 
-# ============================================================================
-# CASE B PARAMETERS
-# ============================================================================
-# Fluid properties
-mdot = 1.6  # kg/s for both fluids
-cp_hot = 1150  # J/(kg·K) for combustion products
-cp_cold = 1040  # J/(kg·K) for air
+def rate_hex_simple(
+    A_fr,
+    A_q,
+    f_in: FluidInputs,
+    d_h_c=4e-3,
+    sigma_r=1.0,
+    sigma_w=1.0,
+    t_over_dhc=0.02,
+    ls_over_dh=5.0,
+):
+    """
+    Rate a counterflow heat exchanger using the simple model.
 
-# Inlet conditions
-T_hot_in = 980  # K
-P_hot_in = 1.06e5  # Pa (1.06 bar)
-T_cold_in = 576  # K
-P_cold_in = 7.2e5  # Pa (7.2 bar)
+    Parameters
+    ----------
+    A_fr : float
+        Frontal area [m²]
+    A_q : float
+        Average heat transfer area (A_h + A_c) / 2 [m²]
+    f_in : FluidInputs
+        Fluid inputs containing fluid models, mass flow rates, and inlet conditions
+    d_h_c : float
+        Cold side hydraulic diameter [m] (default 4 mm) -> dh_h = d_h_c * sigma_r / sigma_w
+    sigma_r : float
+        Free flow area ratio A_o_h/A_o_c (default 1.0)
+    sigma_w : float
+        Heat transfer area ratio A_h/A_c (default 1.0)
+    t_over_dhc : float
+        Wall thickness to cold hydraulic diameter ratio (default 0.02)
+    ls_over_dh : float
+        Strip length to hydraulic diameter ratio for correlations
 
-# Reference conditions (for non-dimensionalization)
-Td = 300  # K
-pd = 1e5  # Pa
+    Notes
+    -----
+    The physical flow length L is assumed to be the same for both hot and cold sides.
+    This could be relaxed in future implementations to allow different flow lengths.
 
-# Geometry
-t_over_dh = 0.02  # t/d_h = 0.02 (85 micron t over 4 mm walls)
-sigma_r = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
-A_fr_over_Ao_c = (1 + sigma_r) * (1 + 2 * t_over_dh)  # Ratio of frontal area to cold side free flow area (A_fr/Ao_c)
-d_h = 4e-3  # m, hydraulic diameter for both sides
+    Returns
+    -------
+    dict
+        Dictionary containing results
+    """
+    # Extract values from FluidInputs
+    fluid_hot = f_in.hot
+    fluid_cold = f_in.cold
+    mdot = f_in.m_dot_hot  # Assume same for both sides
+    T_hot_in = f_in.Th_in
+    P_hot_in = f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out
+    T_cold_in = f_in.Tc_in
+    P_cold_in = f_in.Pc_in
 
-# Start from 0.05 m² and go down
+    # Create fluid states at inlet conditions
+    state_hot_in = fluid_hot.state(T=T_hot_in, P=P_hot_in)
+    state_cold_in = fluid_cold.state(T=T_cold_in, P=P_cold_in)
 
-Aq_baseline = 43.0  # m², baseline heat transfer area
+    # Get fluid properties
+    cp_hot = state_hot_in.cp
+    cp_cold = state_cold_in.cp
+    rho_hot_in = state_hot_in.rho
+    rho_cold_in = state_cold_in.rho
+    mu_hot_in = state_hot_in.mu
+    mu_cold_in = state_cold_in.mu
 
-# Calculate temperature ratios
-Th_in_Td = T_hot_in / Td
-Tc_in_Td = T_cold_in / Td
-Th_in_Tc_in = T_hot_in / T_cold_in
+    # Get model-level properties
+    if isinstance(fluid_hot, PerfectGasFluid):
+        Pr_hot = fluid_hot.Pr
+    else:
+        Pr_hot = state_hot_in.cp * state_hot_in.mu / state_hot_in.k  # Pr = mu*cp/k
 
-# Pressure ratios
-ph_in_pd = P_hot_in / pd
-pc_in_pd = P_cold_in / pd
+    if isinstance(fluid_cold, PerfectGasFluid):
+        Pr_cold = fluid_cold.Pr
+    else:
+        Pr_cold = state_cold_in.cp * state_cold_in.mu / state_cold_in.k
 
-# Geometry parameters
-Ao_c_over_Ao_h = 1.0 / sigma_r  # Ao_c/Ao_h = 1 / (Ao_h/Ao_c)
-ls_over_dh_hot = 5.0  # Will be calculated from geometry
-ls_over_dh_cold = 5.0  # Will be calculated from geometry
+    # Use average Pr for correlations (both sides typically similar)
+    Pr = 0.5 * (Pr_hot + Pr_cold)
 
-# Gamma values for work potential calculations
-gamma_hot = 1.33  # For combustion products
-gamma_cold = 1.4  # For air
-gm1og_hot = (gamma_hot - 1) / gamma_hot
-gm1og_cold = (gamma_cold - 1) / gamma_cold
+    # Reference conditions
+    T_d = 300.0  # K
+    p_d = 1e5  # Pa
 
-# Capacity ratio Cr = C_min / C_max
-C_hot = mdot * cp_hot
-C_cold = mdot * cp_cold
-C_min = min(C_hot, C_cold)
-C_max = max(C_hot, C_cold)
-Cr = C_min / C_max  # Cr < 1 since cp_cold < cp_hot (cold side is C_min)
-C_h_c = C_hot / C_cold
+    # Calculate heat transfer areas from total A_q and sigma_w
+    # A_q = A_h + A_c, and sigma_w = A_h / A_c
+    # Solving: A_c = 2*A_q / (1+sigma_w), A_h = A_c * sigma_w
+    A_c = 2 * A_q / (1 + sigma_w)
+    A_h = A_c * sigma_w
 
-# Plotting parameters
-TICK_LABEL_SIZE = 12
-AXIS_LABEL_SIZE = 14
-LEGEND_SIZE = 12
-FLIP_Y_AXIS = True
-max_dp = 0.06  # Maximum pressure drop (6%)
+    # Calculate hydraulic diameters: dh_h/dh_c = sigma_r / sigma_w
+    d_h_h = d_h_c * sigma_r / sigma_w
 
-# ============================================================================
-# FLUID PROPERTIES CALCULATION
-# ============================================================================
-# Use perfect gas model for simplicity (can be changed to CoolProp if needed)
-# For air: molecular weight ~28.97 kg/kmol, gamma ~1.4
-# For combustion products: approximate as air with higher cp
-R_air = 287  # J/(kg·K)
-gamma_air = 1.4
-
-# Calculate density and viscosity at inlet conditions
-# Using ideal gas law and Sutherland's law approximation
-rho_hot_in = P_hot_in / (R_air * T_hot_in)  # Approximate as air
-rho_cold_in = P_cold_in / (R_air * T_cold_in)
-
-# Viscosity using Sutherland's law (approximate)
-mu_ref = 1.8e-5  # Pa·s at 300 K
-T_ref = 300  # K
-S = 110.4  # K (Sutherland's constant)
-mu_hot_in = mu_ref * ((T_ref + S) / (T_hot_in + S)) * ((T_hot_in / T_ref) ** 1.5)
-mu_cold_in = mu_ref * ((T_ref + S) / (T_cold_in + S)) * ((T_cold_in / T_ref) ** 1.5)
-
-print("=" * 80)
-print("CASE B: Air and Combustion Products Heat Exchanger")
-print("=" * 80)
-print("Hot fluid (combustion products):")
-print(f"  T_in = {T_hot_in} K, P_in = {P_hot_in / 1e5:.2f} bar")
-print(f"  rho = {rho_hot_in:.3f} kg/m³, mu = {mu_hot_in:.2e} Pa·s, cp = {cp_hot} J/(kg·K)")
-print("Cold fluid (air):")
-print(f"  T_in = {T_cold_in} K, P_in = {P_cold_in / 1e5:.2f} bar")
-print(f"  rho = {rho_cold_in:.3f} kg/m³, mu = {mu_cold_in:.2e} Pa·s, cp = {cp_cold} J/(kg·K)")
-print(f"Mass flow rate: {mdot} kg/s (both sides)")
-print(
-    f"Geometry: d_h = {d_h * 1000:.1f} mm, sigma_r = {sigma_r} (Ao_h/Ao_c), "
-    f"A_fr/Ao_c = {A_fr_over_Ao_c}, Aq_baseline = {Aq_baseline} m²"
-)
-print(f"Capacity ratio: Cr = C_min/C_max = {Cr:.4f} (cold side is C_min)")
-print("=" * 80)
-
-# ============================================================================
-# FRONTAL AREA SWEEP TO FIND BASELINE
-# ============================================================================
-# A_fr_over_Ao_c is the ratio of frontal area to cold side free flow area
-# sigma_r = Ao_h/Ao_c is the ratio of hot to cold free flow areas
-
-# Start from 0.05 m² and go down
-A_fr_sweep = np.linspace(0.03, 0.9, 1000)  # 1000 points from 0.05 to 0.001 m²
-
-# Calculate properties for each frontal area
-print("\nFrontal area sweep (filtering out dp_hot < 0% or dp_hot > 20%):")
-header = (
-    f"{'A_fr (m²)':<12} {'eps':<8} {'dp_hot (%)':<12} {'dp_cold (%)':<12} "
-    f"{'Re_hot':<12} {'Re_cold':<12} {'g²_hot':<12} {'g²_cold':<12}"
-)
-print(header)
-print("-" * 100)
-
-results = []
-dp_hot_max = 20.0  # Maximum allowed pressure drop (20%)
-
-for A_fr in A_fr_sweep:
-    # Calculate free flow areas
-    # A_fr_over_Ao_c = A_fr/Ao_c, so Ao_c = A_fr / A_fr_over_Ao_c
+    # Calculate free flow areas: A_fr = A_o_c * ( (1 + sigma_r) + 2*t/d_h * (1+sigma_w) )
+    A_fr_over_Ao_c = (1 + sigma_r) + 2 * t_over_dhc * (1 + sigma_w)
     Ao_c = A_fr / A_fr_over_Ao_c
-    # sigma_r = Ao_h/Ao_c, so Ao_h = Ao_c * sigma_r
     Ao_h = Ao_c * sigma_r
 
-    # Calculate mass flux G = mdot / Ao
+    # Calculate mass flux G = mdot / A_o
     G_hot = mdot / Ao_h
     G_cold = mdot / Ao_c
 
     # Calculate Reynolds numbers: Re = G * d_h / mu
-    Re_hot = G_hot * d_h / mu_hot_in
-    Re_cold = G_cold * d_h / mu_cold_in
+    Re_hot = G_hot * d_h_h / mu_hot_in
+    Re_cold = G_cold * d_h_c / mu_cold_in
 
-    # Calculate g^2 = (mdot/Ao)^2 / 4 / p_in / rho_in
+    # Calculate g² = (mdot/A_o)² / 4 / p_in / rho_in
     g2_hot = (mdot / Ao_h) ** 2 / 4 / P_hot_in / rho_hot_in
     g2_cold = (mdot / Ao_c) ** 2 / 4 / P_cold_in / rho_cold_in
 
-    # Calculate friction factors
+    # Calculate friction factors and j-factors
+    # Note: ls_over_dh uses the respective hydraulic diameter for each side
+    ls_over_dh_hot = ls_over_dh
+    ls_over_dh_cold = ls_over_dh
     f_hot = general_hex_friction_factor(Re_hot, ls_over_dh_hot)
     f_cold = general_hex_friction_factor(Re_cold, ls_over_dh_cold)
-
-    # Calculate Stanton numbers
-    Pr = 0.7  # Prandtl number
     j_hot = general_hex_j_factor(Re_hot, ls_over_dh_hot)
     j_cold = general_hex_j_factor(Re_cold, ls_over_dh_cold)
+
+    # Calculate Stanton numbers: St = j * Pr^(-2/3)
     St_hot = j_hot * Pr ** (-2 / 3)
     St_cold = j_cold * Pr ** (-2 / 3)
 
-    # Calculate L/dh from Aq and Ao
-    # From d_h = 4 * Ao * L / A, we get L/d_h = A / (4 * Ao)
-    # For the hot side: L/d_h = A_h / (4 * Ao_h)
-    # Since d_h is the same for both sides, A_h/Ao_h = A_c/Ao_c, meaning A_h/A_c = sigma_r
-    # So A_h = Aq_baseline represents the hot-side heat transfer area
-    L_dh_hot = Aq_baseline / (4 * Ao_h)
-    # For cold side: same L and d_h, so L/d_h is identical
-    # (A_c = Aq_baseline / sigma_r, Ao_c = Ao_h / sigma_r, so A_c/(4*Ao_c) = L/d_h)
-    L_dh_cold = L_dh_hot  # Same physical flow length and hydraulic diameter
+    # Calculate A_q/A_o for each side: A_q/A_o = 4*L/d_h
+    # Note: L is the same for both sides (physical flow length)
+    # This could be relaxed in future implementations to allow different flow lengths
+    A_q_over_Ao_h = A_h / Ao_h
+    A_q_over_Ao_c = A_c / Ao_c
 
-    # Calculate NTU and effectiveness
-    # NTU = UA / C_min, where UA = 1 / (1/(h_hot*A_hot) + 1/(h_cold*A_cold))
-    # h = St * G * cp, and A_hot = Aq/2, A_cold = Aq/2 (for balanced areas)
-    # Simplified: NTU = 1 / ((1/St_hot + Ao_c/Ao_h/St_cold) / (Aq/Ao_h))
-    Aq_over_Ao_h = Aq_baseline / Ao_h
-    NTU = 1 / ((1 / St_hot + Ao_c_over_Ao_h / St_cold) / Aq_over_Ao_h)
+    # Capacity ratio
+    C_hot = mdot * cp_hot
+    C_cold = mdot * cp_cold
+    C_min = min(C_hot, C_cold)
+    C_max = max(C_hot, C_cold)
+    C_r = C_min / C_max
+    C_h_c = C_hot / C_cold
 
-    if Cr < 0.99:  # If significantly unbalanced
-        eps = (1 - np.exp(-NTU * (1 - Cr))) / (1 - Cr * np.exp(-NTU * (1 - Cr)))
+    # NTU_i = h_i A_i / (mdot cp)_i with i = h,c
+    # Hence NTU_i = St_i * A_i/A_oi
+
+    NTU_h = St_hot * A_q_over_Ao_h
+    NTU_c = St_cold * A_q_over_Ao_c
+
+    NTU = 1 / (C_min / C_hot / NTU_h + C_min / C_cold / NTU_c)
+
+    # Calculate effectiveness: eps = NTU/(1+NTU) for balanced, or counterflow formula
+    if C_r < 0.99:
+        eps = (1 - np.exp(-NTU * (1 - C_r))) / (1 - C_r * np.exp(-NTU * (1 - C_r)))
     else:
         eps = NTU / (1 + NTU)
 
-    # Calculate pressure ratios
-    t = Th_in_Tc_in
-    p_hot_out_p_hot_in = calculate_pressure_ratio(
-        L_dh_hot, f_hot, g2_hot, T_i_Td=Th_in_Td, p_i_pd=ph_in_pd, eps=eps, t=t, hot_fluid=True, C_h_c=C_h_c
+    # Temperature and pressure ratios
+    T_h_in_Td = T_hot_in / T_d
+    T_c_in_Td = T_cold_in / T_d
+    t = T_hot_in / T_cold_in
+    p_h_in_pd = P_hot_in / p_d
+    p_c_in_pd = P_cold_in / p_d
+
+    # Calculate pressure ratios using A_q/A_o
+    # Note: Physical flow length L is the same for both sides
+    # This could be relaxed in future implementations
+    P_hot_out_P_hot_in = calculate_pressure_ratio(
+        A_q_over_Ao_h, f_hot, g2_hot, t_i_td=T_h_in_Td, p_i_pd=p_h_in_pd, eps=eps, t=t, hot_fluid=True, c_h_c=C_h_c
     )
-    p_cold_out_p_cold_in = calculate_pressure_ratio(
-        L_dh_cold, f_cold, g2_cold, T_i_Td=Tc_in_Td, p_i_pd=pc_in_pd, eps=eps, t=t, hot_fluid=False, C_h_c=C_h_c
-    )
-
-    dp_hot = (1 - p_hot_out_p_hot_in) * 100
-    dp_cold = (1 - p_cold_out_p_cold_in) * 100
-
-    # Skip this A_fr if dp_hot is negative or exceeds 20%
-    if dp_hot < 0 or dp_hot > dp_hot_max:
-        continue  # Move to next A_fr value
-
-    results.append(
-        {
-            "A_fr": A_fr,
-            "Ao_h": Ao_h,
-            "eps": eps,
-            "dp_hot": dp_hot,
-            "dp_cold": dp_cold,
-            "Re_hot": Re_hot,
-            "Re_cold": Re_cold,
-            "g2_hot": g2_hot,
-            "g2_cold": g2_cold,
-        }
+    P_cold_out_P_cold_in = calculate_pressure_ratio(
+        A_q_over_Ao_c, f_cold, g2_cold, t_i_td=T_c_in_Td, p_i_pd=p_c_in_pd, eps=eps, t=t, hot_fluid=False, c_h_c=C_h_c
     )
 
-# Check if any valid results were found
-if len(results) == 0:
-    print("\n" + "=" * 80)
-    print("WARNING: No valid A_fr values found!")
-    print(f"All frontal areas in the sweep had dp_hot < 0% or dp_hot > {dp_hot_max}%")
-    print("Consider adjusting the sweep range or geometry parameters.")
-    print("=" * 80)
-    raise ValueError("No valid results found - all A_fr values had invalid pressure drops")
+    # Calculate outlet temperatures
+    if C_h_c > 1:  # cold side is C_min
+        T_o_Ti_hot = 1 - eps / C_h_c * (1 - 1 / t)
+        T_o_Ti_cold = 1 + eps * (t - 1)
+    else:  # hot side is C_min
+        T_o_Ti_hot = 1 - eps * (1 - 1 / t)
+        T_o_Ti_cold = 1 + eps * C_h_c * (t - 1)
+    T_hot_out = T_hot_in * T_o_Ti_hot
+    T_cold_out = T_cold_in * T_o_Ti_cold
 
-# Select 10 evenly spaced values from the valid results
-n_values = min(10, len(results))
-indices = np.linspace(0, len(results) - 1, n_values, dtype=int)
-selected_results = [results[i] for i in indices]
+    return {
+        "eps": eps,
+        "dp_hot": 1 - P_hot_out_P_hot_in,
+        "dp_cold": 1 - P_cold_out_P_cold_in,
+        "t_hot_out": T_hot_out,
+        "t_cold_out": T_cold_out,
+        "re_hot": Re_hot,
+        "re_cold": Re_cold,
+        "ntu": NTU,
+        "g2_hot": g2_hot,
+        "g2_cold": g2_cold,
+        "Aq_over_Ao_c": A_q_over_Ao_c,
+        "Aq_over_Ao_h": A_q_over_Ao_h,
+    }
 
-for r in selected_results:
-    print(
-        f"{r['A_fr']:<12.6f} {r['eps']:<8.4f} {r['dp_hot']:<12.4f} {r['dp_cold']:<12.4f} "
-        f"{r['Re_hot']:<12.1f} {r['Re_cold']:<12.1f} {r['g2_hot']:<12.2e} {r['g2_cold']:<12.2e}"
-    )
-
-# Find the one closest to 60% effectiveness
-target_eps = 0.60
-closest_idx = np.argmin([abs(r["eps"] - target_eps) for r in results])
-baseline_result = results[closest_idx]
-
-print("\n" + "=" * 80)
-print(f"Baseline selected (closest to {target_eps * 100:.0f}% effectiveness):")
-print(f"  A_fr_baseline = {baseline_result['A_fr']:.6f} m²")
-print(f"  Ao_h_baseline = {baseline_result['Ao_h']:.6f} m²")
-print(f"  Effectiveness = {baseline_result['eps']:.4f} ({baseline_result['eps'] * 100:.2f}%)")
-print(f"  Pressure drop (hot) = {baseline_result['dp_hot']:.4f}%")
-print(f"  Pressure drop (cold) = {baseline_result['dp_cold']:.4f}%")
-print(f"  Re_hot = {baseline_result['Re_hot']:.1f}")
-print(f"  Re_cold = {baseline_result['Re_cold']:.1f}")
-print(f"  g²_hot = {baseline_result['g2_hot']:.2e}")
-print(f"  g²_cold = {baseline_result['g2_cold']:.2e}")
-print("=" * 80)
-
-# Set baseline values
-A_fr_baseline = baseline_result["A_fr"]
-Ao_h_baseline = baseline_result["Ao_h"]
-Re_h_baseline = baseline_result["Re_hot"]
-Re_c_baseline = baseline_result["Re_cold"]
-g2_hot_baseline = baseline_result["g2_hot"]
-g2_cold_baseline = baseline_result["g2_cold"]
-
-# Calculate Aq_over_Aoh_baseline for the baseline
-Aq_over_Aoh_baseline = Aq_baseline / Ao_h_baseline
-
-A_fr_min = 0.2  # Minimum A_fr/A_fr_baseline
 
 # ============================================================================
-# CALCULATIONS FOR PLOT
+# COMPRESSIBLE FLOW MODEL (Sturas 1971)
 # ============================================================================
 
-# Create array of A_fr_over_A_fr_baseline values
-A_fr_over_A_fr_baseline = np.linspace(A_fr_min, 2.0, 1000)
 
-# Calculate work potentials with modified function that uses different gamma values
-# We'll calculate most things the same way, but use different gamma for hot and cold
-Re_h = Re_h_baseline / A_fr_over_A_fr_baseline
-Re_c = Re_c_baseline / A_fr_over_A_fr_baseline
+def rate_hex_compressible_two_stream(
+    A_fr,
+    A_q,
+    f_in: FluidInputs,
+    d_h_c=4e-3,
+    sigma_r=1.0,
+    sigma_w=1.0,
+    t_over_dhc=0.02,
+    ls_over_dh=5.0,
+    inlet_is_stagnation=True,
+):
+    """
+    Rate a counterflow heat exchanger using compressible flow model for both streams.
 
-g2_hot = g2_hot_baseline / A_fr_over_A_fr_baseline**2
-g2_cold = g2_cold_baseline / A_fr_over_A_fr_baseline**2
+    Two-step approach:
+    1. First iteration uses inlet Reynolds number
+    2. Second iteration uses average Reynolds number (viscosity varies with temperature)
 
-f_hot = general_hex_friction_factor(Re_h, ls_over_dh_hot)
-f_cold = general_hex_friction_factor(Re_c, ls_over_dh_cold)
+    Process for each iteration:
+    - Calculate heat transfer coefficients from j-factor correlations
+    - Compute overall heat transfer coefficient and total Q
+    - Calculate ksi = 4*f*L/d_h for each stream
+    - Calculate k = Q / (ksi * mdot * cp * T_stag_in) for each stream
+    - Solve for outlet Mach number using Sturas equations
 
-Pr = 0.7
-St_hot = general_hex_j_factor(Re_h, ls_over_dh_hot) * Pr ** (-2 / 3)
-St_cold = general_hex_j_factor(Re_c, ls_over_dh_cold) * Pr ** (-2 / 3)
+    ASSUMPTION: Heat transfer is equally distributed along the length.
+    This is not very accurate for C_r << 1, but provides a reasonable approximation.
 
-L_dh_hot_array = Aq_over_Aoh_baseline / A_fr_over_A_fr_baseline / 4
+    Parameters
+    ----------
+    A_fr : float
+        Frontal area [m²]
+    A_q : float
+        Average heat transfer area (A_h + A_c) / 2 [m²]
+    f_in : FluidInputs
+        Fluid inputs containing fluid models, mass flow rates, and inlet conditions
+    d_h_c : float
+        Cold side hydraulic diameter [m] (default 4 mm) -> dh_h = d_h_c * sigma_r / sigma_w
+    sigma_r : float
+        Free flow area ratio A_o_h/A_o_c (default 1.0)
+    sigma_w : float
+        Heat transfer area ratio A_h/A_c (default 1.0)
+    t_over_dhc : float
+        Wall thickness to hydraulic diameter ratio (default 0.02)
+    ls_over_dh : float
+        Strip length to hydraulic diameter ratio
+    inlet_is_stagnation : bool
+        If True, inlet conditions are stagnation values (default True)
 
-# Calculate NTU and effectiveness
-NTU = 1 / ((1 / St_hot + Ao_c_over_Ao_h / St_cold) / (Aq_over_Aoh_baseline / A_fr_over_A_fr_baseline))
-eps = NTU / (1 + NTU)
+    Returns
+    -------
+    dict
+        Dictionary containing results for both streams
+    """
+    # Extract values from FluidInputs
+    fluid_hot = f_in.hot
+    fluid_cold = f_in.cold
+    mdot_hot = f_in.m_dot_hot
+    mdot_cold = f_in.m_dot_cold
+    T_hot_in = f_in.Th_in
+    P_hot_in = f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out
+    T_cold_in = f_in.Tc_in
+    P_cold_in = f_in.Pc_in
 
-# Calculate temperature ratios
-t = Th_in_Td / Tc_in_Td
-T_hot_out_T_hot_in = calculate_temperature_ratio(eps, t, hot_fluid=True, C_h_c=C_h_c)
-T_cold_out_T_cold_in = calculate_temperature_ratio(eps, t, hot_fluid=False, C_h_c=C_h_c)
+    # Calculate heat transfer areas from total A_q and sigma_w
+    # A_q = A_h + A_c, and sigma_w = A_h / A_c
+    # Solving: A_c = 2*A_q / (1+sigma_w), A_h = A_c * sigma_w
+    A_q_c = 2 * A_q / (1 + sigma_w)
+    A_q_h = A_q_c * sigma_w
 
-# Calculate pressure ratios
-p_hot_out_p_hot_in = calculate_pressure_ratio(
-    L_dh_hot_array, f_hot, g2_hot, T_i_Td=Th_in_Td, p_i_pd=ph_in_pd, eps=eps, t=t, hot_fluid=True, C_h_c=C_h_c
-)
+    # Calculate hydraulic diameters: dh_h/dh_c = sigma_r / sigma_w
+    d_h_h = d_h_c * sigma_r / sigma_w
 
-# L and d_h are the same for both sides, so L/d_h is identical
-L_dh_cold_array = L_dh_hot_array  # Same physical flow length and hydraulic diameter
-p_cold_out_p_cold_in = calculate_pressure_ratio(
-    L_dh_cold_array, f_cold, g2_cold, T_i_Td=Tc_in_Td, p_i_pd=pc_in_pd, eps=eps, t=t, hot_fluid=False, C_h_c=C_h_c
-)
+    # Calculate free flow areas: A_fr = A_o_c * ( (1 + sigma_r) + 2*t/d_h * (1+sigma_w) )
+    A_fr_over_Ao_c = (1 + sigma_r) + 2 * t_over_dhc * (1 + sigma_w)
+    Ao_c = A_fr / A_fr_over_Ao_c
+    Ao_h = Ao_c * sigma_r
 
-# Find cutoff index for pressure drops
-first_invalid_hot = np.argmax(p_hot_out_p_hot_in < (1 - max_dp))
-first_invalid_cold = np.argmax(p_cold_out_p_cold_in < (1 - max_dp))
+    # Mass fluxes
+    G_hot = mdot_hot / Ao_h
+    G_cold = mdot_cold / Ao_c
 
-if first_invalid_hot == 0 and first_invalid_cold == 0:
-    cutoff_idx = len(L_dh_hot_array)
-else:
-    cutoff_idx = min(
-        first_invalid_hot if first_invalid_hot != 0 else len(L_dh_hot_array),
-        first_invalid_cold if first_invalid_cold != 0 else len(L_dh_hot_array),
-    )
+    # =========================================================================
+    # Calculate inlet conditions (simplified: assume rho ≈ rho_stag for low Mach)
+    # =========================================================================
+    if inlet_is_stagnation:
+        # Hot side: stagnation inputs → derive static
+        T_stag_hot_in = T_hot_in
+        P_stag_hot_in = P_hot_in
+        state_stag_hot = fluid_hot.state(T=T_stag_hot_in, P=P_stag_hot_in)
+        cp_hot = state_stag_hot.cp
+        gamma_hot = state_stag_hot.gamma
+        V_hot = G_hot / state_stag_hot.rho  # Approximate: V ≈ G/rho_stag
+        T_static_hot_in = T_stag_hot_in - V_hot**2 / (2 * cp_hot)
+        P_static_hot_in = P_stag_hot_in * (T_static_hot_in / T_stag_hot_in) ** (gamma_hot / (gamma_hot - 1))
+        state_hot_in = fluid_hot.state(T=T_static_hot_in, P=P_static_hot_in)
+        M_hot_in = V_hot / state_hot_in.a
 
-# Initialize arrays with NaNs
-dW_pot_Ex = np.full_like(L_dh_hot_array, np.nan)
-dW_pot_Eu = np.full_like(L_dh_hot_array, np.nan)
+        # Cold side: stagnation inputs → derive static
+        T_stag_cold_in = T_cold_in
+        P_stag_cold_in = P_cold_in
+        state_stag_cold = fluid_cold.state(T=T_stag_cold_in, P=P_stag_cold_in)
+        cp_cold = state_stag_cold.cp
+        gamma_cold = state_stag_cold.gamma
+        V_cold = G_cold / state_stag_cold.rho
+        T_static_cold_in = T_stag_cold_in - V_cold**2 / (2 * cp_cold)
+        P_static_cold_in = P_stag_cold_in * (T_static_cold_in / T_stag_cold_in) ** (gamma_cold / (gamma_cold - 1))
+        state_cold_in = fluid_cold.state(T=T_static_cold_in, P=P_static_cold_in)
+        M_cold_in = V_cold / state_cold_in.a
+    else:
+        # Hot side: static inputs → derive stagnation
+        T_static_hot_in = T_hot_in
+        P_static_hot_in = P_hot_in
+        state_hot_in = fluid_hot.state(T=T_static_hot_in, P=P_static_hot_in)
+        cp_hot = state_hot_in.cp
+        gamma_hot = state_hot_in.gamma
+        V_hot = G_hot / state_hot_in.rho
+        M_hot_in = V_hot / state_hot_in.a
+        T_stag_hot_in = T_static_hot_in + V_hot**2 / (2 * cp_hot)
+        P_stag_hot_in = P_static_hot_in * (T_stag_hot_in / T_static_hot_in) ** (gamma_hot / (gamma_hot - 1))
 
-# Create mask that is True up to cutoff_idx
-valid_pressure_mask = np.arange(len(L_dh_hot_array)) < cutoff_idx
+        # Cold side: static inputs → derive stagnation
+        T_static_cold_in = T_cold_in
+        P_static_cold_in = P_cold_in
+        state_cold_in = fluid_cold.state(T=T_static_cold_in, P=P_static_cold_in)
+        cp_cold = state_cold_in.cp
+        gamma_cold = state_cold_in.gamma
+        V_cold = G_cold / state_cold_in.rho
+        M_cold_in = V_cold / state_cold_in.a
+        T_stag_cold_in = T_static_cold_in + V_cold**2 / (2 * cp_cold)
+        P_stag_cold_in = P_static_cold_in * (T_stag_cold_in / T_static_cold_in) ** (gamma_cold / (gamma_cold - 1))
 
-# Calculate work potentials with different gamma values for hot and cold
-# For Exergy, use average gm1og (or could use separate terms)
-gm1og_avg = 0.5 * (gm1og_hot + gm1og_cold)
-log_p_hot = np.log(p_hot_out_p_hot_in[valid_pressure_mask])
-log_p_cold = np.log(p_cold_out_p_cold_in[valid_pressure_mask])
-dW_pot_Ex[valid_pressure_mask] = (
-    np.log(T_hot_out_T_hot_in[valid_pressure_mask])
-    + np.log(T_cold_out_T_cold_in[valid_pressure_mask])
-    - gm1og_avg * (log_p_hot + log_p_cold)
-)
+    Pr_hot = fluid_hot.Pr
+    Pr_cold = fluid_cold.Pr
 
-# Calculate Euergy change with different gamma for hot and cold
-dW_pot_Eu_hot = (
-    (1 / ph_in_pd) ** gm1og_hot * Th_in_Td * (T_hot_out_T_hot_in * (1 / p_hot_out_p_hot_in) ** gm1og_hot - 1)
-)
-dW_pot_Eu_cold = (
-    (1 / pc_in_pd) ** gm1og_cold * Tc_in_Td * (T_cold_out_T_cold_in * (1 / p_cold_out_p_cold_in) ** gm1og_cold - 1)
-)
-dW_pot_Eu[valid_pressure_mask] = dW_pot_Eu_hot[valid_pressure_mask] + dW_pot_Eu_cold[valid_pressure_mask]
+    # Capacity rates
+    C_hot = mdot_hot * cp_hot
+    C_cold = mdot_cold * cp_cold
+    C_min = min(C_hot, C_cold)
+    C_max = max(C_hot, C_cold)
+    C_r = C_min / C_max
 
-# Normalize by Q_max
-norm = 1 / (Th_in_Td - Tc_in_Td)
-dW_pot_Ex_norm = dW_pot_Ex * norm
-dW_pot_Eu_norm = dW_pot_Eu * norm
+    # Maximum possible heat transfer
+    Q_max = C_min * (T_stag_hot_in - T_stag_cold_in)
 
-# ============================================================================
-# PLOTTING
-# ============================================================================
+    # =========================================================================
+    # TWO-STEP APPROACH: First with inlet Re, then with average Re
+    # =========================================================================
 
-# Create figure
-fig, ax = plt.subplots(figsize=(6, 5))
+    # Initialize with inlet temperature estimates for output
+    T_stag_hot_out = T_stag_hot_in
+    T_stag_cold_out = T_stag_cold_in
 
-# Plot Exergy (dashed, black)
-ax.plot(A_fr_over_A_fr_baseline, dW_pot_Ex_norm, "k--", label="Exergy", linewidth=1.5)
+    for iteration in range(2):
+        # Step 1 (iteration=0): Use inlet Reynolds number
+        # Step 2 (iteration=1): Use average Reynolds number based on temperature
 
-# Plot Euergy (solid, black)
-ax.plot(A_fr_over_A_fr_baseline, dW_pot_Eu_norm, "k-", label="Euergy", linewidth=1.5)
-
-# Find and mark optimal points
-# Euergy: minimum of dW_pot_Eu
-valid_mask_eu = ~np.isnan(dW_pot_Eu_norm)
-if np.any(valid_mask_eu):
-    eu_min_idx = np.nanargmin(dW_pot_Eu_norm[valid_mask_eu])
-    eu_min_x = A_fr_over_A_fr_baseline[valid_mask_eu][eu_min_idx]
-    eu_min_y = dW_pot_Eu_norm[valid_mask_eu][eu_min_idx]
-    ax.scatter(eu_min_x, eu_min_y, color="black", s=100, zorder=5, marker="o")
-    ax.plot([eu_min_x, eu_min_x], [0, eu_min_y], "k--", alpha=0.5, linewidth=1)
-
-# Exergy: minimum of dW_pot_Ex
-valid_mask_ex = ~np.isnan(dW_pot_Ex_norm)
-if np.any(valid_mask_ex):
-    ex_min_idx = np.nanargmin(dW_pot_Ex_norm[valid_mask_ex])
-    ex_min_x = A_fr_over_A_fr_baseline[valid_mask_ex][ex_min_idx]
-    ex_min_y = dW_pot_Ex_norm[valid_mask_ex][ex_min_idx]
-    ax.scatter(ex_min_x, ex_min_y, color="black", s=100, zorder=5, marker="s")
-    ax.plot([ex_min_x, ex_min_x], [0, ex_min_y], "k:", alpha=0.5, linewidth=1)
-
-# Set labels
-ax.set_xlabel("$A_{fr}/A_{fr,baseline}$", fontsize=AXIS_LABEL_SIZE)
-ax.set_ylabel(r"$\Delta Q_0/Q_{\mathrm{max}}$", fontsize=AXIS_LABEL_SIZE)
-
-# Set tick label sizes
-ax.tick_params(axis="both", labelsize=TICK_LABEL_SIZE)
-
-# Use PercentFormatter for y-axis
-ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=1))
-
-# Set x-axis to logarithmic scale
-ax.set_xscale("log")
-
-# Flip y-axis if requested
-if FLIP_Y_AXIS:
-    ax.invert_yaxis()
-
-# Set x-axis limits to only show valid range (inverted: high to low left to right)
-valid_mask = ~np.isnan(dW_pot_Ex_norm)
-if np.any(valid_mask):
-    x_min = A_fr_over_A_fr_baseline[valid_mask][0]
-    x_max = A_fr_over_A_fr_baseline[valid_mask][-1]
-    # Invert: set limits so high values are on left, low on right
-    ax.set_xlim(x_max, x_min)
-
-    # Set ticks at 0.1 spacing, but only display labels for specified values
-    # Values to display labels for
-    label_values = [0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.2, 1.5, 2.0]
-
-    # Generate all ticks at 0.1 spacing within the axis limits
-    x_range_min = min(x_min, x_max)
-    x_range_max = max(x_min, x_max)
-
-    # Start from the first 0.1 increment above/below the range
-    start_val = np.ceil(x_range_min * 10) / 10
-    end_val = np.floor(x_range_max * 10) / 10
-
-    # Generate all ticks at 0.1 spacing
-    all_ticks = np.arange(start_val, end_val + 0.05, 0.1)  # +0.05 to include end_val
-
-    # Set all ticks
-    ax.set_xticks(all_ticks)
-
-    # Custom formatter: only show labels for specified values
-    def format_tick(x, pos):
-        # Round to 1 decimal place to handle floating point precision
-        x_rounded = round(x, 1)
-        if x_rounded in label_values:
-            return f"{x_rounded:.1f}"
+        if iteration == 0:
+            # Use inlet viscosities
+            mu_hot = state_hot_in.mu
+            mu_cold = state_cold_in.mu
         else:
-            return ""
+            # Use average temperature for viscosity (only viscosity changes due to temperature)
+            T_avg_hot = 0.5 * (T_stag_hot_in + T_stag_hot_out)
+            T_avg_cold = 0.5 * (T_stag_cold_in + T_stag_cold_out)
+            # Get viscosity at average temperature (use inlet pressure as approximation)
+            state_hot_avg = fluid_hot.state(T=T_avg_hot, P=P_static_hot_in)
+            state_cold_avg = fluid_cold.state(T=T_avg_cold, P=P_static_cold_in)
+            mu_hot = state_hot_avg.mu
+            mu_cold = state_cold_avg.mu
 
-    ax.xaxis.set_major_formatter(FuncFormatter(format_tick))
-else:
-    # Fallback if no valid data
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, p: f"{x:.1f}"))
+        # Calculate Reynolds numbers: Re = G * d_h / mu
+        Re_hot = G_hot * d_h_h / mu_hot
+        Re_cold = G_cold * d_h_c / mu_cold
 
-# Add grid
-ax.grid(True, alpha=0.3)
+        # Calculate j-factors and friction factors (same Re for both j and f)
+        j_hot = general_hex_j_factor(Re_hot, ls_over_dh)
+        j_cold = general_hex_j_factor(Re_cold, ls_over_dh)
+        f_hot = general_hex_friction_factor(Re_hot, ls_over_dh)
+        f_cold = general_hex_friction_factor(Re_cold, ls_over_dh)
 
-# Add legend
-ax.legend(loc="best", fontsize=LEGEND_SIZE, frameon=True)
+        # Calculate Stanton numbers: St = j * Pr^(-2/3)
+        St_hot = j_hot * Pr_hot ** (-2 / 3)
+        St_cold = j_cold * Pr_cold ** (-2 / 3)
 
-# Tight layout
-plt.tight_layout()
+        # Calculate NTU_i = St_i * A_q_i/A_oi
+        NTU_h = St_hot * A_q_h / Ao_h
+        NTU_c = St_cold * A_q_c / Ao_c
+        NTU = 1 / (C_min / C_hot / NTU_h + C_min / C_cold / NTU_c)
 
-# Save as SVG
-output_filename = "hex_Afr_isolation_figure.svg"
-# plt.savefig(output_filename, format="svg", bbox_inches="tight")
-# print(f"Figure saved as {output_filename}")
+        # Calculate effectiveness (counterflow)
+        if C_r < 0.99:
+            eps = (1 - np.exp(-NTU * (1 - C_r))) / (1 - C_r * np.exp(-NTU * (1 - C_r)))
+        else:
+            eps = NTU / (1 + NTU)
 
-# Optionally show the plot
-plt.show()
+        # Calculate total heat transfer
+        Q = eps * Q_max
+
+        # Calculate ksi = f A_q_i / A_oi
+        ksi_hot = f_hot * A_q_h / Ao_h
+        ksi_cold = f_cold * A_q_c / Ao_c
+
+        # =====================================================================
+        # ASSUMPTION: Heat transfer is equally distributed along the length.
+        # This is not very accurate for C_r << 1 but will do for now.
+        # =====================================================================
+
+        # Calculate k = delta_T_stag / (T_stag_in * ksi) for each stream
+        # delta_T_stag = Q / (mdot * cp)
+        # For hot side: Q is removed (negative delta_T_stag)
+        # For cold side: Q is added (positive delta_T_stag)
+
+        delta_T_stag_hot = -Q / (mdot_hot * cp_hot)  # Hot side loses heat
+        delta_T_stag_cold = Q / (mdot_cold * cp_cold)  # Cold side gains heat
+
+        if ksi_hot > 1e-6:
+            k_hot = delta_T_stag_hot / (T_stag_hot_in * ksi_hot)
+        else:
+            k_hot = 0.0
+
+        if ksi_cold > 1e-6:
+            k_cold = delta_T_stag_cold / (T_stag_cold_in * ksi_cold)
+        else:
+            k_cold = 0.0
+
+        # Solve for outlet Mach numbers using Sturas equations
+        choked_hot = False
+        choked_cold = False
+
+        try:
+            _, M_hot_out = solve_M_from_ksi(ksi_hot, M_hot_in, k_hot, gamma=gamma_hot)
+        except (ValueError, RuntimeError):
+            M_hot_out = np.nan
+            choked_hot = True
+
+        try:
+            _, M_cold_out = solve_M_from_ksi(ksi_cold, M_cold_in, k_cold, gamma=gamma_cold)
+        except (ValueError, RuntimeError):
+            M_cold_out = np.nan
+            choked_cold = True
+
+        T_stag_hot_out = T_stag_hot_in + delta_T_stag_hot
+        T_stag_cold_out = T_stag_cold_in + delta_T_stag_cold
+
+    # Calculate outlet static temperatures
+    if not choked_hot and not np.isnan(M_hot_out):
+        ratio_out_hot = 1 + (gamma_hot - 1) / 2 * M_hot_out**2
+        T_static_hot_out = T_stag_hot_out / ratio_out_hot
+        # Calculate static pressure ratio using Sturas equation
+        p_ratio_hot = p_static_over_p_static_in(M_hot_in, M_hot_out, k_hot, ksi_hot, gamma_hot)
+        P_static_hot_out = P_static_hot_in * p_ratio_hot
+        P_stag_hot_out = P_static_hot_out * ratio_out_hot ** (gamma_hot / (gamma_hot - 1))
+    else:
+        T_static_hot_out = np.nan
+        P_static_hot_out = np.nan
+        p_ratio_hot = np.nan
+
+    if not choked_cold and not np.isnan(M_cold_out):
+        ratio_out_cold = 1 + (gamma_cold - 1) / 2 * M_cold_out**2
+        T_static_cold_out = T_stag_cold_out / ratio_out_cold
+        # Calculate static pressure ratio using Sturas equation
+        p_ratio_cold = p_static_over_p_static_in(M_cold_in, M_cold_out, k_cold, ksi_cold, gamma_cold)
+        P_static_cold_out = P_static_cold_in * p_ratio_cold
+        P_stag_cold_out = P_static_cold_out * ratio_out_cold ** (gamma_cold / (gamma_cold - 1))
+    else:
+        T_static_cold_out = np.nan
+        P_static_cold_out = np.nan
+        p_ratio_cold = np.nan
+
+    dp_hot_friction = gamma_hot * (M_hot_in**2 * A_q_h / Ao_h / 2 * f_hot)
+    dp_hot_heat = (
+        gamma_hot / (gamma_hot - 1) * (delta_T_stag_hot / T_static_hot_in - np.log(T_static_hot_out / T_static_hot_in))
+    )
+
+    # Build result dictionaries
+    result_hot = {
+        "mach_in": M_hot_in,
+        "mach_out": M_hot_out,
+        "t_stag_in": T_stag_hot_in,
+        "t_stag_out": T_stag_hot_out,
+        "t_static_in": T_static_hot_in,
+        "t_static_out": T_static_hot_out,
+        "p_stag_in": P_stag_hot_in,
+        "p_static_in": P_static_hot_in,
+        "p_static_out": P_static_hot_out,
+        "p_static_out_p_static_in": p_ratio_hot,
+        "ksi": ksi_hot,
+        "k": k_hot,
+        "re": Re_hot,
+        "choked": choked_hot,
+    }
+
+    result_cold = {
+        "mach_in": M_cold_in,
+        "mach_out": M_cold_out,
+        "t_stag_in": T_stag_cold_in,
+        "t_stag_out": T_stag_cold_out,
+        "t_static_in": T_static_cold_in,
+        "t_static_out": T_static_cold_out,
+        "p_stag_in": P_stag_cold_in,
+        "p_static_in": P_static_cold_in,
+        "p_static_out": P_static_cold_out,
+        "p_static_out_p_static_in": p_ratio_cold,
+        "ksi": ksi_cold,
+        "k": k_cold,
+        "re": Re_cold,
+        "choked": choked_cold,
+    }
+
+    return {
+        "hot": result_hot,
+        "cold": result_cold,
+        "eps": eps,
+        "dp_hot": 1 - p_ratio_hot,
+        "dp_hot_friction": dp_hot_friction,
+        "dp_hot_heat": dp_hot_heat,
+        "dp_hot_stag": 1 - P_stag_hot_out / P_stag_hot_in,
+        "dp_cold": 1 - p_ratio_cold,
+        "dp_cold_stag": 1 - P_stag_cold_out / P_stag_cold_in,
+        "t_hot_out": T_static_hot_out,
+        "t_cold_out": T_static_cold_out,
+        "t_stag_hot_out": T_stag_hot_out,
+        "t_stag_cold_out": T_stag_cold_out,
+        "re_hot": Re_hot,
+        "re_cold": Re_cold,
+        "ntu": NTU,
+        "g2_hot": G_hot**2 / P_static_hot_in / state_hot_in.rho / 4,
+        "g2_cold": G_cold**2 / P_static_cold_in / state_cold_in.rho / 4,
+        "q": Q,
+        "c_r": C_r,
+        "Aq_over_Ao_c": A_q_c / Ao_c,
+        "Aq_over_Ao_h": A_q_h / Ao_h,
+    }
+
+
+def xflow_guess_0d(
+    geom,
+    f_in: FluidInputs,
+) -> tuple[float, float]:
+    """Return (Th_inner_guess, Ph_other_guess) using a two-step 0D estimate.
+    Assumes that the Radial Spiral Geometry is close enough to a counterflow configuration.
+    This tends to be off by only a few percentage points
+
+    The first step evaluates properties at the inlet conditions; the second step
+    re-evaluates at the mean of the inlet and the first-step outlet to refine the
+    guess.
+    """
+
+    logger = logging.getLogger(__name__ + ".xflow_guess_0d")
+
+    # Validate boundary pressure specification
+    if (f_in.Ph_in is None and f_in.Ph_out is None) or (f_in.Ph_in is not None and f_in.Ph_out is not None):
+        raise ValueError("Specify exactly one of Ph_in or Ph_out in FluidInputs.")
+
+    A_q_c = 2 * geom["A_q"] / (1 + geom["sigma_w"])
+    A_q_h = A_q_c * geom["sigma_w"]
+    d_h_c = geom["d_h_c"]
+    d_h_h = geom["d_h_c"] * geom["sigma_r"] / geom["sigma_w"]
+    Ao_c = geom["A_fr"] / (1 + geom["sigma_r"]) + 2 * geom["t_over_dhc"] * (1 + geom["sigma_w"])
+    Ao_h = Ao_c * geom["sigma_r"]
+    ls_over_dh = geom["ls_over_dh"]
+
+    A_total_hot0 = A_q_h
+    A_total_cold0 = A_q_c
+
+    # Frontal/free areas at mid-radius and total cold frontal area (per sector/header)
+    Afr_hot_mid = Ao_h
+    Aff_hot_mid = Afr_hot_mid * 1
+
+    Aff_cold_total = Ao_c
+
+    G_h0 = f_in.m_dot_hot / Aff_hot_mid
+    G_c0 = f_in.m_dot_cold / Aff_cold_total
+
+    def _0d_xflow_guess(
+        _Th_in: float,
+        _Ph_in: float,
+        _Tc_in: float,
+        _Pc_in: float,
+        Th_eval: float,
+        Ph_eval: float,
+        Tc_eval: float,
+        Pc_eval: float,
+        _Ph_out: float | None = None,
+    ) -> tuple[float, float, float, float]:
+        """Single 0D estimate using property evaluation at (eval) and inlets (b).
+        Approximates the heat exchanger as counterflow
+        If _Ph_out is specified, then any input at _Ph_in is ignored. The inlet pressure
+        is then calculated and returned as Ph_not_b.
+        If no _Ph_out is specified, then like with the other three, _Ph_in is used
+        and the exit pressure is returned as Ph_not_b."""
+        sh = f_in.hot.state(Th_eval, Ph_eval)
+        sc = f_in.cold.state(Tc_eval, Pc_eval)
+        Pr_h = sh.mu * sh.cp / sh.k
+        Pr_c = sc.mu * sc.cp / sc.k
+        Re_h = G_h0 * d_h_h / sh.mu
+        Re_c = G_c0 * d_h_c / sc.mu
+
+        j_hot = general_hex_j_factor(Re_h, ls_over_dh)
+        j_cold = general_hex_j_factor(Re_c, ls_over_dh)
+        f_hot = general_hex_friction_factor(Re_h, ls_over_dh)
+        f_cold = general_hex_friction_factor(Re_c, ls_over_dh)
+
+        St_h = j_hot * Pr_h ** (-2 / 3)
+        St_c = j_cold * Pr_c ** (-2 / 3)
+        logger.info(
+            "0D guess tube bank for Re_h=%5.2e: St_h=%5.2f, f_h=%5.2e",
+            Re_h,
+            St_h,
+            f_hot,
+        )
+        St_c = j_cold * Pr_c ** (-2 / 3)
+        logger.info(
+            "0D guess tube flow for Re_c=%5.2e: St_c=%5.2f, f_c=%5.2e",
+            Re_c,
+            St_c,
+            f_cold,
+        )
+
+        h_h = St_h * G_h0 * sh.cp
+        h_c = St_c * G_c0 * sc.cp
+
+        wall_term = 0
+        U_h = 1.0 / (1.0 / h_h + 1.0 / h_c * (A_q_h / A_q_c) + wall_term)
+
+        C_h_tot = f_in.m_dot_hot * sh.cp
+        C_c_tot = f_in.m_dot_cold * sc.cp
+        C_min = min(C_h_tot, C_c_tot)
+        C_max = max(C_h_tot, C_c_tot)
+        Cr = C_min / C_max
+
+        NTU = U_h * A_total_hot0 / C_min
+        eps = _eps_ntu(NTU, Cr, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1)
+        logger.info("0D guess epsilon-NTU: NTU=%5.2f, eps=%5.2f", NTU, eps)
+        Q = eps * C_min * (_Th_in - _Tc_in)
+
+        tau_h = f_hot * (A_total_hot0 / Aff_hot_mid) * (G_h0**2) / (2.0 * sh.rho)
+        tau_c = f_cold * (A_total_cold0 / Aff_cold_total) * (G_c0**2) / (2.0 * sc.rho)
+
+        dh0_h = -Q / f_in.m_dot_hot
+        dh0_c = Q / f_in.m_dot_cold
+
+        ksi_h = f_hot * (A_total_hot0 / Aff_hot_mid)
+        ksi_c = f_cold * (A_total_cold0 / Aff_cold_total)
+        k_h = dh0_h / (sh.h * ksi_h)
+        k_c = dh0_c / (sc.h * ksi_c)
+        M_in_h = G_h0 / sh.rho / sh.a
+        M_in_c = G_c0 / sc.rho / sc.a
+
+        # Check for choking limit
+        if abs(k_h) > 1e-10:  # Avoid division by zero
+            ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
+            if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
+                logger.info(
+                    "Hot fluid choking risk: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_h,
+                    ksi_lim_h,
+                    M_in_h,
+                    k_h,
+                )
+        if abs(k_c) > 1e-10:  # Avoid division by zero
+            ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
+            if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
+                logger.info(
+                    "Cold fluid choking risk: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_c,
+                    ksi_lim_c,
+                    M_in_c,
+                    k_c,
+                )
+
+        Th_out, Ph_not_b = _upd_stat_prop(
+            f_in.hot,
+            G_h0,
+            dh0_h,
+            tau_h,
+            T_a=_Th_in,
+            p_b=_Ph_out if _Ph_out is not None else _Ph_in,
+            a_is_in=True,
+            b_is_in=(_Ph_out is None),
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
+        )
+
+        Tc_out, Pc_out = _upd_stat_prop(
+            f_in.cold,
+            G_c0,
+            dh0_c,
+            tau_c,
+            T_a=_Tc_in,
+            p_b=_Pc_in,
+            a_is_in=True,
+            b_is_in=True,
+            max_iter=100,
+            tol_T=1e-2,
+            rel_tol_p=1e-2,
+        )
+        if Pc_out < 0:
+            logger.warning(f"Pc_out {Pc_out:.1e} <0, for {tau_c:.1e} setting to 0.1e5 Pa")
+            Pc_out = 0.1e5
+
+        return Th_out, Tc_out, Ph_not_b, Pc_out
+
+    logger.info(
+        "0D guess inputs: Th_in =%5.2f K, Tc_in =%5.2f K, Ph_in =%s Pa, Pc_in =%5.2e Pa (Ph_out=%s)",
+        f_in.Th_in,
+        f_in.Tc_in,
+        f"{f_in.Ph_in:.2e}" if f_in.Ph_in is not None else "N/A",
+        f_in.Pc_in,
+        f"{f_in.Ph_out:.2e}" if f_in.Ph_out is not None else "N/A",
+    )
+    Th_o1, Tc_o1, Ph_not_b1, Pc_o1 = _0d_xflow_guess(
+        _Th_in=f_in.Th_in,
+        _Ph_in=f_in.Ph_in if f_in.Ph_in is not None else float("nan"),
+        _Tc_in=f_in.Tc_in,
+        _Pc_in=f_in.Pc_in,
+        Th_eval=f_in.Th_in,
+        Ph_eval=f_in.Ph_out if f_in.Ph_out is not None else f_in.Ph_in,
+        Tc_eval=f_in.Tc_in,
+        Pc_eval=f_in.Pc_in,
+        _Ph_out=f_in.Ph_out,
+    )
+    if f_in.Ph_out is not None:
+        logger.info(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o1,
+            Tc_o1,
+            f_in.Ph_out,
+            Pc_o1,
+            Ph_not_b1,
+        )
+    else:
+        logger.info(
+            "0D guess 1: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o1,
+            Tc_o1,
+            Ph_not_b1,
+            Pc_o1,
+        )
+    Th_mean = 0.5 * (f_in.Th_in + Th_o1)
+    Tc_mean = 0.5 * (f_in.Tc_in + Tc_o1)
+    Ph_known = f_in.Ph_out if f_in.Ph_out is not None else f_in.Ph_in
+    if Ph_known is None:
+        raise ValueError("Either Ph_in or Ph_out must be provided for the 0D guess.")
+    Ph_mean = 0.5 * (Ph_known + Ph_not_b1)
+    Pc_mean = 0.5 * (f_in.Pc_in + Pc_o1)
+    Th_o2, Tc_o2, Ph_not_b2, Pc_o2 = _0d_xflow_guess(
+        _Th_in=f_in.Th_in,
+        _Ph_in=f_in.Ph_in if f_in.Ph_in is not None else float("nan"),
+        _Tc_in=f_in.Tc_in,
+        _Pc_in=f_in.Pc_in,
+        Th_eval=Th_mean,
+        Ph_eval=Ph_mean,
+        Tc_eval=Tc_mean,
+        Pc_eval=Pc_mean,
+        _Ph_out=f_in.Ph_out,
+    )
+    if f_in.Ph_out is not None:
+        logger.info(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa (Ph_in_guess=%5.2e Pa)",
+            Th_o2,
+            Tc_o2,
+            f_in.Ph_out,
+            Pc_o2,
+            Ph_not_b2,
+        )
+    else:
+        logger.info(
+            "0D guess 2: Th_out=%5.2f K, Tc_out=%5.2f K, Ph_out=%5.2e Pa, Pc_out=%5.2e Pa",
+            Th_o2,
+            Tc_o2,
+            Ph_not_b2,
+            Pc_o2,
+        )
+    # Hot inner boundary (inboard shoot) guess equals the 0D outlet
+    return float(Th_o2), float(Tc_o2), float(Ph_not_b2), float(Pc_o2)
