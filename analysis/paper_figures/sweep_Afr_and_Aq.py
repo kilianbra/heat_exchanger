@@ -1,11 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
+from scipy.interpolate import griddata
 
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
-from heat_exchanger.geometries.general_counterflow import (
-    rate_hex_simple,
-)
+from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # region fixed inputs
 # Fluid models (global)
@@ -45,8 +44,8 @@ Aq_list = []
 # endregion
 
 # plotting options
-PLOT_EUERGY_NOT_EXERGY = False
-PLOT_BOTH_PER_AQ = False
+PLOT_EUERGY_NOT_EXERGY = True
+PLOT_BOTH_PER_AQ = True
 PLOT_DIMENSIONAL = False
 
 # Geometry
@@ -63,13 +62,20 @@ scale_everything = 1
 
 if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = 0.2 * 2.5 * scale_everything
-    Aq_sweep = np.linspace(20, 80, 30) * scale_everything
+    Aq_sweep = np.linspace(20 / scale_everything, 80, 300) * scale_everything
 else:
     Afr_start = 1.5 * scale_everything
-    Aq_sweep = np.linspace(20, 100, 50) * scale_everything
+    Aq_sweep = np.linspace(2, 100, 50) * scale_everything
 AOH_OVER_AFR_RATIO = SIGMA_R / A_FR_OVER_AO_C
 Ao_h_start = Afr_start * AOH_OVER_AFR_RATIO
-g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / 4 / F_IN.Ph_in / F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).rho
+RHO_IN_HOT = F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).rho
+g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / F_IN.Ph_in / RHO_IN_HOT
+
+MISSION_HOURS = 2
+LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
+FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
+
+ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
 
 
 A_fr_decrease_ratio_start = 0.999
@@ -128,7 +134,6 @@ if len(results_euergy) > 0:
     Xi, Yi = np.meshgrid(xi, yi)
 
     # Interpolate scattered data to grid
-    from scipy.interpolate import griddata
 
     Zi_euergy = griddata((Aq_array, Afr_array), euergy_array, (Xi, Yi), method="linear")
     Zi_exergy = griddata((Aq_array, Afr_array), exergy_array, (Xi, Yi), method="linear")
@@ -137,6 +142,10 @@ if len(results_euergy) > 0:
     idx_max_euergy_creation = np.nanargmax(Zi_euergy, axis=0)  # For each column (Aq value), row index of max
     y_at_max_euergy_creation = yi[idx_max_euergy_creation]  # yi is the array of A_fr (y axis)
     # Plot the (Aq, A_fr) where max occurs as a red line
+
+    A_fr_opt_min = y_at_max_euergy_creation[0]
+
+    print(f"For Area {xi[0]:.2f} m² and mass of {xi[0] * RHO_WALL_T:.2f} kg, opt{A_fr_opt_min:.2f} m2 frontal area")
 
     min_exergy_destr_for_Aq = np.nanmax(Zi_exergy, axis=0)
     idx_min_exergy_destr = np.nanargmax(Zi_exergy, axis=0)  # For each column (Aq value), row index of min
@@ -167,23 +176,26 @@ if len(results_euergy) > 0:
         euergy_at_exergy_optimal_filtered[mask_exergy] = np.nan
 
         plt.plot(
-            xi,
-            euergy_at_euergy_optimal / (xi * RHO_WALL_T) * Q_max / 1000,
+            xi * RHO_WALL_T / MASS_ENGINE,
+            euergy_at_euergy_optimal / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max,
             "r--",
             lw=2,
             label="Euergy (euergy-optimal A_fr)",
         )
         plt.plot(
-            xi,
-            euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * Q_max / 1000,
+            xi * RHO_WALL_T / MASS_ENGINE,
+            euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max,
             "b--",
             lw=2,
             label="Euergy (exergy-optimal A_fr)",
         )
 
+        plt.axhline(y=ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Unrecuperated break even")
+        plt.axhline(y=(1 - 300 / 1400) / 0.88, color="y", linestyle="-", label="Ideal break even")
+
         plt.title("Work Potential creation per kg of core HEx mass vs Aq")
-        plt.xlabel("Aq (m²)")
-        plt.ylabel("Work Potential creation per kg of core HEx mass (kW/kg)")
+        plt.xlabel("m_hex / m_engine")
+        plt.ylabel("Ideal Engine kg fuel avoided per kg of core HEx mass (kg/kg)")
 
     else:
         if PLOT_DIMENSIONAL:
@@ -195,15 +207,24 @@ if len(results_euergy) > 0:
             y_ex = y_at_min_exergy_destr_filtered
             yi = Yi
 
-        else:
+        else:  # y starts out as A_fr now want to convert it to g^2
             dimensionalisation_x = RHO_WALL_T / MASS_ENGINE
-            plt.ylabel("A_q/A_o_h")
-            plt.xlabel("m_hex / m_engine")
-            plt.ylim(0, 1000)
 
-            y_eu = 1 / (y_at_max_euergy_creation * AOH_OVER_AFR_RATIO / xi)
-            y_ex = 1 / (y_at_min_exergy_destr_filtered * AOH_OVER_AFR_RATIO / xi)
-            yi = 1 / (Yi * AOH_OVER_AFR_RATIO / xi)
+            plt.xlabel("m_hex / m_engine")
+
+            # plot hex aspect ratio on y axis i.e. A_q/A_o_h
+
+            # y_eu = 1 / (y_at_max_euergy_creation * AOH_OVER_AFR_RATIO / xi)
+            # y_ex = 1 / (y_at_min_exergy_destr_filtered * AOH_OVER_AFR_RATIO / xi)
+            # yi = 1 / (Yi * AOH_OVER_AFR_RATIO / xi)
+            # plt.ylabel("A_q/A_o_h")
+            # plt.ylim(0, 1000)
+
+            # plot g^2_in on y axis
+            y_eu = (F_IN.m_dot_hot / y_at_max_euergy_creation) ** 2 / F_IN.Ph_in / RHO_IN_HOT
+            y_ex = (F_IN.m_dot_hot / y_at_min_exergy_destr_filtered) ** 2 / F_IN.Ph_in / RHO_IN_HOT
+            yi = (F_IN.m_dot_hot / Yi) ** 2 / F_IN.Ph_in / RHO_IN_HOT
+            plt.ylabel("g^2_in (-)")
 
         cp = plt.contourf(Xi * dimensionalisation_x, yi, Zi, cmap="viridis", levels=20)
 
@@ -242,3 +263,30 @@ if len(results_euergy) > 0:
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+r_s = rate_hex_simple(
+    A_fr=A_fr_opt_min,
+    A_q=Aq_sweep[0],
+    f_in=F_IN,
+    d_h_c=D_H_C,
+    sigma_r=SIGMA_R,
+    sigma_w=SIGMA_W,
+    t_over_dhc=T_OVER_DHC,
+    ls_over_dh=LS_OVER_DH,
+)
+
+print(
+    f" Re_hot: {r_s['re_hot']:.2e}, Re_cold: {r_s['re_cold']:.2e}, g2_hot: {r_s['g2_hot']:.2e}, g2_cold: {r_s['g2_cold']:.2e}"
+)
+from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
+
+j_hot = general_hex_j_factor(r_s["re_hot"], LS_OVER_DH)
+f_hot = general_hex_friction_factor(r_s["re_hot"], LS_OVER_DH)
+j_cold = general_hex_j_factor(r_s["re_cold"], LS_OVER_DH)
+f_cold = general_hex_friction_factor(r_s["re_cold"], LS_OVER_DH)
+
+print(f" j/f hot: {j_hot / f_hot:.2e}, j/f cold: {j_cold / f_cold:.2e}")
+
+cutoff_g2 = j_hot / f_hot / 2 * 0.7 ** (-2 / 3) * 0.03 * (F_IN.Th_in / F_IN.Tc_in - 1)
+
+print(f" Single stream cutoff g^2: {cutoff_g2:.2e}")

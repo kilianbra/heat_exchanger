@@ -1,0 +1,418 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import PercentFormatter
+from matplotlib.widgets import Button, Slider
+
+from heat_exchanger.geometries.general_counterflow import rate_hex_simple
+from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+
+
+# Fluid models (global)
+FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
+FLUID_COLD = PerfectGasFluid.from_name("air")
+
+# Initial values for sliders
+INIT_T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+INIT_SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
+INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
+INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
+INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+INIT_AQ_BASELINE = 43.0
+INIT_A_FR_BASELINE = 5.0
+
+# Fluid inputs initial values
+INIT_M_DOT_HOT = 1.6  # kg/s
+INIT_M_DOT_COLD = 1.6  # kg/s
+INIT_TH_IN = 980  # K
+INIT_PH_IN = 1.06e5  # Pa (1.06 bar)
+INIT_TC_IN = 576  # K
+INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
+INIT_DP_MAX = 0.2
+
+# Initial boolean values
+INIT_PLOT_AQ_SWEEP_NOT_AFR = False
+INIT_PLOT_ENTROPY_NOT_EUERGY = True
+
+
+def calculate_plot(
+    plot_aq_sweep_not_afr,
+    plot_entropy_not_euergy,
+    t_over_dhc,
+    sigma_r,
+    sigma_w,
+    d_h_c,
+    ls_over_dh,
+    aq_baseline,
+    a_fr_baseline,
+    m_dot_hot,
+    m_dot_cold,
+    th_in,
+    ph_in,
+    tc_in,
+    pc_in,
+    dp_max,
+):
+    """Calculate and return plot data"""
+    # Create fluid inputs
+    f_in = FluidInputs(
+        hot=FLUID_HOT,
+        cold=FLUID_COLD,
+        m_dot_hot=m_dot_hot,
+        m_dot_cold=m_dot_cold,
+        Th_in=th_in,
+        Ph_in=ph_in,
+        Tc_in=tc_in,
+        Pc_in=pc_in,
+    )
+
+    # Generate x values
+    if plot_aq_sweep_not_afr:
+        x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        Aq = x
+        A_fr = a_fr_baseline
+        title = "Heat transfer area variation Aq (m²) (HEx mass, length changes)"
+    else:
+        x = np.geomspace(a_fr_baseline, 0.001, 100)
+        Aq = aq_baseline
+        A_fr = x
+        title = "Frontal area variation A_fr (m²) (Velocity, g^2)"
+    # Calculate results
+    r_s = rate_hex_simple(
+        A_fr=A_fr,
+        A_q=Aq,
+        f_in=f_in,
+        d_h_c=d_h_c,
+        sigma_r=sigma_r,
+        sigma_w=sigma_w,
+        t_over_dhc=t_over_dhc,
+        ls_over_dh=ls_over_dh,
+    )
+
+    # Find validity mask
+    dp_hot = r_s["dp_hot"]
+    dp_cold = r_s["dp_cold"]
+    over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max)
+    if np.any(over_limit):
+        first_exceed = np.argmax(over_limit)
+        validity_mask = np.zeros_like(dp_hot, dtype=bool)
+        validity_mask[:first_exceed] = True
+    else:
+        validity_mask = np.ones_like(dp_hot, dtype=bool)
+
+    x_plot = r_s["ntu"]
+    x_title = "NTU"
+
+    if plot_entropy_not_euergy:
+        y_plot = r_s["dW_pot_Ex_norm"]
+        label = "Exergy"
+        color = "r"
+        deci = 3
+    else:
+        y_plot = r_s["dW_pot_Eu_norm"]
+        label = "Euergy"
+        color = "b"
+        deci = 1
+
+    return x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq / A_fr
+
+
+if __name__ == "__main__":
+    # Create figure with space for sliders on the right
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot(111)
+    plt.subplots_adjust(right=0.75)  # Make room for sliders on the right
+
+    # Initial plot
+    x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq_over_A_fr = calculate_plot(
+        INIT_PLOT_AQ_SWEEP_NOT_AFR,
+        INIT_PLOT_ENTROPY_NOT_EUERGY,
+        INIT_T_OVER_DHC,
+        INIT_SIGMA_R,
+        INIT_SIGMA_W,
+        INIT_D_H_C,
+        INIT_LS_OVER_DH,
+        INIT_AQ_BASELINE,
+        INIT_A_FR_BASELINE,
+        INIT_M_DOT_HOT,
+        INIT_M_DOT_COLD,
+        INIT_TH_IN,
+        INIT_PH_IN,
+        INIT_TC_IN,
+        INIT_PC_IN,
+        INIT_DP_MAX,
+    )
+
+    if INIT_PLOT_AQ_SWEEP_NOT_AFR:
+        print(
+            f"NTU = {x_plot[0]:.2f}, g2_h: {r_s['g2_hot']:.2e}, g2_c: {r_s['g2_cold']:.2e},Rc {r_s['R_cold_over_R_tot'][0] * 100:.0f}%, Re_h: {r_s['re_hot']:.2e}, Re_c: {r_s['re_cold']:.2e}"
+        )
+    else:
+        print(
+            f"NTU = {x_plot[0]:.2f}, g2_h: {r_s['g2_hot'][0]:.2e}, g2_c: {r_s['g2_cold'][0]:.2e},Rc {r_s['R_cold_over_R_tot'][0] * 100:.0f}%, Re_h: {r_s['re_hot'][0]:.2e}, Re_c: {r_s['re_cold'][0]:.2e}"
+        )
+        print(
+            f"NTU = {x_plot[validity_mask][-1]:.2f}, g2_h: {r_s['g2_hot'][validity_mask][-1]:.2e}, g2_c: {r_s['g2_cold'][validity_mask][-1]:.2e},Rc {r_s['R_cold_over_R_tot'][validity_mask][-1] * 100:.0f}%, Re_h: {r_s['re_hot'][validity_mask][-1]:.2e}, Re_c: {r_s['re_cold'][validity_mask][-1]:.2e}"
+        )
+
+    (line,) = ax.plot(x_plot[validity_mask], y_plot[validity_mask], color + "-", label=label)
+    ax.legend()
+    ax.set_xlabel(x_title)
+    ax.set_ylabel("dW_pot / Q_max")
+    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
+    ax.set_title(title)
+
+    # Create sliders on the right side
+    slider_height = 0.03
+    slider_spacing = 0.03
+    start_y = 0.95
+
+    # Slider positions (right side)
+    slider_left = 0.86
+    slider_width = 0.1
+
+    # region Create sliders
+    y_pos = start_y
+    slider_t_over_dhc = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "T_OVER_DHC",
+        0.001,
+        0.1,
+        valinit=INIT_T_OVER_DHC,
+        valfmt="%.4f",
+    )
+    y_pos -= slider_spacing
+
+    slider_sigma_r = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "SIGMA_R",
+        0.1,
+        10.0,
+        valinit=INIT_SIGMA_R,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    slider_sigma_w = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "SIGMA_W",
+        0.1,
+        10.0,
+        valinit=INIT_SIGMA_W,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    slider_d_h_c = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "D_H_C (m)",
+        1e-4,
+        0.01,
+        valinit=INIT_D_H_C,
+        valfmt="%.4f",
+    )
+    y_pos -= slider_spacing
+
+    slider_ls_over_dh = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "LS_OVER_DH",
+        0.7,
+        70,
+        valinit=INIT_LS_OVER_DH,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    slider_aq_baseline = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "AQ_BASELINE",
+        1.0,
+        200.0,
+        valinit=INIT_AQ_BASELINE,
+        valfmt="%.1f",
+    )
+    y_pos -= slider_spacing
+
+    slider_a_fr_baseline = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "A_FR_BASELINE",
+        0.01,
+        10.0,
+        valinit=INIT_A_FR_BASELINE,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    # Fluid input sliders
+    slider_m_dot_hot = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "m_dot_hot",
+        0.1,
+        10.0,
+        valinit=INIT_M_DOT_HOT,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    slider_m_dot_cold = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "m_dot_cold",
+        0.1,
+        10.0,
+        valinit=INIT_M_DOT_COLD,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
+
+    slider_th_in = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "Th_in (K)",
+        300,
+        2000,
+        valinit=INIT_TH_IN,
+        valfmt="%.0f",
+    )
+    y_pos -= slider_spacing
+
+    slider_ph_in = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "Ph_in (Pa)",
+        1e4,
+        1e6,
+        valinit=INIT_PH_IN,
+        valfmt="%.0e",
+    )
+    y_pos -= slider_spacing
+
+    slider_tc_in = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "Tc_in (K)",
+        200,
+        1000,
+        valinit=INIT_TC_IN,
+        valfmt="%.0f",
+    )
+    y_pos -= slider_spacing
+
+    slider_pc_in = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "Pc_in (Pa)",
+        1e4,
+        1e6,
+        valinit=INIT_PC_IN,
+        valfmt="%.0e",
+    )
+    y_pos -= slider_spacing
+
+    slider_dp_max = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "DP_MAX",
+        0.2,
+        0.8,
+        valinit=INIT_DP_MAX,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing * 2
+
+    # Create buttons for booleans
+    button_height = 0.04
+    button_spacing = 0.05
+
+    button_aq_sweep = Button(
+        plt.axes([slider_left, y_pos, slider_width, button_height]), f"AQ Sweep: {INIT_PLOT_AQ_SWEEP_NOT_AFR}"
+    )
+    y_pos -= button_spacing
+
+    button_entropy = Button(
+        plt.axes([slider_left, y_pos, slider_width, button_height]), f"Entropy: {INIT_PLOT_ENTROPY_NOT_EUERGY}"
+    )
+
+    # endregion Create sliders
+
+    # Store boolean states
+    plot_aq_sweep_not_afr = INIT_PLOT_AQ_SWEEP_NOT_AFR
+    plot_entropy_not_euergy = INIT_PLOT_ENTROPY_NOT_EUERGY
+
+    def update_plot(val=None):
+        """Update the plot when any slider changes"""
+        global plot_aq_sweep_not_afr, plot_entropy_not_euergy
+
+        x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq_over_A_fr = calculate_plot(
+            plot_aq_sweep_not_afr,
+            plot_entropy_not_euergy,
+            slider_t_over_dhc.val,
+            slider_sigma_r.val,
+            slider_sigma_w.val,
+            slider_d_h_c.val,
+            slider_ls_over_dh.val,
+            slider_aq_baseline.val,
+            slider_a_fr_baseline.val,
+            slider_m_dot_hot.val,
+            slider_m_dot_cold.val,
+            slider_th_in.val,
+            slider_ph_in.val,
+            slider_tc_in.val,
+            slider_pc_in.val,
+            slider_dp_max.val,
+        )
+
+        if plot_aq_sweep_not_afr:
+            print(
+                f"NTU = {x_plot[0]:.2f}, g2_h: {r_s['g2_hot']:.2e}, g2_c: {r_s['g2_cold']:.2e},Rc {r_s['R_cold_over_R_tot'][0] * 100:.0f}%, Re_h: {r_s['re_hot']:.2e}, Re_c: {r_s['re_cold']:.2e}"
+            )
+        else:
+            print(
+                f"NTU = {x_plot[0]:.2f}, g2_h: {r_s['g2_hot'][0]:.2e}, g2_c: {r_s['g2_cold'][0]:.2e},Rc {r_s['R_cold_over_R_tot'][0] * 100:.0f}%, Re_h: {r_s['re_hot'][0]:.2e}, Re_c: {r_s['re_cold'][0]:.2e}"
+            )
+            print(
+                f"NTU = {x_plot[validity_mask][-1]:.2f}, g2_h: {r_s['g2_hot'][validity_mask][-1]:.2e}, g2_c: {r_s['g2_cold'][validity_mask][-1]:.2e},Rc {r_s['R_cold_over_R_tot'][validity_mask][-1] * 100:.0f}%, Re_h: {r_s['re_hot'][validity_mask][-1]:.2e}, Re_c: {r_s['re_cold'][validity_mask][-1]:.2e}"
+            )
+
+        line.set_data(x_plot[validity_mask], y_plot[validity_mask])
+        line.set_color(color)
+        line.set_label(label)
+        ax.set_xlabel(x_title)
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
+        ax.set_title(title)
+        ax.relim()
+        if not plot_aq_sweep_not_afr:
+            ax.set_xlim(0, x_plot[validity_mask][-1])
+
+        ax.autoscale_view()
+        ax.legend()
+        fig.canvas.draw_idle()
+
+    def toggle_aq_sweep(event):
+        """Toggle PLOT_AQ_SWEEP_NOT_AFR boolean"""
+        global plot_aq_sweep_not_afr
+        plot_aq_sweep_not_afr = not plot_aq_sweep_not_afr
+        button_aq_sweep.label.set_text(f"AQ Sweep: {plot_aq_sweep_not_afr}")
+        update_plot()
+
+    def toggle_entropy(event):
+        """Toggle PLOT_ENTROPY_NOT_EUERGY boolean"""
+        global plot_entropy_not_euergy
+        plot_entropy_not_euergy = not plot_entropy_not_euergy
+        button_entropy.label.set_text(f"Entropy: {plot_entropy_not_euergy}")
+        update_plot()
+
+    # Connect sliders to update function
+    slider_t_over_dhc.on_changed(update_plot)
+    slider_sigma_r.on_changed(update_plot)
+    slider_sigma_w.on_changed(update_plot)
+    slider_d_h_c.on_changed(update_plot)
+    slider_ls_over_dh.on_changed(update_plot)
+    slider_aq_baseline.on_changed(update_plot)
+    slider_a_fr_baseline.on_changed(update_plot)
+    slider_m_dot_hot.on_changed(update_plot)
+    slider_m_dot_cold.on_changed(update_plot)
+    slider_th_in.on_changed(update_plot)
+    slider_ph_in.on_changed(update_plot)
+    slider_tc_in.on_changed(update_plot)
+    slider_pc_in.on_changed(update_plot)
+    slider_dp_max.on_changed(update_plot)
+
+    # Connect buttons to toggle functions
+    button_aq_sweep.on_clicked(toggle_aq_sweep)
+    button_entropy.on_clicked(toggle_entropy)
+
+    plt.show()

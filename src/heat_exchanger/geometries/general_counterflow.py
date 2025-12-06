@@ -169,7 +169,8 @@ def rate_hex_simple(
     # Extract values from FluidInputs
     fluid_hot = f_in.hot
     fluid_cold = f_in.cold
-    mdot = f_in.m_dot_hot  # Assume same for both sides
+    mdot_hot = f_in.m_dot_hot  # Assume same for both sides
+    mdot_cold = f_in.m_dot_cold
     T_hot_in = f_in.Th_in
     P_hot_in = f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out
     T_cold_in = f_in.Tc_in
@@ -214,16 +215,16 @@ def rate_hex_simple(
     Ao_h = Ao_c * sigma_r
 
     # Calculate mass flux G = mdot / A_o
-    G_hot = mdot / Ao_h
-    G_cold = mdot / Ao_c
+    G_hot = mdot_hot / Ao_h
+    G_cold = mdot_cold / Ao_c
 
     # Calculate Reynolds numbers: Re = G * d_h / mu
     Re_hot = G_hot * d_h_h / mu_hot_in
     Re_cold = G_cold * d_h_c / mu_cold_in
 
     # Calculate g² = (mdot/A_o)² / 4 / p_in / rho_in
-    g2_hot = (mdot / Ao_h) ** 2 / 4 / P_hot_in / rho_hot_in
-    g2_cold = (mdot / Ao_c) ** 2 / 4 / P_cold_in / rho_cold_in
+    g2_hot = (mdot_hot / Ao_h) ** 2 / 4 / P_hot_in / rho_hot_in
+    g2_cold = (mdot_cold / Ao_c) ** 2 / 4 / P_cold_in / rho_cold_in
 
     # Calculate friction factors and j-factors
     # Note: ls_over_dh uses the respective hydraulic diameter for each side
@@ -245,8 +246,8 @@ def rate_hex_simple(
     A_q_over_Ao_c = A_c / Ao_c
 
     # Capacity ratio
-    C_hot = mdot * cp_hot
-    C_cold = mdot * cp_cold
+    C_hot = mdot_hot * cp_hot
+    C_cold = mdot_cold * cp_cold
     C_min = min(C_hot, C_cold)
     C_max = max(C_hot, C_cold)
     C_r = C_min / C_max
@@ -261,10 +262,7 @@ def rate_hex_simple(
     NTU = 1 / (C_min / C_hot / NTU_h + C_min / C_cold / NTU_c)
 
     # Calculate effectiveness: eps = NTU/(1+NTU) for balanced, or counterflow formula
-    if C_r < 0.99:
-        eps = (1 - np.exp(-NTU * (1 - C_r))) / (1 - C_r * np.exp(-NTU * (1 - C_r)))
-    else:
-        eps = NTU / (1 + NTU)
+    eps = _eps_ntu(NTU, C_r, exchanger_type="aligned_flow", flow_type="counterflow", n_passes=1)
 
     # Temperature and pressure ratios
     T_h_in_Td = T_hot_in / T_d
@@ -284,39 +282,29 @@ def rate_hex_simple(
     )
 
     # Calculate outlet temperatures
-    if C_h_c > 1:  # cold side is C_min
-        T_o_Ti_hot = 1 - eps / C_h_c * (1 - 1 / t)
-        T_o_Ti_cold = 1 + eps * (t - 1)
-    else:  # hot side is C_min
-        T_o_Ti_hot = 1 - eps * (1 - 1 / t)
-        T_o_Ti_cold = 1 + eps * C_h_c * (t - 1)
+    T_o_Ti_hot = 1 - eps * C_min / C_hot * (1 - 1 / t)
+    T_o_Ti_cold = 1 + eps * C_min / C_cold * (t - 1)
+
     T_hot_out = T_hot_in * T_o_Ti_hot
     T_cold_out = T_cold_in * T_o_Ti_cold
 
     # Calculate work potentials with different gamma values for hot and cold
-    # This is Td delta s / cp/Td = delta s / cp
-    log_p_hot = np.log(P_hot_out_P_hot_in)
-    log_p_cold = np.log(P_cold_out_P_cold_in)
-    dW_pot_Ex = (
-        np.log(T_hot_out / T_hot_in) + np.log(T_cold_out / T_cold_in) - gm1og_hot * log_p_hot - gm1og_cold * log_p_cold
-    )
+    # This is Td delta S / Qmax
+    dW_pot_Ex_norm = (
+        C_hot * np.log(T_o_Ti_hot)
+        + C_cold * np.log(T_o_Ti_cold)
+        - C_hot * gm1og_hot * np.log(P_hot_out_P_hot_in)
+        - C_cold * gm1og_cold * np.log(P_cold_out_P_cold_in)
+    ) / (C_min * (T_hot_in - T_cold_in))
 
     # Calculate Euergy change with different gamma for hot and cold
 
-    dW_pot_Eu_hot = (
-        (1 / p_h_in_pd) ** gm1og_hot * T_hot_in * (T_hot_out / T_hot_in * (1 / P_hot_out_P_hot_in) ** gm1og_hot - 1)
+    dw_pot_Eu_hot = (1 / p_h_in_pd) ** gm1og_hot * T_hot_in * (T_o_Ti_hot * (1 / P_hot_out_P_hot_in) ** gm1og_hot - 1)
+    dw_pot_Eu_c = (
+        (1 / p_c_in_pd) ** gm1og_cold * T_cold_in * (T_o_Ti_cold * (1 / P_cold_out_P_cold_in) ** gm1og_cold - 1)
     )
-    dW_pot_Eu_cold = (
-        (1 / p_c_in_pd) ** gm1og_cold
-        * T_cold_in
-        * (T_cold_out / T_cold_in * (1 / P_cold_out_P_cold_in) ** gm1og_cold - 1)
-    )
-    dW_pot_Eu = dW_pot_Eu_hot + dW_pot_Eu_cold
 
-    # Normalize by Q_max
-    norm = 1 / (T_hot_in - T_cold_in)
-    dW_pot_Ex_norm = dW_pot_Ex * norm
-    dW_pot_Eu_norm = dW_pot_Eu * norm
+    dW_pot_Eu_norm = (C_hot * dw_pot_Eu_hot + C_cold * dw_pot_Eu_c) / (C_min * (T_hot_in - T_cold_in))
 
     return {
         "eps": eps,
@@ -333,6 +321,7 @@ def rate_hex_simple(
         "Aq_over_Ao_h": A_q_over_Ao_h,
         "dW_pot_Ex_norm": dW_pot_Ex_norm,
         "dW_pot_Eu_norm": dW_pot_Eu_norm,
+        "R_cold_over_R_tot": C_min / C_cold / NTU_c * NTU,
     }
 
 
