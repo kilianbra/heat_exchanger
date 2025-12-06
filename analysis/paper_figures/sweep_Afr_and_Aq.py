@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib.ticker import PercentFormatter
 from scipy.interpolate import griddata
 
+from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
@@ -44,8 +45,8 @@ Aq_list = []
 # endregion
 
 # plotting options
-PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = True
+PLOT_EUERGY_NOT_EXERGY = False
+PLOT_BOTH_PER_AQ = False
 PLOT_DIMENSIONAL = False
 
 # Geometry
@@ -64,7 +65,7 @@ if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = 0.2 * 2.5 * scale_everything
     Aq_sweep = np.linspace(20 / scale_everything, 80, 300) * scale_everything
 else:
-    Afr_start = 1.5 * scale_everything
+    Afr_start = 0.5 * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
 AOH_OVER_AFR_RATIO = SIGMA_R / A_FR_OVER_AO_C
 Ao_h_start = Afr_start * AOH_OVER_AFR_RATIO
@@ -76,6 +77,7 @@ LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
 FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
 
 ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
+ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
 
 
 A_fr_decrease_ratio_start = 0.999
@@ -177,21 +179,28 @@ if len(results_euergy) > 0:
 
         plt.plot(
             xi * RHO_WALL_T / MASS_ENGINE,
-            euergy_at_euergy_optimal / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max,
+            euergy_at_euergy_optimal / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
             "r--",
             lw=2,
             label="Euergy (euergy-optimal A_fr)",
         )
         plt.plot(
             xi * RHO_WALL_T / MASS_ENGINE,
-            euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max,
+            euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
             "b--",
             lw=2,
             label="Euergy (exergy-optimal A_fr)",
         )
 
-        plt.axhline(y=ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Unrecuperated break even")
-        plt.axhline(y=(1 - 300 / 1400) / 0.88, color="y", linestyle="-", label="Ideal break even")
+        plt.axhline(
+            y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Unrecuperated break even"
+        )
+        plt.axhline(
+            y=ETA_OV_RECUP_MAX_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB,
+            color="y",
+            linestyle="-",
+            label="Ideal Recup break even",
+        )
 
         plt.title("Work Potential creation per kg of core HEx mass vs Aq")
         plt.xlabel("m_hex / m_engine")
@@ -278,7 +287,7 @@ r_s = rate_hex_simple(
 print(
     f" Re_hot: {r_s['re_hot']:.2e}, Re_cold: {r_s['re_cold']:.2e}, g2_hot: {r_s['g2_hot']:.2e}, g2_cold: {r_s['g2_cold']:.2e}"
 )
-from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
+
 
 j_hot = general_hex_j_factor(r_s["re_hot"], LS_OVER_DH)
 f_hot = general_hex_friction_factor(r_s["re_hot"], LS_OVER_DH)

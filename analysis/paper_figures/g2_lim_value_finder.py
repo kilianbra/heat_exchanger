@@ -68,9 +68,9 @@ substituting back into cubic
 
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brentq
-import matplotlib.pyplot as plt
 
 # Parameter sweep for t and corresponding c values
 t = np.linspace(1.1, 4, 10)

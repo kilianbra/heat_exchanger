@@ -1,11 +1,10 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.ticker import PercentFormatter
 from matplotlib.widgets import Button, Slider
 
-from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
-
+from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # Fluid models (global)
 FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -18,7 +17,7 @@ INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
 INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
 INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
 INIT_AQ_BASELINE = 43.0
-INIT_A_FR_BASELINE = 5.0
+INIT_A_FR_BASELINE = 0.5
 
 # Fluid inputs initial values
 INIT_M_DOT_HOT = 1.6  # kg/s
@@ -29,14 +28,25 @@ INIT_TC_IN = 576  # K
 INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
 INIT_DP_MAX = 0.2
 
+F_IN = FluidInputs(
+    hot=FLUID_HOT,
+    cold=FLUID_COLD,
+    m_dot_hot=INIT_M_DOT_HOT,
+    m_dot_cold=INIT_M_DOT_COLD,
+    Th_in=INIT_TH_IN,
+    Ph_in=INIT_PH_IN,
+    Tc_in=INIT_TC_IN,
+    Pc_in=INIT_PC_IN,
+)
+
 # Initial boolean values
 INIT_PLOT_AQ_SWEEP_NOT_AFR = False
-INIT_PLOT_ENTROPY_NOT_EUERGY = True
+INIT_PDOT_NOT_DP = False
 
 
 def calculate_plot(
     plot_aq_sweep_not_afr,
-    plot_entropy_not_euergy,
+    plot_pdot_not_dp,
     t_over_dhc,
     sigma_r,
     sigma_w,
@@ -44,26 +54,11 @@ def calculate_plot(
     ls_over_dh,
     aq_baseline,
     a_fr_baseline,
-    m_dot_hot,
-    m_dot_cold,
-    th_in,
-    ph_in,
-    tc_in,
-    pc_in,
+    f_in,
     dp_max,
 ):
     """Calculate and return plot data"""
     # Create fluid inputs
-    f_in = FluidInputs(
-        hot=FLUID_HOT,
-        cold=FLUID_COLD,
-        m_dot_hot=m_dot_hot,
-        m_dot_cold=m_dot_cold,
-        Th_in=th_in,
-        Ph_in=ph_in,
-        Tc_in=tc_in,
-        Pc_in=pc_in,
-    )
 
     # Generate x values
     if plot_aq_sweep_not_afr:
@@ -91,6 +86,17 @@ def calculate_plot(
     # Find validity mask
     dp_hot = r_s["dp_hot"]
     dp_cold = r_s["dp_cold"]
+    eps = r_s["eps"]
+    if plot_pdot_not_dp:
+        hot_in = f_in.hot.state(T=f_in.Th_in, P=f_in.Ph_in)
+        cold_in = f_in.cold.state(T=f_in.Tc_in, P=f_in.Pc_in)
+        Cmin = min(f_in.m_dot_hot * hot_in.cp, f_in.m_dot_cold * cold_in.cp)
+        Q_max = Cmin * (f_in.Th_in - f_in.Tc_in)
+        y_hot = f_in.m_dot_hot * dp_hot * f_in.Ph_in / hot_in.rho / Q_max
+        y_cold = f_in.m_dot_cold * dp_cold * f_in.Pc_in / cold_in.rho / Q_max
+    else:
+        y_hot = dp_hot
+        y_cold = dp_cold
     over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max)
     if np.any(over_limit):
         first_exceed = np.argmax(over_limit)
@@ -102,18 +108,7 @@ def calculate_plot(
     x_plot = r_s["ntu"]
     x_title = "NTU"
 
-    if plot_entropy_not_euergy:
-        y_plot = r_s["dW_pot_Ex_norm"]
-        label = "Exergy"
-        color = "r"
-        deci = 3
-    else:
-        y_plot = r_s["dW_pot_Eu_norm"]
-        label = "Euergy"
-        color = "b"
-        deci = 1
-
-    return x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq / A_fr
+    return x_plot, eps, y_hot, y_cold, validity_mask, x_title, title, r_s
 
 
 if __name__ == "__main__":
@@ -123,9 +118,9 @@ if __name__ == "__main__":
     plt.subplots_adjust(right=0.75)  # Make room for sliders on the right
 
     # Initial plot
-    x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq_over_A_fr = calculate_plot(
+    x_plot, eps, y_hot, y_cold, validity_mask, x_title, title, r_s = calculate_plot(
         INIT_PLOT_AQ_SWEEP_NOT_AFR,
-        INIT_PLOT_ENTROPY_NOT_EUERGY,
+        INIT_PDOT_NOT_DP,
         INIT_T_OVER_DHC,
         INIT_SIGMA_R,
         INIT_SIGMA_W,
@@ -133,12 +128,7 @@ if __name__ == "__main__":
         INIT_LS_OVER_DH,
         INIT_AQ_BASELINE,
         INIT_A_FR_BASELINE,
-        INIT_M_DOT_HOT,
-        INIT_M_DOT_COLD,
-        INIT_TH_IN,
-        INIT_PH_IN,
-        INIT_TC_IN,
-        INIT_PC_IN,
+        F_IN,
         INIT_DP_MAX,
     )
 
@@ -154,11 +144,21 @@ if __name__ == "__main__":
             f"NTU = {x_plot[validity_mask][-1]:.2f}, g2_h: {r_s['g2_hot'][validity_mask][-1]:.2e}, g2_c: {r_s['g2_cold'][validity_mask][-1]:.2e},Rc {r_s['R_cold_over_R_tot'][validity_mask][-1] * 100:.0f}%, Re_h: {r_s['re_hot'][validity_mask][-1]:.2e}, Re_c: {r_s['re_cold'][validity_mask][-1]:.2e}"
         )
 
-    (line,) = ax.plot(x_plot[validity_mask], y_plot[validity_mask], color + "-", label=label)
+    (line,) = ax.plot(x_plot[validity_mask], eps[validity_mask], "-", label="eps")
+    ax.set_ylim(0, 1)
+
+    ax2 = ax.twinx()
+    y_lab = "Pdot / Q_max" if INIT_PDOT_NOT_DP else "dp"
+    (line2,) = ax2.plot(x_plot[validity_mask], y_hot[validity_mask], "r--", label=f"{y_lab}_hot")
+    (line3,) = ax2.plot(x_plot[validity_mask], y_cold[validity_mask], "g--", label=f"{y_lab}_cold")
+    ax2.set_ylim(0, INIT_DP_MAX)
     ax.legend()
     ax.set_xlabel(x_title)
-    ax.set_ylabel("dW_pot / Q_max")
-    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
+    ax.set_ylabel("eps")
+    ax2.set_ylabel(y_lab)
+    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+    ax2.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=1))
+
     ax.set_title(title)
 
     # Create sliders on the right side
@@ -322,23 +322,34 @@ if __name__ == "__main__":
     )
     y_pos -= button_spacing
 
-    button_entropy = Button(
-        plt.axes([slider_left, y_pos, slider_width, button_height]), f"Entropy: {INIT_PLOT_ENTROPY_NOT_EUERGY}"
+    button_pdot_not_dp = Button(
+        plt.axes([slider_left, y_pos, slider_width, button_height]), f"Pdot / Q_max: {INIT_PDOT_NOT_DP}"
     )
 
     # endregion Create sliders
 
     # Store boolean states
     plot_aq_sweep_not_afr = INIT_PLOT_AQ_SWEEP_NOT_AFR
-    plot_entropy_not_euergy = INIT_PLOT_ENTROPY_NOT_EUERGY
+    plot_pdot_not_dp = INIT_PDOT_NOT_DP
 
     def update_plot(val=None):
         """Update the plot when any slider changes"""
-        global plot_aq_sweep_not_afr, plot_entropy_not_euergy
+        global plot_aq_sweep_not_afr, plot_pdot_not_dp
 
-        x_plot, y_plot, validity_mask, x_title, label, color, deci, title, r_s, Aq_over_A_fr = calculate_plot(
+        f_in = FluidInputs(
+            hot=FLUID_HOT,
+            cold=FLUID_COLD,
+            m_dot_hot=slider_m_dot_hot.val,
+            m_dot_cold=slider_m_dot_cold.val,
+            Th_in=slider_th_in.val,
+            Ph_in=slider_ph_in.val,
+            Tc_in=slider_tc_in.val,
+            Pc_in=slider_pc_in.val,
+        )
+
+        x_plot, eps, y_hot, y_cold, validity_mask, x_title, title, r_s = calculate_plot(
             plot_aq_sweep_not_afr,
-            plot_entropy_not_euergy,
+            plot_pdot_not_dp,
             slider_t_over_dhc.val,
             slider_sigma_r.val,
             slider_sigma_w.val,
@@ -346,12 +357,7 @@ if __name__ == "__main__":
             slider_ls_over_dh.val,
             slider_aq_baseline.val,
             slider_a_fr_baseline.val,
-            slider_m_dot_hot.val,
-            slider_m_dot_cold.val,
-            slider_th_in.val,
-            slider_ph_in.val,
-            slider_tc_in.val,
-            slider_pc_in.val,
+            f_in,
             slider_dp_max.val,
         )
 
@@ -367,18 +373,28 @@ if __name__ == "__main__":
                 f"NTU = {x_plot[validity_mask][-1]:.2f}, g2_h: {r_s['g2_hot'][validity_mask][-1]:.2e}, g2_c: {r_s['g2_cold'][validity_mask][-1]:.2e},Rc {r_s['R_cold_over_R_tot'][validity_mask][-1] * 100:.0f}%, Re_h: {r_s['re_hot'][validity_mask][-1]:.2e}, Re_c: {r_s['re_cold'][validity_mask][-1]:.2e}"
             )
 
-        line.set_data(x_plot[validity_mask], y_plot[validity_mask])
-        line.set_color(color)
-        line.set_label(label)
+        line.set_data(x_plot[validity_mask], eps[validity_mask])
+        line2.set_data(x_plot[validity_mask], y_hot[validity_mask])
+        line3.set_data(x_plot[validity_mask], y_cold[validity_mask])
         ax.set_xlabel(x_title)
-        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
+        y_lab = "Pdot / Q_max" if plot_pdot_not_dp else "dp/p_in"
+        ax2.set_ylabel(y_lab)
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         ax.set_title(title)
+        ax2.relim()
         ax.relim()
+        ax2.set_ylim(0, slider_dp_max.val)
+        ax.set_ylim(0, 1)
         if not plot_aq_sweep_not_afr:
             ax.set_xlim(0, x_plot[validity_mask][-1])
 
         ax.autoscale_view()
-        ax.legend()
+        # Combine legend handles and labels from ax and ax2
+        handles1, labels1 = ax.get_legend_handles_labels()
+        handles2, labels2 = ax2.get_legend_handles_labels()
+        handles = handles1 + handles2
+        labels = labels1 + labels2
+        ax.legend(handles, labels, loc="upper left")
         fig.canvas.draw_idle()
 
     def toggle_aq_sweep(event):
@@ -388,11 +404,11 @@ if __name__ == "__main__":
         button_aq_sweep.label.set_text(f"AQ Sweep: {plot_aq_sweep_not_afr}")
         update_plot()
 
-    def toggle_entropy(event):
-        """Toggle PLOT_ENTROPY_NOT_EUERGY boolean"""
-        global plot_entropy_not_euergy
-        plot_entropy_not_euergy = not plot_entropy_not_euergy
-        button_entropy.label.set_text(f"Entropy: {plot_entropy_not_euergy}")
+    def toggle_pdot_not_dp(event):
+        """Toggle PLOT_PDOT_NOT_DP boolean"""
+        global plot_pdot_not_dp
+        plot_pdot_not_dp = not plot_pdot_not_dp
+        button_pdot_not_dp.label.set_text(f"Pdot / Q_max: {plot_pdot_not_dp}")
         update_plot()
 
     # Connect sliders to update function
@@ -413,6 +429,6 @@ if __name__ == "__main__":
 
     # Connect buttons to toggle functions
     button_aq_sweep.on_clicked(toggle_aq_sweep)
-    button_entropy.on_clicked(toggle_entropy)
+    button_pdot_not_dp.on_clicked(toggle_pdot_not_dp)
 
     plt.show()

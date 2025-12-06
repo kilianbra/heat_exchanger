@@ -1,9 +1,9 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.ticker import PercentFormatter
 from scipy.signal import find_peaks
+from wp_sliders import calculate_plot
 
-from entropy_sliders import calculate_plot
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 
 # Fluid models (global)
@@ -27,6 +27,17 @@ PH_IN = 1.06e5  # Pa (1.06 bar)
 TC_IN = 576  # K
 PC_IN = 7.2e5  # Pa (7.2 bar)
 DP_MAX = 0.2
+
+F_IN = FluidInputs(
+    hot=FLUID_HOT,
+    cold=FLUID_COLD,
+    m_dot_hot=M_DOT_HOT,
+    m_dot_cold=M_DOT_COLD,
+    Th_in=TH_IN,
+    Ph_in=PH_IN,
+    Tc_in=TC_IN,
+    Pc_in=PC_IN,
+)
 
 A_fr_over_Ao_c = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)
 Ao_c = A_FR_BASELINE / A_fr_over_Ao_c
@@ -56,12 +67,7 @@ if PLOT_AQ_SWEEP_NOT_AFR:
             LS_OVER_DH,
             AQ_BASELINE,
             A_fr,
-            M_DOT_HOT,
-            M_DOT_COLD,
-            TH_IN,
-            PH_IN,
-            TC_IN,
-            PC_IN,
+            F_IN,
             DP_MAX,
         )
         ax.plot(
@@ -106,12 +112,7 @@ else:
             LS_OVER_DH,
             A_q,
             A_FR_BASELINE,
-            M_DOT_HOT,
-            M_DOT_COLD,
-            TH_IN,
-            PH_IN,
-            TC_IN,
-            PC_IN,
+            F_IN,
             DP_MAX,
         )
 
