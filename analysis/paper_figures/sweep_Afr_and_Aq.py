@@ -8,21 +8,81 @@ from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # region fixed inputs
-# Fluid models (global)
-FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
-FLUID_COLD = PerfectGasFluid.from_name("air")
+case = "Heli"  # "Brewer"
+if case == "Heli":
+    # Fluid models (global)
+    FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
+    FLUID_COLD = PerfectGasFluid.from_name("air")
 
-# Fluid inputs (global) - all other values derived from this
-F_IN = FluidInputs(
-    hot=FLUID_HOT,
-    cold=FLUID_COLD,
-    m_dot_hot=1.6,  # kg/s
-    m_dot_cold=1.6,  # kg/s
-    Th_in=980,  # K
-    Ph_in=1.06e5,  # Pa (1.06 bar)
-    Tc_in=576,  # K
-    Pc_in=7.2e5,  # Pa (7.2 bar)
-)
+    # Fluid inputs (global) - all other values derived from this
+    F_IN = FluidInputs(
+        hot=FLUID_HOT,
+        cold=FLUID_COLD,
+        m_dot_hot=1.6,  # kg/s
+        m_dot_cold=1.6,  # kg/s
+        Th_in=980,  # K
+        Ph_in=1.06e5,  # Pa (1.06 bar)
+        Tc_in=576,  # K
+        Pc_in=7.2e5,  # Pa (7.2 bar)
+    )
+    # Geometry
+    LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
+    T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
+    A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
+    D_H_C = 4e-3  # m, cold side hydraulic diameter
+    RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
+    MASS_ENGINE = 250  # kg, mass of the engine from TUM paper
+
+    MISSION_HOURS = 2
+    LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
+    FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
+
+    ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
+    ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
+
+    KG_HEX_FIXED = 6  # kg of hex per kg/s of air
+    ALPHA_HEX_KG = 0.7  # kg of hex packaging per kg of matrix
+
+    A_fr_start = 0.5
+
+elif case == "Brewer":
+    # Fluid models (global)
+    FLUID_COLD = PerfectGasFluid.from_name("para_h2")
+    FLUID_HOT = PerfectGasFluid(
+        M=27.5, S=150.0, T_ref=350.0, mu_ref=1.12e-5, gamma=1.37, Pr=0.74, cp=1170.0
+    )  # 1170 from dT
+
+    # Fluid inputs (global) - all other values derived from this
+    F_IN = FluidInputs(
+        hot=FLUID_HOT,
+        cold=FLUID_COLD,
+        m_dot_hot=19.07,  # kg/s
+        m_dot_cold=0.166,  # kg/s
+        Th_in=778,  # K
+        Ph_in=0.388e5,  # Pa (1.06 bar)
+        Tc_in=264,  # K
+        Pc_in=16.8e5,  # Pa (7.2 bar)
+    )
+    # Geometry
+    LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+    T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    SIGMA_R = 11.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    SIGMA_W = 1.14  # Ratio of heat transfer areas (Ah/Ac)
+    A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
+    D_H_C = 4.7e-2  # m, cold side hydraulic diameter
+    RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
+    MASS_ENGINE = 6000  # kg, mass of the engine from TUM paper
+
+    MISSION_HOURS = 10
+    LHV_KWH_PER_KG_FUEL = 120 / 3.6
+    FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
+
+    ETA_OV_OVER_ETA_TURB = 0.363 / 0.88
+    ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
+    A_fr_start = 10.0
+
 
 Cmin = min(
     F_IN.m_dot_hot * F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).cp,
@@ -35,7 +95,6 @@ TD = 300  # K
 PD = 1e5  # Pa
 
 # Geometry parameters
-LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
 
 
 results_euergy = []
@@ -45,39 +104,24 @@ Aq_list = []
 # endregion
 
 # plotting options
-PLOT_EUERGY_NOT_EXERGY = False
-PLOT_BOTH_PER_AQ = False
+PLOT_EUERGY_NOT_EXERGY = True
+PLOT_BOTH_PER_AQ = True
 PLOT_DIMENSIONAL = False
 
-# Geometry
-T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
-SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
-SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
-A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
-D_H_C = 4e-3  # m, cold side hydraulic diameter
-RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
-MASS_ENGINE = 72  # kg, mass of the engine from TUM paper
 
 A_FR_OVER_AO_H = SIGMA_R * A_FR_OVER_AO_C
 scale_everything = 1
 
 if PLOT_EUERGY_NOT_EXERGY:
-    Afr_start = 0.2 * 2.5 * scale_everything
-    Aq_sweep = np.linspace(20 / scale_everything, 80, 300) * scale_everything
+    Afr_start = A_fr_start * scale_everything
+    Aq_sweep = np.linspace(0.5, 80, 500) * scale_everything
 else:
-    Afr_start = 0.5 * scale_everything
+    Afr_start = A_fr_start * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
 AOH_OVER_AFR_RATIO = SIGMA_R / A_FR_OVER_AO_C
 Ao_h_start = Afr_start * AOH_OVER_AFR_RATIO
 RHO_IN_HOT = F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).rho
 g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / F_IN.Ph_in / RHO_IN_HOT
-
-MISSION_HOURS = 2
-LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
-FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
-
-ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
-ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
 
 
 A_fr_decrease_ratio_start = 0.999
@@ -85,7 +129,7 @@ DP_MAX = 0.2
 AQ_BASELINE = 43.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
 
-print(f"g_in2_start: {g_in2_start:.2e} , m_hex_base/m_engine: {AQ_BASELINE * RHO_WALL_T / MASS_ENGINE * 100:.2f} %")
+print(f"g_in2_start: {g_in2_start:.2e} , m_hex_base/m_fuel: {AQ_BASELINE * RHO_WALL_T / MASS_ENGINE * 100:.2f} %")
 
 
 for Aq in Aq_sweep:
@@ -140,10 +184,15 @@ if len(results_euergy) > 0:
     Zi_euergy = griddata((Aq_array, Afr_array), euergy_array, (Xi, Yi), method="linear")
     Zi_exergy = griddata((Aq_array, Afr_array), exergy_array, (Xi, Yi), method="linear")
 
+    # For each Aq value find best A_fr
     max_euergy_creation_for_Aq = np.nanmax(Zi_euergy, axis=0)
     idx_max_euergy_creation = np.nanargmax(Zi_euergy, axis=0)  # For each column (Aq value), row index of max
     y_at_max_euergy_creation = yi[idx_max_euergy_creation]  # yi is the array of A_fr (y axis)
     # Plot the (Aq, A_fr) where max occurs as a red line
+
+    max_euergy_creation_for_Afr = np.nanmax(Zi_euergy, axis=1)
+    idx_max_euergy_creation_for_Afr = np.nanargmax(Zi_euergy, axis=1)  # For each row (A_fr value), column index of max
+    x_at_max_euergy_creation_for_Afr = xi[idx_max_euergy_creation_for_Afr]  # xi corresponds to A_q (x axis)
 
     A_fr_opt_min = y_at_max_euergy_creation[0]
 
@@ -164,6 +213,8 @@ if len(results_euergy) > 0:
         Zi = Zi_exergy
 
     plt.figure(figsize=(8, 6))
+    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_cold
+    x_label = "m_hex / mdot_air (kg/(kg/s))"
 
     if PLOT_BOTH_PER_AQ:
         # Euergy at euergy-optimal A_fr for each Aq (already computed)
@@ -178,64 +229,76 @@ if len(results_euergy) > 0:
         euergy_at_exergy_optimal_filtered[mask_exergy] = np.nan
 
         plt.plot(
-            xi * RHO_WALL_T / MASS_ENGINE,
-            euergy_at_euergy_optimal / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
+            (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
+            euergy_at_euergy_optimal
+            / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
+            * FUEL_PER_HEAT
+            / 1000
+            * Q_max
+            / ETA_OV_OVER_ETA_TURB,
             "r--",
             lw=2,
-            label="Euergy (euergy-optimal A_fr)",
-        )
-        plt.plot(
-            xi * RHO_WALL_T / MASS_ENGINE,
-            euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
-            "b--",
-            lw=2,
-            label="Euergy (exergy-optimal A_fr)",
+            label="Assuming cst cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
         )
 
-        plt.axhline(
-            y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Unrecuperated break even"
+        plt.plot(
+            (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
+            euergy_at_euergy_optimal
+            / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
+            * FUEL_PER_HEAT
+            / 1000
+            * Q_max
+            / ETA_OV_RECUP_MAX_OVER_ETA_TURB,
+            "k-.",
+            lw=2,
+            label="Assuming ideal recup cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
         )
-        plt.axhline(
-            y=ETA_OV_RECUP_MAX_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB,
-            color="y",
-            linestyle="-",
-            label="Ideal Recup break even",
-        )
+        x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
+        # plt.plot(
+        #     xi * dimensionalisation_x,
+        #     euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
+        #     "b--",
+        #     lw=2,
+        #     label="Euergy (exergy-optimal A_fr)",
+        # )
+
+        plt.axhline(y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Break even")
+        # plt.axhline(
+        #     y=ETA_OV_RECUP_MAX_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB,
+        #     color="y",
+        #     linestyle="-",
+        #     label="Ideal Recup break even",
+        # )
 
         plt.title("Work Potential creation per kg of core HEx mass vs Aq")
-        plt.xlabel("m_hex / m_engine")
-        plt.ylabel("Ideal Engine kg fuel avoided per kg of core HEx mass (kg/kg)")
+        plt.ylabel("Engine fuel mass avoided per unit mass of HEx (-)")
 
     else:
         if PLOT_DIMENSIONAL:
             dimensionalisation_x = 1
+            x_label = "Aq (m²)"
             plt.ylabel("A_fr (m²)")
-            plt.xlabel("Aq (m²)")
 
             y_eu = y_at_max_euergy_creation
             y_ex = y_at_min_exergy_destr_filtered
             yi = Yi
 
         else:  # y starts out as A_fr now want to convert it to g^2
-            dimensionalisation_x = RHO_WALL_T / MASS_ENGINE
-
-            plt.xlabel("m_hex / m_engine")
-
             # plot hex aspect ratio on y axis i.e. A_q/A_o_h
 
             # y_eu = 1 / (y_at_max_euergy_creation * AOH_OVER_AFR_RATIO / xi)
             # y_ex = 1 / (y_at_min_exergy_destr_filtered * AOH_OVER_AFR_RATIO / xi)
             # yi = 1 / (Yi * AOH_OVER_AFR_RATIO / xi)
             # plt.ylabel("A_q/A_o_h")
-            # plt.ylim(0, 1000)
 
             # plot g^2_in on y axis
             y_eu = (F_IN.m_dot_hot / y_at_max_euergy_creation) ** 2 / F_IN.Ph_in / RHO_IN_HOT
             y_ex = (F_IN.m_dot_hot / y_at_min_exergy_destr_filtered) ** 2 / F_IN.Ph_in / RHO_IN_HOT
+            y_i_nd = (F_IN.m_dot_hot / yi) ** 2 / F_IN.Ph_in / RHO_IN_HOT
             yi = (F_IN.m_dot_hot / Yi) ** 2 / F_IN.Ph_in / RHO_IN_HOT
             plt.ylabel("g^2_in (-)")
 
-        cp = plt.contourf(Xi * dimensionalisation_x, yi, Zi, cmap="viridis", levels=20)
+        cp = plt.contourf(Xi * dimensionalisation_x, yi, Zi, cmap="binary_r", levels=20)
 
         # Add optimal (maximum) results/Zi for each individual Aq value
         # For each column in Xi (corresponding to fixed Aq), find the max(Zi) and its index, ignoring nans
@@ -248,9 +311,16 @@ if len(results_euergy) > 0:
                 y_eu,
                 "r--",
                 lw=2,
-                label="A_fr at max Euergy for each Aq",
+                label="Optimal g2 for a given m_hex",
             )
-            deci = 1
+            plt.plot(
+                x_at_max_euergy_creation_for_Afr * dimensionalisation_x,
+                y_i_nd,
+                "b-",
+                lw=2,
+                label="Optimal m_hex for a given g2",
+            )
+            deci = 0
 
             # Optionally, plot the value of the max as function of Aq for reference (e.g., as a secondary axis)
             # plt.plot(xi, max_Zi_for_Aq, 'k:', lw=1, label="Max Euergy for Aq (value)")
@@ -265,10 +335,13 @@ if len(results_euergy) > 0:
                 label="A_fr at min Exergy for each Aq",
             )
             deci = 3
+        # Create the colorbar as before
         cbar = plt.colorbar(
             cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=deci)
         )
-
+    plt.xlabel(x_label)
+    if not PLOT_DIMENSIONAL and not PLOT_BOTH_PER_AQ:
+        plt.ylim(0, 0.1)
     plt.legend()
     plt.tight_layout()
     plt.show()

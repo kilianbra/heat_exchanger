@@ -6,27 +6,58 @@ from matplotlib.widgets import Button, Slider
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
-# Fluid models (global)
-FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
-FLUID_COLD = PerfectGasFluid.from_name("air")
 
-# Initial values for sliders
-INIT_T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
-INIT_SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
-INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
-INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
-INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
-INIT_AQ_BASELINE = 43.0
-INIT_A_FR_BASELINE = 5.0
+case = "B"  # "Brewer"
+if case == "Heli":
+    # Fluid models (global)
+    FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
+    FLUID_COLD = PerfectGasFluid.from_name("air")
 
-# Fluid inputs initial values
-INIT_M_DOT_HOT = 1.6  # kg/s
-INIT_M_DOT_COLD = 1.6  # kg/s
-INIT_TH_IN = 980  # K
-INIT_PH_IN = 1.06e5  # Pa (1.06 bar)
-INIT_TC_IN = 576  # K
-INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
-INIT_DP_MAX = 0.2
+    # Initial values for sliders
+    INIT_T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    INIT_SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
+    INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
+    INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+    INIT_AQ_BASELINE = 43.0
+    INIT_A_FR_BASELINE = 5.0
+
+    # Fluid inputs initial values
+    INIT_M_DOT_HOT = 1.6  # kg/s
+    INIT_M_DOT_COLD = 1.6  # kg/s
+    INIT_TH_IN = 980  # K
+    INIT_PH_IN = 1.06e5  # Pa (1.06 bar)
+    INIT_TC_IN = 576  # K
+    INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
+    INIT_DP_MAX = 0.2
+
+else:
+    # Fluid models (global)
+    FLUID_COLD = PerfectGasFluid.from_name("para_h2")
+    FLUID_HOT = PerfectGasFluid(
+        M=27.5, S=150.0, T_ref=350.0, mu_ref=1.12e-5, gamma=1.37, Pr=0.74, cp=1170.0
+    )  # 1170 from dT
+
+    INIT_M_DOT_HOT = 19.07  # kg/s
+    INIT_M_DOT_COLD = 0.166  # kg/s
+    INIT_TH_IN = 778  # K
+    INIT_PH_IN = 0.388e5  # Pa (1.06 bar)
+    INIT_TC_IN = 264  # K
+    INIT_PC_IN = 16.8e5  # Pa (7.2 bar)
+
+    # Geometry
+    INIT_T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    INIT_SIGMA_R = 11.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    INIT_SIGMA_W = 1.14  # Ratio of heat transfer areas (Ah/Ac)
+    INIT_A_FR_OVER_AO_C = (1 + INIT_SIGMA_R) + 2 * INIT_T_OVER_DHC * (
+        1 + INIT_SIGMA_W
+    )  # Ratio of frontal area to cold side free flow area
+    INIT_D_H_C = 4.7e-2  # m, cold side hydraulic diameter
+    INIT_LS_OVER_DH = 0.7  # Strip length to hydraulic diameter ratio
+    INIT_AQ_BASELINE = 16.0
+    INIT_A_FR_BASELINE = 1.0
+    INIT_DP_MAX = 0.5
+
 
 F_IN = FluidInputs(
     hot=FLUID_HOT,

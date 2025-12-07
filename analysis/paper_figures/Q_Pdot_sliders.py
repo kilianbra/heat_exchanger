@@ -40,7 +40,7 @@ F_IN = FluidInputs(
 )
 
 # Initial boolean values
-INIT_PLOT_AQ_SWEEP_NOT_AFR = False
+INIT_PLOT_AQ_SWEEP_NOT_AFR = True
 INIT_PDOT_NOT_DP = False
 
 
