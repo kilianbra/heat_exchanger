@@ -4,7 +4,21 @@ from matplotlib.ticker import PercentFormatter
 from scipy.signal import find_peaks
 from wp_sliders import calculate_plot
 
+import os
+save_dir = os.path.dirname(os.path.abspath(__file__))
+
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+
+# Set font sizes to match Word (10pt = 10 points)
+plt.rcParams.update({
+    'font.size': 10,
+    'axes.titlesize': 10,
+    'axes.labelsize': 10,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10,
+    'legend.fontsize': 10,
+    'figure.titlesize': 10
+})
 
 # Fluid models (global)
 FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -46,12 +60,20 @@ Ao_h = Ao_c * SIGMA_R
 # Initial boolean values
 PLOT_AQ_SWEEP_NOT_AFR = False
 PLOT_ENTROPY_NOT_EUERGY = True
+# T & T = Fig 4
+# F & T = Fig 5
+# T & F = Fig 6
+# F & F = Fig 7
 
 
 colors = ["r", "b", "g"]
 lines = ["-.", "--", "-"]
 
-fig, ax = plt.subplots()
+# Set figure size BEFORE creating the plot to ensure proper layout
+# Size: 9 cm × 7.5 cm (matching Figure2-3.py)
+fig_width = 9 / 2.54  # 9 cm to inches
+fig_height = 7.5 / 2.54  # 7.5 cm to inches
+fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
 if PLOT_AQ_SWEEP_NOT_AFR:
     A_fr_values = [0.07, 0.09, 0.14]
@@ -71,7 +93,7 @@ if PLOT_AQ_SWEEP_NOT_AFR:
             DP_MAX,
         )
         ax.plot(
-            x_plot[validity_mask], y_plot[validity_mask], colors[i] + lines[i], label=f"g2_h = {r_s['g2_hot']:.2e} "
+            x_plot[validity_mask], y_plot[validity_mask], colors[i] + lines[i], label=fr"$g^2$ = {r_s['g2_hot']:.1e}"
         )
         if PLOT_ENTROPY_NOT_EUERGY:
             peaks, _ = find_peaks(y_plot[validity_mask])
@@ -87,18 +109,40 @@ if PLOT_AQ_SWEEP_NOT_AFR:
         else:
             arg_y_min = np.argmin(y_plot[validity_mask])
             ax.scatter(x_plot[validity_mask][arg_y_min], y_plot[validity_mask][arg_y_min], color=colors[i], marker="o")
-    ax.legend()
+    ax.legend(labelspacing=0.05)
+    ax.tick_params(labelsize=10)
     ax.set_xlim(0, 20)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
-    ax.set_xlabel(x_title)
-    ax.set_ylabel("dW_pot / Q_max")
+    ax.set_xlabel("NTU [-]")
+    # ax.set_ylabel("dW_pot / Q_max")
+    # ax.set_ylabel(r"$\Delta \mathcal{E}$")
+    
     if PLOT_ENTROPY_NOT_EUERGY:
         ax.set_ylim(0, 0.03 / 100)
-
-        ax.set_title("Exergy destr/ Entropy gen (3 Ao, varying Aq)")
+        # ax.set_yticks(np.arange(0, 0.03, 0.01))
+        ax.set_yticks((0, 0.01/ 100, 0.02/ 100, 0.03/100))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=2))
+        # ax.set_title("Exergy destr/ Entropy gen (3 Ao, varying Aq)", fontsize=10)        
+        ax.set_ylabel(r"$\Delta \dot{W}_0 / \dot{Q}_{\mathrm{max}}$ [%]")
     else:
         ax.set_ylim(-40 / 100, 0)
-        ax.set_title("Euergy destruction (3 Ao, varying Aq)")
+        ax.set_yticks((-40/ 100, -30/ 100, -20/ 100, -10/ 100, 0))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+        # ax.set_title("Euergy destruction (3 Ao, varying Aq)", fontsize=10)
+        ax.set_ylabel(r"$\Delta \dot{W}_0^M / \dot{Q}_{\mathrm{max}}$ [%]")
+    
+    # Apply tight layout to optimize spacing (after ylabel is set)
+    # Use larger padding to ensure ylabel is included
+    plt.tight_layout(pad=0.5)
+    
+    if PLOT_ENTROPY_NOT_EUERGY:
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure4.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
+    else:
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure6.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
 else:
     A_q_values = [10, 32, 60]
     for i, A_q in enumerate(A_q_values):
@@ -130,7 +174,7 @@ else:
             x_plot[validity_mask],
             y_plot[validity_mask],
             colors[i] + lines[i],
-            label=f"g2_h (Ao/A)^2 = {new_g2_h[0]:.2e}",
+            label=fr"$g^2 (A_o/A)^2$ = {new_g2_h[0]:.1e}",
         )
 
         if PLOT_ENTROPY_NOT_EUERGY:
@@ -150,16 +194,37 @@ else:
                 ax.scatter(
                     x_plot[validity_mask][arg_y_min], y_plot[validity_mask][arg_y_min], color=colors[i], marker="o"
                 )
-    ax.legend()
+    ax.legend(labelspacing = 0.15)
+    ax.tick_params(labelsize=10)
     ax.set_xlim(0, 5)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
-    ax.set_xlabel(x_title)
-    ax.set_ylabel("dW_pot / Q_max")
+    ax.set_xlabel("NTU [-]")
+    # ax.set_ylabel("dW_pot / Q_max")
+    
     if PLOT_ENTROPY_NOT_EUERGY:
-        ax.set_ylim(0, 0.035 / 100)
-        ax.set_title("Exergy destr/ Entropy gen (3 Aq, varying Ao)")
+        ax.set_ylim(0, 0.03 / 100)
+        ax.set_yticks((0, 0.01/ 100, 0.02/ 100, 0.03/100))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=2))
+        # ax.set_title("Exergy destr/ Entropy gen (3 Aq, varying Ao)", fontsize=10)
+        ax.set_ylabel(r"$\Delta \dot{W}_0 / \dot{Q}_{\mathrm{max}}$ [%]")
     else:
         ax.set_ylim(-40 / 100, 0)
-        ax.set_title("Euergy destruction (3 Aq, varying Ao)")
+        ax.set_yticks((-40/ 100, -30/ 100, -20/ 100, -10/ 100, 0))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+        # ax.set_title("Euergy destruction (3 Aq, varying Ao)", fontsize=10)
+        ax.set_ylabel(r"$\Delta \dot{W}_0^M / \dot{Q}_{\mathrm{max}}$ [%]")
+    
+    # Apply tight layout to optimize spacing (after ylabel is set)
+    # Use larger padding to ensure ylabel is included
+    plt.tight_layout(pad=0.5)
+    
+    if PLOT_ENTROPY_NOT_EUERGY:
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure5.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
+    else:
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure7.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
 
 plt.show()

@@ -3,7 +3,7 @@ name = "heat-exchanger"
 version = "0.1.0"
 description = "Heat exchanger model for first order evaluating and designing."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "coolprop>=7.1.0",
     "logging>=0.4.9.6",

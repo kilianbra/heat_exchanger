@@ -43,7 +43,6 @@ F_IN = FluidInputs(
 INIT_PLOT_AQ_SWEEP_NOT_AFR = True
 INIT_PDOT_NOT_DP = False
 
-
 def calculate_plot(
     plot_aq_sweep_not_afr,
     plot_pdot_not_dp,
