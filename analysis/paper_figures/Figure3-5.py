@@ -109,7 +109,7 @@ if PLOT_AQ_SWEEP_NOT_AFR:
         else:
             arg_y_min = np.argmin(y_plot[validity_mask])
             ax.scatter(x_plot[validity_mask][arg_y_min], y_plot[validity_mask][arg_y_min], color=colors[i], marker="o")
-    ax.legend(labelspacing=0.05)
+    ax.legend(labelspacing=0.05, edgecolor='black', frameon=True)
     ax.tick_params(labelsize=10)
     ax.set_xlim(0, 20)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))
@@ -194,7 +194,7 @@ else:
                 ax.scatter(
                     x_plot[validity_mask][arg_y_min], y_plot[validity_mask][arg_y_min], color=colors[i], marker="o"
                 )
-    ax.legend(labelspacing = 0.15)
+    ax.legend(labelspacing=0.15, edgecolor='black', frameon=True)
     ax.tick_params(labelsize=10)
     ax.set_xlim(0, 5)
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=deci))

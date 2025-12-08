@@ -1,11 +1,25 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import PercentFormatter, FuncFormatter
 from scipy.interpolate import griddata
 
 from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
+
+import os
+save_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Set font sizes to match Word (10pt = 10 points)
+plt.rcParams.update({
+    'font.size': 10,
+    'axes.titlesize': 10,
+    'axes.labelsize': 10,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10,
+    'legend.fontsize': 10,
+    'figure.titlesize': 10
+})
 
 # region fixed inputs
 case = "Heli"  # "Brewer"
@@ -42,8 +56,8 @@ if case == "Heli":
     ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
     ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
 
-    KG_HEX_FIXED = 6  # kg of hex per kg/s of air
-    ALPHA_HEX_KG = 0.7  # kg of hex packaging per kg of matrix
+    KG_HEX_FIXED = 4.7  # kg of hex per kg/s of air
+    ALPHA_HEX_KG = 0.9  # kg of hex packaging per kg of matrix
 
     A_fr_start = 0.5
 
@@ -105,7 +119,7 @@ Aq_list = []
 
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = True # false for fig 6 and true for fig 7
+PLOT_BOTH_PER_AQ = False # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
 
 
@@ -212,7 +226,11 @@ if len(results_euergy) > 0:
     else:
         Zi = Zi_exergy
 
-    plt.figure(figsize=(8, 6))
+    # Set figure size BEFORE creating the plot to ensure proper layout
+    # Size: 9 cm × 7.5 cm (matching other figures)
+    fig_width = 9 / 2.54  # 9 cm to inches
+    fig_height = 7.5 / 2.54  # 7.5 cm to inches
+    fig = plt.figure(figsize=(fig_width, fig_height))
     dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_cold
     x_label = "m_hex / mdot_air (kg/(kg/s))"
 
@@ -238,7 +256,7 @@ if len(results_euergy) > 0:
             / ETA_OV_OVER_ETA_TURB,
             "r--",
             lw=2,
-            label="Assuming cst cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
+            label=r"$\eta_{ov} = 20\%$",  # "Euergy (euergy-optimal A_fr)",
         )
 
         plt.plot(
@@ -251,7 +269,7 @@ if len(results_euergy) > 0:
             / ETA_OV_RECUP_MAX_OVER_ETA_TURB,
             "k-.",
             lw=2,
-            label="Assuming ideal recup cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
+            label=r"$\eta_{ov} = 40\%$",  # "Euergy (euergy-optimal A_fr)",
         )
         x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
         # plt.plot(
@@ -262,7 +280,7 @@ if len(results_euergy) > 0:
         #     label="Euergy (exergy-optimal A_fr)",
         # )
 
-        plt.axhline(y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Break even")
+        # plt.axhline(y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Break even")
         # plt.axhline(
         #     y=ETA_OV_RECUP_MAX_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB,
         #     color="y",
@@ -270,8 +288,25 @@ if len(results_euergy) > 0:
         #     label="Ideal Recup break even",
         # )
 
-        plt.title("Work Potential creation per kg of core HEx mass vs Aq")
-        plt.ylabel("Engine fuel mass avoided per unit mass of HEx (-)")
+        # plt.title("Work Potential creation per kg of core HEx mass vs Aq")
+        # plt.ylabel("Engine fuel mass avoided per unit mass of HEx (-)")
+        plt.ylabel(r"$-\Delta m_{\mathrm{fuel}}/m_{\mathrm{HEx,tot}}$ [-]")
+        
+        # Set xlabel before tight_layout
+        # plt.xlabel(x_label)
+        plt.xlabel(r"$m_{\mathrm{HEx,tot}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
+        
+        # Apply tight layout to optimize spacing (after all labels are set)
+        # Use larger padding to ensure ylabel is included
+        plt.tight_layout(pad=0.5)
+        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='lower right')
+        plt.ylim(0, 6)
+        plt.xlim(5, 30)
+        
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure7.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
+
 
     else:
         if PLOT_DIMENSIONAL:
@@ -298,27 +333,36 @@ if len(results_euergy) > 0:
             yi = (F_IN.m_dot_hot / Yi) ** 2 / F_IN.Ph_in / RHO_IN_HOT
             plt.ylabel("g^2_in (-)")
 
-        cp = plt.contourf(Xi * dimensionalisation_x, yi, Zi, cmap="binary_r", levels=20)
+        # Fix color scaling at creation so colorbar matches data limits
+        cp = plt.contourf(
+            Xi * dimensionalisation_x,
+            yi,
+            Zi,
+            cmap="binary_r",
+            levels=20,
+            vmin=-0.10,
+            vmax=0.30,
+        )
 
         # Add optimal (maximum) results/Zi for each individual Aq value
         # For each column in Xi (corresponding to fixed Aq), find the max(Zi) and its index, ignoring nans
 
         if PLOT_EUERGY_NOT_EXERGY:
-            plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
+            # plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
 
             plt.plot(
                 xi * dimensionalisation_x,
                 y_eu,
                 "r--",
                 lw=2,
-                label="Optimal g2 for a given m_hex",
+                label="Fixed $m_{\mathrm{HEx,core}}$",
             )
             plt.plot(
                 x_at_max_euergy_creation_for_Afr * dimensionalisation_x,
                 y_i_nd,
                 "b-",
                 lw=2,
-                label="Optimal m_hex for a given g2",
+                label=r"Fixed $g^2$",
             )
             deci = 0
 
@@ -335,15 +379,33 @@ if len(results_euergy) > 0:
                 label="A_fr at min Exergy for each Aq",
             )
             deci = 3
-        # Create the colorbar as before
+        # Create the colorbar with fixed ticks/labels
+        def percent_formatter(x, p):
+            return f"{x*100:.0f}"
+
         cbar = plt.colorbar(
-            cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=deci)
+            cp,
+            label=r"$\Delta \dot{W}_0^M / \dot{Q}_{\mathrm{max}}$ [%]",
+            format=FuncFormatter(percent_formatter),
+            ticks=[-0.10, 0, 0.10, 0.20, 0.299],
         )
-    plt.xlabel(x_label)
-    if not PLOT_DIMENSIONAL and not PLOT_BOTH_PER_AQ:
+        # Ensure colorbar uses full range and shows top tick
+        # cbar.mappable.set_clim(vmin=-0.10, vmax=0.299)
+        # cbar.ax.set_ylim(-0.10, 0.299)
+        # plt.xlabel(x_label)
+        plt.xlabel(r"$m_{\mathrm{HEx,tot}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
+        plt.ylabel(r"$g^2_{\mathrm{in}}$ [-]")
+        plt.xlim(0, 15)
         plt.ylim(0, 0.1)
-    plt.legend()
-    plt.tight_layout()
+        if not PLOT_DIMENSIONAL:
+            plt.ylim(0, 0.1)
+        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='upper right')
+        # Apply tight layout to optimize spacing (after all labels are set)
+        # Use larger padding to ensure ylabel is included
+        plt.tight_layout(pad=0.5)
+        # Save with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure6.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
     plt.show()
 
 r_s = rate_hex_simple(

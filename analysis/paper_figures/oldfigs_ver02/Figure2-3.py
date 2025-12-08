@@ -52,7 +52,7 @@ PRESET_B = {
 }
 
 # Preset switch: Change this to 0 for Preset A, or 1 for Preset B
-INIT_PRESET_SWITCH = 0
+INIT_PRESET_SWITCH = 1
 
 def calculate_plot(
     plot_aq_sweep_not_afr,
@@ -215,13 +215,13 @@ if __name__ == "__main__":
     plt.tight_layout(pad=0.5)
     
     if not preset["plot_aq_sweep_not_afr"]:
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure3.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
+        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure3.svg"), dpi=300, facecolor='white', 
+                   format='svg', bbox_inches=None, pad_inches=0)
     else:
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure2.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
+        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure2.svg"), dpi=300, facecolor='white', 
+                   format='svg', bbox_inches=None, pad_inches=0)
 
     plt.show()
 

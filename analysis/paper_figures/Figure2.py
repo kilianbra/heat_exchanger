@@ -46,13 +46,10 @@ PRESET_B = {
     "ph_in": 1.06e5,
     "tc_in": 576,
     "pc_in": 7.2e5,
-    "dp_max": 0.2,
+    "dp_max": 0.3,
     "plot_aq_sweep_not_afr": False,
     "plot_pdot_not_dp": False,
 }
-
-# Preset switch: Change this to 0 for Preset A, or 1 for Preset B
-INIT_PRESET_SWITCH = 0
 
 def calculate_plot(
     plot_aq_sweep_not_afr,
@@ -161,38 +158,55 @@ if __name__ == "__main__":
     fig = plt.figure(figsize=(fig_width, fig_height))
     ax = plt.subplot(111)
     
-    # Get preset based on switch (0 = Preset A, 1 = Preset B)
-    preset = get_preset(INIT_PRESET_SWITCH)
-    f_in = create_fluid_inputs(preset)
-    
-    # Calculate data
-    x_plot, eps, y_hot, y_cold, validity_mask, x_title, title, r_s = calculate_plot(
-        preset["plot_aq_sweep_not_afr"],
-        preset["plot_pdot_not_dp"],
-        preset["t_over_dhc"],
-        preset["sigma_r"],
-        preset["sigma_w"],
-        preset["d_h_c"],
-        preset["ls_over_dh"],
-        preset["aq_baseline"],
-        preset["a_fr_baseline"],
-        f_in,
-        preset["dp_max"],
+    # Compute Preset A (base plot)
+    f_in_A = create_fluid_inputs(PRESET_A)
+    xA, epsA, y_hotA, _, maskA, x_titleA, titleA, r_sA = calculate_plot(
+        PRESET_A["plot_aq_sweep_not_afr"],
+        PRESET_A["plot_pdot_not_dp"],
+        PRESET_A["t_over_dhc"],
+        PRESET_A["sigma_r"],
+        PRESET_A["sigma_w"],
+        PRESET_A["d_h_c"],
+        PRESET_A["ls_over_dh"],
+        PRESET_A["aq_baseline"],
+        PRESET_A["a_fr_baseline"],
+        f_in_A,
+        PRESET_A["dp_max"],
+    )
+
+    # Compute Preset B (only dp line overlay)
+    f_in_B = create_fluid_inputs(PRESET_B)
+    xB, epsB, y_hotB, _, maskB, x_titleB, titleB, r_sB = calculate_plot(
+        PRESET_B["plot_aq_sweep_not_afr"],
+        PRESET_B["plot_pdot_not_dp"],
+        PRESET_B["t_over_dhc"],
+        PRESET_B["sigma_r"],
+        PRESET_B["sigma_w"],
+        PRESET_B["d_h_c"],
+        PRESET_B["ls_over_dh"],
+        PRESET_B["aq_baseline"],
+        PRESET_B["a_fr_baseline"],
+        f_in_B,
+        PRESET_B["dp_max"],
     )
     
     # Create plot
-    ax.plot(x_plot[validity_mask], eps[validity_mask], "-", label=r"$\varepsilon$", color="blue")
+    ax.plot(xA[maskA], epsA[maskA], "-", label=r"$\varepsilon$ (both)", color="black")
     ax.set_ylim(0, 1)
     ax_twin = ax.twinx()
-    y_lab = r"$\dot{P}/Q_{\mathrm{max}}$" if preset["plot_pdot_not_dp"] else r"$\Delta p/p_{\mathrm{in}}$ [%]"
-    ax_twin.plot(x_plot[validity_mask], y_hot[validity_mask], "r--", label=r"$\Delta p/p_{\mathrm{in}}$")
-    # ax_twin.plot(x_plot[validity_mask], y_cold[validity_mask], "g--", label=f"{y_lab}_cold")
-    ax_twin.set_ylim(0, preset["dp_max"])
+    y_lab = r"$\dot{P}/Q_{\mathrm{max}}$" if PRESET_A["plot_pdot_not_dp"] else r"$\Delta p/p_{\mathrm{in}}$ [%]"
+    # Preset A dp
+    ax_twin.plot(xA[maskA], y_hotA[maskA], "r--", label=r"$\Delta p/p_{\mathrm{in}}$ (fixed $A_o$)")
+    # Preset B dp overlay
+    ax_twin.plot(xB[maskB], y_hotB[maskB], color="blue", linestyle="-.", label=r"$\Delta p/p_{\mathrm{in}}$ (fixed $A$)")
+    max_dp = max(PRESET_A["dp_max"], PRESET_B["dp_max"])
+    max_dp = 0.2
+    ax_twin.set_ylim(0, max_dp)
     
     # Combine legend handles and labels from ax and ax_twin
     handles1, labels1 = ax.get_legend_handles_labels()
     handles2, labels2 = ax_twin.get_legend_handles_labels()
-    ax.legend(handles1 + handles2, labels1 + labels2, loc="upper left",labelspacing = 0.05)
+    ax.legend(handles1 + handles2, labels1 + labels2, loc="lower right", labelspacing=0.05, edgecolor='black', frameon=True)
     
     ax.set_xlabel("NTU [-]")
     ax.set_ylabel(r"$\varepsilon$ [%]")
@@ -201,27 +215,25 @@ if __name__ == "__main__":
     ax_twin.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
     
     # Set second y-axis ticks: 0, 5, 10, 15, 20 (as percentages: 0, 0.05, 0.10, 0.15, 0.20)
-    ax_twin.set_yticks([0, 0.05, 0.10, 0.15, 0.20])
+    # set ticks based on max_dp
+    ax_twin.set_yticks(np.linspace(0, max_dp, 5))
     # ax.set_title(f"Preset {'B' if INIT_PRESET_SWITCH == 1 else 'A'}: {title}")
 
-    # Set xlim before tight_layout
-    if not preset["plot_aq_sweep_not_afr"]:
-        ax.set_xlim(0, x_plot[validity_mask][-1])
-    else:
-        ax.set_xlim(0, 10)
+    # Set xlim before tight_layout based on Preset A range (primary)
+    ax.set_xlim(0, 10)
     
     # Apply tight layout to optimize spacing (after all labels and limits are set)
     # Use larger padding to ensure ylabel is included
     plt.tight_layout(pad=0.5)
     
-    if not preset["plot_aq_sweep_not_afr"]:
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure3.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
+    if not PRESET_A["plot_aq_sweep_not_afr"]:
+        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure2b.svg"), dpi=300, facecolor='white', 
+                   format='svg', bbox_inches=None, pad_inches=0)
     else:
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure2.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
+        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
+        fig.savefig(os.path.join(save_dir, "figure2a.svg"), dpi=300, facecolor='white', 
+                   format='svg', bbox_inches=None, pad_inches=0)
 
     plt.show()
 
