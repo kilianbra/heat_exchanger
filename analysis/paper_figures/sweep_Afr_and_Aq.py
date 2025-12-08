@@ -8,7 +8,7 @@ from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # region fixed inputs
-case = "Heli"  # "Brewer"
+case = "Brewer"  # "Brewer"
 if case == "Heli":
     # Fluid models (global)
     FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -66,7 +66,7 @@ elif case == "Brewer":
         Pc_in=16.8e5,  # Pa (7.2 bar)
     )
     # Geometry
-    LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+    LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
     SIGMA_R = 11.0  # Ratio of free flow areas (Ao_h/Ao_c)
     SIGMA_W = 1.14  # Ratio of heat transfer areas (Ah/Ac)
@@ -82,6 +82,9 @@ elif case == "Brewer":
     ETA_OV_OVER_ETA_TURB = 0.363 / 0.88
     ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
     A_fr_start = 10.0
+
+    KG_HEX_FIXED = 20  # kg of hex per kg/s of air
+    ALPHA_HEX_KG = 0.5  # kg of hex packaging per kg of matrix
 
 
 Cmin = min(
@@ -105,7 +108,7 @@ Aq_list = []
 
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = True # false for fig 6 and true for fig 7
+PLOT_BOTH_PER_AQ = False  # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
 
 
@@ -114,7 +117,7 @@ scale_everything = 1
 
 if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = A_fr_start * scale_everything
-    Aq_sweep = np.linspace(0.5, 40, 500) * scale_everything
+    Aq_sweep = np.linspace(0.5, 20, 50) * scale_everything
 else:
     Afr_start = A_fr_start * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
@@ -124,7 +127,7 @@ RHO_IN_HOT = F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).rho
 g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / F_IN.Ph_in / RHO_IN_HOT
 
 
-A_fr_decrease_ratio_start = 0.999
+A_fr_decrease_ratio_start = 0.99
 DP_MAX = 0.2
 AQ_BASELINE = 43.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
@@ -213,7 +216,7 @@ if len(results_euergy) > 0:
         Zi = Zi_exergy
 
     plt.figure(figsize=(8, 6))
-    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_cold
+    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_hot
     x_label = "m_hex / mdot_air (kg/(kg/s))"
 
     if PLOT_BOTH_PER_AQ:
@@ -340,7 +343,7 @@ if len(results_euergy) > 0:
             cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=deci)
         )
     plt.xlabel(x_label)
-    if not PLOT_DIMENSIONAL and not PLOT_BOTH_PER_AQ:
+    if not PLOT_DIMENSIONAL and not PLOT_BOTH_PER_AQ and not case == "Brewer":
         plt.ylim(0, 0.1)
     plt.legend()
     plt.tight_layout()
