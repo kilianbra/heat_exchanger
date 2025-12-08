@@ -8,7 +8,7 @@ from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # region fixed inputs
-case = "Brewer"  # "Brewer"
+case = "Heli"  # "Brewer"
 if case == "Heli":
     # Fluid models (global)
     FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -26,14 +26,14 @@ if case == "Heli":
         Pc_in=7.2e5,  # Pa (7.2 bar)
     )
     # Geometry
-    LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
+    LS_OVER_DH = 0.7  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
     SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
     SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
     A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
     D_H_C = 4e-3  # m, cold side hydraulic diameter
     RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
-    MASS_ENGINE = 250  # kg, mass of the engine from TUM paper
+    MASS_ENGINE = 250  # kg,250 kg of fuel  72kg mass of the engine from TUM paper
 
     MISSION_HOURS = 2
     LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
@@ -108,7 +108,7 @@ Aq_list = []
 
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = False  # false for fig 6 and true for fig 7
+PLOT_BOTH_PER_AQ = True  # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
 
 
@@ -117,7 +117,10 @@ scale_everything = 1
 
 if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = A_fr_start * scale_everything
-    Aq_sweep = np.linspace(0.5, 20, 50) * scale_everything
+    if case == "Heli":
+        Aq_sweep = np.linspace(1, 80, 50) * scale_everything
+    else:
+        Aq_sweep = np.linspace(0.5, 20, 50) * scale_everything
 else:
     Afr_start = A_fr_start * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
