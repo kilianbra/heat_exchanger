@@ -18,8 +18,8 @@ PRESET_A = {
     "sigma_w": 2.0,
     "d_h_c": 4e-3,
     "ls_over_dh": 5.0,
-    "aq_baseline": 43.0,
-    "a_fr_baseline": 0.1,
+    "aq_baseline": 43.0*2,
+    "a_fr_baseline": 0.12,
     "m_dot_hot": 1.6,
     "m_dot_cold": 1.6,
     "th_in": 980,
@@ -39,7 +39,7 @@ PRESET_B = {
     "d_h_c": 4e-3,
     "ls_over_dh": 5.0,
     "aq_baseline": 43.0,
-    "a_fr_baseline": 0.5,
+    "a_fr_baseline": 1.0,
     "m_dot_hot": 1.6,
     "m_dot_cold": 1.6,
     "th_in": 980,
@@ -67,7 +67,7 @@ def calculate_plot(
     """Calculate and return plot data"""
     # Generate x values
     if plot_aq_sweep_not_afr:
-        x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        x = np.geomspace(2, 5000, 100)
         Aq = x
         A_fr = a_fr_baseline
         title = "Heat transfer area variation Aq (m²) (HEx mass, length changes)"
@@ -75,7 +75,7 @@ def calculate_plot(
         # Start from larger frontal area to get lower NTU values
         # Use a_fr_baseline * 10 as starting point to extend range to lower NTU
         # x = np.geomspace(a_fr_baseline, 0.001, 100) # original
-        x = np.geomspace(a_fr_baseline * 10, 0.001, 100)
+        x = np.geomspace(a_fr_baseline * 10, 0.0001, 100)
         Aq = aq_baseline
         A_fr = x
         title = "Frontal area variation A_fr (m²) (Velocity, g^2)"
@@ -191,14 +191,14 @@ if __name__ == "__main__":
     )
     
     # Create plot
-    ax.plot(xA[maskA], epsA[maskA], "-", label=r"$\varepsilon$ (both)", color="black")
+    ax.plot(xA[maskA], epsA[maskA], "-", label=r"$\varepsilon$ (both)", color="black", zorder=3)
     ax.set_ylim(0, 1)
     ax_twin = ax.twinx()
     y_lab = r"$\dot{P}/Q_{\mathrm{max}}$" if PRESET_A["plot_pdot_not_dp"] else r"$\Delta p/p_{\mathrm{in}}$ [%]"
     # Preset A dp
-    ax_twin.plot(xA[maskA], y_hotA[maskA], "r--", label=r"$\Delta p/p_{\mathrm{in}}$ (fixed $A_o$)")
+    ax_twin.plot(xA[maskA], y_hotA[maskA], "r--", label=r"$\Delta p/p_{\mathrm{in}}$ (fix $A_o$)", zorder=1)
     # Preset B dp overlay
-    ax_twin.plot(xB[maskB], y_hotB[maskB], color="blue", linestyle="-.", label=r"$\Delta p/p_{\mathrm{in}}$ (fixed $A$)")
+    ax_twin.plot(xB[maskB], y_hotB[maskB], "b-.", label=r"$\Delta p/p_{\mathrm{in}}$ (fix $A$)", zorder=2)
     max_dp = max(PRESET_A["dp_max"], PRESET_B["dp_max"])
     max_dp = 0.2
     ax_twin.set_ylim(0, max_dp)
@@ -206,7 +206,21 @@ if __name__ == "__main__":
     # Combine legend handles and labels from ax and ax_twin
     handles1, labels1 = ax.get_legend_handles_labels()
     handles2, labels2 = ax_twin.get_legend_handles_labels()
-    ax.legend(handles1 + handles2, labels1 + labels2, loc="lower right", labelspacing=0.05, edgecolor='black', frameon=True)
+    legend = ax.legend(
+        handles1 + handles2,
+        labels1 + labels2,
+        loc="lower right",
+        labelspacing=0.05,
+        edgecolor="black",
+        frameon=True,
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=True,
+    )
+    # Force opaque legend background and border
+    legend.get_frame().set_facecolor("white")
+    legend.get_frame().set_alpha(1.0)
+    legend.get_frame().set_edgecolor("black")
     
     ax.set_xlabel("NTU [-]")
     ax.set_ylabel(r"$\varepsilon$ [%]")
@@ -220,20 +234,15 @@ if __name__ == "__main__":
     # ax.set_title(f"Preset {'B' if INIT_PRESET_SWITCH == 1 else 'A'}: {title}")
 
     # Set xlim before tight_layout based on Preset A range (primary)
-    ax.set_xlim(0, 10)
+    ax.set_xlim(0, 15)
     
     # Apply tight layout to optimize spacing (after all labels and limits are set)
     # Use larger padding to ensure ylabel is included
     plt.tight_layout(pad=0.5)
     
-    if not PRESET_A["plot_aq_sweep_not_afr"]:
-        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure2b.svg"), dpi=300, facecolor='white', 
-                   format='svg', bbox_inches=None, pad_inches=0)
-    else:
-        # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure2a.svg"), dpi=300, facecolor='white', 
-                   format='svg', bbox_inches=None, pad_inches=0)
+    # Save as SVG with exact dimensions (no bbox_inches='tight' which crops)
+    fig.savefig(os.path.join(save_dir, "figure2.svg"), dpi=300, facecolor='white', 
+                format='svg', bbox_inches=None, pad_inches=0)
 
     plt.show()
 
