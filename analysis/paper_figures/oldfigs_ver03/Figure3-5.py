@@ -69,7 +69,7 @@ def percent_without_symbol(decimals: int = 0) -> FuncFormatter:
 
 # Initial boolean values
 PLOT_AQ_SWEEP_NOT_AFR = True
-PLOT_ENTROPY_NOT_EUERGY = False
+PLOT_ENTROPY_NOT_EUERGY = True
 # T & T = Fig 4
 # F & T = Fig 5
 # T & F = Fig 6
@@ -147,14 +147,12 @@ if PLOT_AQ_SWEEP_NOT_AFR:
     
     if PLOT_ENTROPY_NOT_EUERGY:
         # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure3.tiff"), dpi=300, facecolor='white', 
+        fig.savefig(os.path.join(save_dir, "figure4.tiff"), dpi=300, facecolor='white', 
                    format='tiff', bbox_inches=None, pad_inches=0)
     else:
         # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure5.tiff"), dpi=300, facecolor='white', 
+        fig.savefig(os.path.join(save_dir, "figure6.tiff"), dpi=300, facecolor='white', 
                    format='tiff', bbox_inches=None, pad_inches=0)
-        fig.savefig(os.path.join(save_dir, "figure5.pdf"), dpi=300, facecolor='white', 
-                   format='pdf', bbox_inches=None, pad_inches=0)
 else:
     A_q_values = [10, 32, 60]
     for i, A_q in enumerate(A_q_values):
@@ -230,13 +228,13 @@ else:
     # Use larger padding to ensure ylabel is included
     plt.tight_layout(pad=0.5)
     
-    # if PLOT_ENTROPY_NOT_EUERGY:
+    if PLOT_ENTROPY_NOT_EUERGY:
         # Save with exact dimensions (no bbox_inches='tight' which crops)
-        # fig.savefig(os.path.join(save_dir, "figure3.tiff"), dpi=300, facecolor='white', 
-                #    format='tiff', bbox_inches=None, pad_inches=0)
-    # else:
+        fig.savefig(os.path.join(save_dir, "figure3.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
+    else:
         # Save with exact dimensions (no bbox_inches='tight' which crops)
-        # fig.savefig(os.path.join(save_dir, "figure5.tiff"), dpi=300, facecolor='white', 
-                #    format='tiff', bbox_inches=None, pad_inches=0)
+        fig.savefig(os.path.join(save_dir, "figure5.tiff"), dpi=300, facecolor='white', 
+                   format='tiff', bbox_inches=None, pad_inches=0)
 
 plt.show()
