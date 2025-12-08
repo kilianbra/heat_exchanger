@@ -39,8 +39,8 @@ if case == "Heli":
     LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
     FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
 
-    ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
-    ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
+    ETA_OV_OVER_ETA_TURB = 0.2 / 0.8
+    ETA_OV_RECUP_MAX_OVER_ETA_TURB = 0.4 / 0.8
 
     KG_HEX_FIXED = 6  # kg of hex per kg/s of air
     ALPHA_HEX_KG = 0.7  # kg of hex packaging per kg of matrix
@@ -238,7 +238,7 @@ if len(results_euergy) > 0:
             / ETA_OV_OVER_ETA_TURB,
             "r--",
             lw=2,
-            label="Assuming cst cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
+            label="20%% efficient cycle",  # "Euergy (euergy-optimal A_fr)",
         )
 
         plt.plot(
@@ -251,7 +251,7 @@ if len(results_euergy) > 0:
             / ETA_OV_RECUP_MAX_OVER_ETA_TURB,
             "k-.",
             lw=2,
-            label="Assuming ideal recup cycle efficiency",  # "Euergy (euergy-optimal A_fr)",
+            label="40%% efficient cycle",  # "Euergy (euergy-optimal A_fr)",
         )
         x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
         # plt.plot(
