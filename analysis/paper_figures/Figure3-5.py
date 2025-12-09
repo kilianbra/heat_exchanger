@@ -69,14 +69,14 @@ def percent_without_symbol(decimals: int = 0) -> FuncFormatter:
 
 # Initial boolean values
 PLOT_AQ_SWEEP_NOT_AFR = True
-PLOT_ENTROPY_NOT_EUERGY = False
+PLOT_ENTROPY_NOT_EUERGY = True
 # T & T = Fig 4
 # F & T = Fig 5
 # T & F = Fig 6
 # F & F = Fig 7
 
 
-colors = ["r", "b", "g"]
+colors = ["r", "b", "k"]
 lines = ["-.", "--", "-"]
 
 # Set figure size BEFORE creating the plot to ensure proper layout
@@ -103,7 +103,7 @@ if PLOT_AQ_SWEEP_NOT_AFR:
             DP_MAX,
         )
         ax.plot(
-            x_plot[validity_mask], y_plot[validity_mask], colors[i] + lines[i], label=fr"$g^2$ = {r_s['g2_hot']:.1e}"
+            x_plot[validity_mask], y_plot[validity_mask], colors[i] + lines[i], label=fr"$g^2$ = {r_s['g2_hot']:.0e}"
         )
         if PLOT_ENTROPY_NOT_EUERGY:
             peaks, _ = find_peaks(y_plot[validity_mask])
@@ -123,7 +123,7 @@ if PLOT_AQ_SWEEP_NOT_AFR:
     ax.tick_params(labelsize=10)
     ax.set_xlim(0, 20)
     ax.yaxis.set_major_formatter(percent_without_symbol(decimals=deci))
-    ax.set_xlabel("NTU [-]")
+    ax.set_xlabel(r"$N_{\mathrm{tu}}$ [-]")
     # ax.set_ylabel("dW_pot / Q_max")
     # ax.set_ylabel(r"$\Delta \mathcal{E}$")
     

@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter, FuncFormatter
 from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter1d
 
 from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
@@ -116,6 +117,19 @@ results_exergy = []
 A_fr_list = []
 Aq_list = []
 # endregion
+
+
+def smooth_line(x: np.ndarray, y: np.ndarray, sigma: float = 2.0) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Interpolate over NaNs then apply a gentle Gaussian filter to smooth the curve.
+    Keeps x unchanged to preserve axis limits.
+    """
+    mask = ~np.isnan(y)
+    if mask.sum() < 3:
+        return x, y
+    y_interp = np.interp(x, x[mask], y[mask])
+    y_smoothed = gaussian_filter1d(y_interp, sigma=sigma)
+    return x, y_smoothed
 
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
@@ -350,16 +364,18 @@ if len(results_euergy) > 0:
         if PLOT_EUERGY_NOT_EXERGY:
             # plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
 
+            x_red, y_red = smooth_line(xi * dimensionalisation_x, y_eu, sigma=2.0)
             plt.plot(
-                xi * dimensionalisation_x,
-                y_eu,
+                x_red,
+                y_red,
                 "r--",
                 lw=2,
                 label="Fixed $m_{\mathrm{HEx,core}}$",
             )
+            x_blue, y_blue = smooth_line(x_at_max_euergy_creation_for_Afr * dimensionalisation_x, y_i_nd, sigma=2.0)
             plt.plot(
-                x_at_max_euergy_creation_for_Afr * dimensionalisation_x,
-                y_i_nd,
+                x_blue,
+                y_blue,
                 "b-",
                 lw=2,
                 label=r"Fixed $g^2$",
@@ -371,9 +387,10 @@ if len(results_euergy) > 0:
 
         else:
             plt.title("Contour plot of Exergy creation / Q_max vs Aq and A_fr")
+            x_red, y_red = smooth_line(xi * dimensionalisation_x, y_ex, sigma=2.0)
             plt.plot(
-                xi * dimensionalisation_x,
-                y_ex,
+                x_red,
+                y_red,
                 "r--",
                 lw=2,
                 label="A_fr at min Exergy for each Aq",
@@ -391,10 +408,21 @@ if len(results_euergy) > 0:
         )
         # Ensure colorbar uses full range and shows top tick
         # cbar.mappable.set_clim(vmin=-0.10, vmax=0.299)
-        # cbar.ax.set_ylim(-0.10, 0.299)
+        # cbar.ax.set_ylim(-0.10, 0.2999)
         # plt.xlabel(x_label)
-        plt.xlabel(r"$m_{\mathrm{HEx,tot}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
+        plt.xlabel(r"$m_{\mathrm{HEx,core}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
         plt.ylabel(r"$g^2_{\mathrm{in}}$ [-]")
+        # Annotate high pressure drop region in empty/white area
+        plt.text(
+            10.0,
+            0.05,
+            r"$\Delta p/p_{\mathrm{in}} > 20\%$",
+            rotation=-45,
+            ha="center",
+            va="center",
+            fontsize=10,
+            color="black",
+        )
         plt.xlim(0, 15)
         plt.ylim(0, 0.1)
         if not PLOT_DIMENSIONAL:
@@ -406,6 +434,8 @@ if len(results_euergy) > 0:
         # Save with exact dimensions (no bbox_inches='tight' which crops)
         fig.savefig(os.path.join(save_dir, "figure6.tiff"), dpi=300, facecolor='white', 
                    format='tiff', bbox_inches=None, pad_inches=0)
+        fig.savefig(os.path.join(save_dir, "figure6.pdf"), dpi=300, facecolor='white', 
+            format='pdf', bbox_inches=None, pad_inches=0)
     plt.show()
 
 r_s = rate_hex_simple(
