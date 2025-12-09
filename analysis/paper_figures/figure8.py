@@ -1,29 +1,29 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import PercentFormatter, FuncFormatter
+from matplotlib.ticker import PercentFormatter
 from scipy.interpolate import griddata
-from scipy.ndimage import gaussian_filter1d
+import os
+
+plt.rcParams.update(
+    {
+        "font.size": 10,
+        "axes.titlesize": 10,
+        "axes.labelsize": 10,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.titlesize": 10,
+    }
+)
 
 from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
-import os
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Set font sizes to match Word (10pt = 10 points)
-plt.rcParams.update({
-    'font.size': 10,
-    'axes.titlesize': 10,
-    'axes.labelsize': 10,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
-    'legend.fontsize': 10,
-    'figure.titlesize': 10
-})
-
 # region fixed inputs
-case = "Heli"  # "Brewer"
+case = "Brewer"  # "Brewer"
 if case == "Heli":
     # Fluid models (global)
     FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -41,26 +41,30 @@ if case == "Heli":
         Pc_in=7.2e5,  # Pa (7.2 bar)
     )
     # Geometry
-    LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
+    LS_OVER_DH = 0.7  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
     SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
     SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
     A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
-    D_H_C = 4e-3  # m, cold side hydraulic diameter
+    D_H_C = 1e-3  # m, cold side hydraulic diameter
     RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
-    MASS_ENGINE = 250  # kg, mass of the engine from TUM paper
+    MASS_ENGINE = 250  # kg,250 kg of fuel  72kg mass of the engine from TUM paper
 
     MISSION_HOURS = 2
     LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
     FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
 
-    ETA_OV_OVER_ETA_TURB = 0.2 / 0.88
-    ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
+    ETA_OV_OVER_ETA_TURB = 0.2 / 0.8
+    ETA_OV_RECUP_MAX_OVER_ETA_TURB = 0.4 / 0.8
 
-    KG_HEX_FIXED = 4.7  # kg of hex per kg/s of air
-    ALPHA_HEX_KG = 0.9  # kg of hex packaging per kg of matrix
+    KG_HEX_FIXED = 6  # kg of hex per kg/s of air
+    ALPHA_HEX_KG = 0.7  # kg of hex packaging per kg of matrix
 
     A_fr_start = 0.5
+    DP_MAX = 0.2
+
+    scale_everything = 1
+    AQ_BASELINE = 43.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
 elif case == "Brewer":
     # Fluid models (global)
@@ -81,12 +85,12 @@ elif case == "Brewer":
         Pc_in=16.8e5,  # Pa (7.2 bar)
     )
     # Geometry
-    LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+    LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
-    SIGMA_R = 11.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    SIGMA_R = 250.0  # Ratio of free flow areas (Ao_h/Ao_c)
     SIGMA_W = 1.14  # Ratio of heat transfer areas (Ah/Ac)
     A_FR_OVER_AO_C = (1 + SIGMA_R) + 2 * T_OVER_DHC * (1 + SIGMA_W)  # Ratio of frontal area to cold side free flow area
-    D_H_C = 4.7e-2  # m, cold side hydraulic diameter
+    D_H_C = 5e-3  # m, cold side hydraulic diameter
     RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
     MASS_ENGINE = 6000  # kg, mass of the engine from TUM paper
 
@@ -95,8 +99,15 @@ elif case == "Brewer":
     FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
 
     ETA_OV_OVER_ETA_TURB = 0.363 / 0.88
-    ETA_OV_RECUP_MAX_OVER_ETA_TURB = (1 - F_IN.Tc_in / F_IN.Th_in) / 0.88
+    ETA_OV_RECUP_MAX_OVER_ETA_TURB = 0.4 / 0.88
     A_fr_start = 10.0
+
+    KG_HEX_FIXED = 0.2  # kg of hex per kg/s of air
+    ALPHA_HEX_KG = 0.9  # kg of hex packaging per kg of matrix
+    DP_MAX = 0.1
+
+    scale_everything = 1
+    AQ_BASELINE = 15.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
 
 Cmin = min(
@@ -118,31 +129,21 @@ A_fr_list = []
 Aq_list = []
 # endregion
 
-
-def smooth_line(x: np.ndarray, y: np.ndarray, sigma: float = 2.0) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Interpolate over NaNs then apply a gentle Gaussian filter to smooth the curve.
-    Keeps x unchanged to preserve axis limits.
-    """
-    mask = ~np.isnan(y)
-    if mask.sum() < 3:
-        return x, y
-    y_interp = np.interp(x, x[mask], y[mask])
-    y_smoothed = gaussian_filter1d(y_interp, sigma=sigma)
-    return x, y_smoothed
-
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = True # false for fig 6 and true for fig 7
+PLOT_BOTH_PER_AQ = True  # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
 
 
 A_FR_OVER_AO_H = SIGMA_R * A_FR_OVER_AO_C
-scale_everything = 1
+
 
 if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = A_fr_start * scale_everything
-    Aq_sweep = np.linspace(0.5, 40, 500) * scale_everything
+    if case == "Heli":
+        Aq_sweep = np.linspace(1, 80, 50) * scale_everything
+    else:
+        Aq_sweep = np.linspace(0.5, 100, 200) * scale_everything
 else:
     Afr_start = A_fr_start * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
@@ -153,8 +154,6 @@ g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / F_IN.Ph_in / RHO_IN_HOT
 
 
 A_fr_decrease_ratio_start = 0.999
-DP_MAX = 0.2
-AQ_BASELINE = 43.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
 
 print(f"g_in2_start: {g_in2_start:.2e} , m_hex_base/m_fuel: {AQ_BASELINE * RHO_WALL_T / MASS_ENGINE * 100:.2f} %")
@@ -176,7 +175,7 @@ for Aq in Aq_sweep:
             ls_over_dh=LS_OVER_DH,
         )
 
-        if r_s["dp_hot"] > DP_MAX or r_s["dp_cold"] > DP_MAX:
+        if r_s["dp_hot"] > DP_MAX or r_s["dp_cold"] > DP_MAX or r_s["dp_hot"] < 0:
             break
         else:
             # r_s["eps"]
@@ -221,6 +220,7 @@ if len(results_euergy) > 0:
     max_euergy_creation_for_Afr = np.nanmax(Zi_euergy, axis=1)
     idx_max_euergy_creation_for_Afr = np.nanargmax(Zi_euergy, axis=1)  # For each row (A_fr value), column index of max
     x_at_max_euergy_creation_for_Afr = xi[idx_max_euergy_creation_for_Afr]  # xi corresponds to A_q (x axis)
+    y_at_max_euergy_creation_for_Afr = yi[idx_max_euergy_creation_for_Afr]
 
     A_fr_opt_min = y_at_max_euergy_creation[0]
 
@@ -239,62 +239,93 @@ if len(results_euergy) > 0:
         Zi = Zi_euergy
     else:
         Zi = Zi_exergy
-
-    # Set figure size BEFORE creating the plot to ensure proper layout
-    # Size: 9 cm × 7.5 cm (matching other figures)
-    fig_width = 9 / 2.54  # 9 cm to inches
-    fig_height = 7.5 / 2.54  # 7.5 cm to inches
+    fig_width = 9 / 2.54
+    fig_height = 7.5 / 2.54
     fig = plt.figure(figsize=(fig_width, fig_height))
-    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_cold
+    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_hot
     x_label = "m_hex / mdot_air (kg/(kg/s))"
 
     if PLOT_BOTH_PER_AQ:
-        # Euergy at euergy-optimal A_fr for each Aq (already computed)
-        euergy_at_euergy_optimal = max_euergy_creation_for_Aq
+        if case == "Heli":
+            euergy_at_euergy_optimal = max_euergy_creation_for_Aq
 
-        # Euergy at exergy-optimal A_fr for each Aq
-        # Extract Zi_euergy values at the indices that maximize exergy
-        euergy_at_exergy_optimal = Zi_euergy[idx_min_exergy_destr, np.arange(len(xi))]
+            euergy_at_exergy_optimal = Zi_euergy[idx_min_exergy_destr, np.arange(len(xi))]
 
-        # Apply the same filtering for exergy-optimal (where A_fr is at boundary)
-        euergy_at_exergy_optimal_filtered = euergy_at_exergy_optimal.copy()
-        euergy_at_exergy_optimal_filtered[mask_exergy] = np.nan
+            euergy_at_exergy_optimal_filtered = euergy_at_exergy_optimal.copy()
+            euergy_at_exergy_optimal_filtered[mask_exergy] = np.nan
 
-        plt.plot(
-            (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
-            euergy_at_euergy_optimal
-            / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
-            * FUEL_PER_HEAT
-            / 1000
-            * Q_max
-            / ETA_OV_OVER_ETA_TURB
-            / 1.6,
-            "r--",
-            lw=2,
-            label=r"$\eta_{ov} = 20\%$",  # "Euergy (euergy-optimal A_fr)",
-        )
+            plt.plot(
+                (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
+                euergy_at_euergy_optimal
+                / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
+                * FUEL_PER_HEAT
+                / 1000
+                * Q_max
+                / F_IN.m_dot_hot
+                / ETA_OV_OVER_ETA_TURB,
+                "r--",
+                lw=2,
+                label=r"$\eta_{ov} = 20\%$",  # "Euergy (euergy-optimal A_fr)",
+            )
 
-        plt.plot(
-            (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
-            euergy_at_euergy_optimal
-            / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
-            * FUEL_PER_HEAT
-            / 1000
-            * Q_max
-            / ETA_OV_RECUP_MAX_OVER_ETA_TURB
-            / 1.6,
-            "k-.",
-            lw=2,
-            label=r"$\eta_{ov} = 40\%$",  # "Euergy (euergy-optimal A_fr)",
-        )
-        x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
-        # plt.plot(
-        #     xi * dimensionalisation_x,
-        #     euergy_at_exergy_optimal_filtered / (xi * RHO_WALL_T) * FUEL_PER_HEAT / 1000 * Q_max / ETA_OV_OVER_ETA_TURB,
-        #     "b--",
-        #     lw=2,
-        #     label="Euergy (exergy-optimal A_fr)",
-        # )
+            plt.plot(
+                (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED),
+                euergy_at_euergy_optimal
+                / (xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED)
+                * FUEL_PER_HEAT
+                / 1000
+                * Q_max
+                / F_IN.m_dot_hot
+                / ETA_OV_RECUP_MAX_OVER_ETA_TURB,
+                "k-.",
+                lw=2,
+                label=r"$\eta_{ov} = 40\%$",  # "Euergy (euergy-optimal A_fr)",
+            )
+            x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
+        else:
+            A_fr_desired = 1.0
+
+            # Find the yi value closest to A_fr_desired
+            idx_closest_afr = np.argmin(np.abs(yi - A_fr_desired))
+            A_fr_closest = yi[idx_closest_afr]
+
+            # Extract euergy values at fixed A_fr (horizontal slice through Zi_euergy)
+            euergy_at_fixed_afr = Zi_euergy[idx_closest_afr, :]  # Row corresponds to fixed A_fr, columns are Aq values
+
+            # Calculate x values
+            x_plot = xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED
+
+            # Calculate y values for both lines (no extra smoothing needed)
+            y_20pct = (
+                euergy_at_fixed_afr / x_plot * FUEL_PER_HEAT / 1000 * Q_max / F_IN.m_dot_hot / ETA_OV_OVER_ETA_TURB
+            )
+
+            y_40pct = (
+                euergy_at_fixed_afr
+                / x_plot
+                * FUEL_PER_HEAT
+                / 1000
+                * Q_max
+                / F_IN.m_dot_hot
+                / ETA_OV_RECUP_MAX_OVER_ETA_TURB
+            )
+
+            plt.plot(
+                x_plot,
+                y_20pct,
+                "r--",
+                lw=2,
+                label=r"$\eta_{ov} = 36\%$",
+            )
+
+            plt.plot(
+                x_plot,
+                y_40pct,
+                "k-.",
+                lw=2,
+                label=r"$\eta_{ov} = 40\%$",
+            )
+            x_label = "m_hex_overall / mdot_air (kg/(kg/s))"
 
         # plt.axhline(y=ETA_OV_OVER_ETA_TURB / ETA_OV_OVER_ETA_TURB, color="g", linestyle="-", label="Break even")
         # plt.axhline(
@@ -304,27 +335,16 @@ if len(results_euergy) > 0:
         #     label="Ideal Recup break even",
         # )
 
-        # plt.title("Work Potential creation per kg of core HEx mass vs Aq")
-        # plt.ylabel("Engine fuel mass avoided per unit mass of HEx (-)")
         plt.ylabel(r"$-\Delta m_{\mathrm{fuel}}/m_{\mathrm{HEx,tot}}$ [-]")
-        
-        # Set xlabel before tight_layout
-        # plt.xlabel(x_label)
         plt.xlabel(r"$m_{\mathrm{HEx,tot}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
-        
-        # Apply tight layout to optimize spacing (after all labels are set)
-        # Use larger padding to ensure ylabel is included
-        plt.tight_layout(pad=1)
-        plt.margins(x=0.015, y=0.02)  # small margin to avoid clipping tick labels
-        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='upper right')
-        plt.ylim(1, 4)
-        plt.xlim(5, 30)
-        
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure7.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
-        fig.savefig(os.path.join(save_dir, "figure7.pdf"), dpi=300, facecolor='white', 
-                   format='pdf', bbox_inches=None, pad_inches=0)
+        plt.legend(labelspacing=0.05, edgecolor="black", frameon=True, loc="upper right")
+        plt.ylim(1, 2.5)
+        plt.yticks([1.0, 1.5, 2.0, 2.5])
+        plt.xlim(0, 20)
+        plt.tight_layout(pad=0.5)
+        # Save outputs matching other figures
+        fig.savefig(os.path.join(save_dir, "figure8.tiff"), dpi=300, facecolor="white", format="tiff", bbox_inches=None, pad_inches=0)
+        fig.savefig(os.path.join(save_dir, "figure8.pdf"), dpi=300, facecolor="white", format="pdf", bbox_inches=None, pad_inches=0)
 
     else:
         if PLOT_DIMENSIONAL:
@@ -351,38 +371,27 @@ if len(results_euergy) > 0:
             yi = (F_IN.m_dot_hot / Yi) ** 2 / F_IN.Ph_in / RHO_IN_HOT
             plt.ylabel("g^2_in (-)")
 
-        # Fix color scaling at creation so colorbar matches data limits
-        cp = plt.contourf(
-            Xi * dimensionalisation_x,
-            yi,
-            Zi,
-            cmap="binary_r",
-            levels=20,
-            vmin=-0.10,
-            vmax=0.30,
-        )
+        cp = plt.contourf(Xi * dimensionalisation_x, yi, Zi, cmap="binary_r", levels=20)
 
         # Add optimal (maximum) results/Zi for each individual Aq value
         # For each column in Xi (corresponding to fixed Aq), find the max(Zi) and its index, ignoring nans
 
         if PLOT_EUERGY_NOT_EXERGY:
-            # plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
+            plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
 
-            x_red, y_red = smooth_line(xi * dimensionalisation_x, y_eu, sigma=2.0)
             plt.plot(
-                x_red,
-                y_red,
+                xi * dimensionalisation_x,
+                y_eu,
                 "r--",
                 lw=2,
-                label="Fixed $m_{\mathrm{HEx,core}}$",
+                label="Optimal g2 for a given m_hex",
             )
-            x_blue, y_blue = smooth_line(x_at_max_euergy_creation_for_Afr * dimensionalisation_x, y_i_nd, sigma=2.0)
             plt.plot(
-                x_blue,
-                y_blue,
+                x_at_max_euergy_creation_for_Afr * dimensionalisation_x,
+                y_i_nd,
                 "b-",
                 lw=2,
-                label=r"Fixed $g^2$",
+                label="Optimal m_hex for a given g2",
             )
             deci = 0
 
@@ -391,55 +400,26 @@ if len(results_euergy) > 0:
 
         else:
             plt.title("Contour plot of Exergy creation / Q_max vs Aq and A_fr")
-            x_red, y_red = smooth_line(xi * dimensionalisation_x, y_ex, sigma=2.0)
             plt.plot(
-                x_red,
-                y_red,
+                xi * dimensionalisation_x,
+                y_ex,
                 "r--",
                 lw=2,
                 label="A_fr at min Exergy for each Aq",
             )
             deci = 3
-        # Create the colorbar with fixed ticks/labels
-        def percent_formatter(x, p):
-            return f"{x*100:.0f}"
-
+        # Create the colorbar as before
         cbar = plt.colorbar(
-            cp,
-            label=r"$\Delta \dot{W}_0^M / \dot{Q}_{\mathrm{max}}$ [%]",
-            format=FuncFormatter(percent_formatter),
-            ticks=[-0.10, 0, 0.10, 0.20, 0.299],
+            cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=deci)
         )
-        # Ensure colorbar uses full range and shows top tick
-        # cbar.mappable.set_clim(vmin=-0.10, vmax=0.299)
-        # cbar.ax.set_ylim(-0.10, 0.2999)
-        # plt.xlabel(x_label)
-        plt.xlabel(r"$m_{\mathrm{HEx,core}}/\dot{m}_{\mathrm{air}}$ [kg/(kg/s)]")
-        plt.ylabel(r"$g^2_{\mathrm{in}}$ [-]")
-        # Annotate high pressure drop region in empty/white area
-        plt.text(
-            10.0,
-            0.05,
-            r"$\Delta p/p_{\mathrm{in}} > 20\%$",
-            rotation=-45,
-            ha="center",
-            va="center",
-            fontsize=10,
-            color="black",
-        )
-        plt.xlim(0, 15)
-        plt.ylim(0, 0.1)
-        if not PLOT_DIMENSIONAL:
+    if not PLOT_BOTH_PER_AQ:
+        plt.xlabel(x_label)
+        if not PLOT_DIMENSIONAL and case == "Heli":
             plt.ylim(0, 0.1)
-        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='upper right')
-        # Apply tight layout to optimize spacing (after all labels are set)
-        # Use larger padding to ensure ylabel is included
-        plt.tight_layout(pad=0.5)
-        # Save with exact dimensions (no bbox_inches='tight' which crops)
-        fig.savefig(os.path.join(save_dir, "figure6.tiff"), dpi=300, facecolor='white', 
-                   format='tiff', bbox_inches=None, pad_inches=0)
-        fig.savefig(os.path.join(save_dir, "figure6.pdf"), dpi=300, facecolor='white', 
-            format='pdf', bbox_inches=None, pad_inches=0)
+        elif not PLOT_DIMENSIONAL and case == "Brewer":
+            plt.ylim(0, 0.25)
+        plt.legend()
+        plt.tight_layout()
     plt.show()
 
 r_s = rate_hex_simple(

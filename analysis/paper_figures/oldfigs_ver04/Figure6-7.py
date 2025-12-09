@@ -314,10 +314,9 @@ if len(results_euergy) > 0:
         
         # Apply tight layout to optimize spacing (after all labels are set)
         # Use larger padding to ensure ylabel is included
-        plt.tight_layout(pad=1)
-        plt.margins(x=0.015, y=0.02)  # small margin to avoid clipping tick labels
-        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='upper right')
-        plt.ylim(1, 4)
+        plt.tight_layout(pad=0.5)
+        plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='lower right')
+        plt.ylim(0, 4)
         plt.xlim(5, 30)
         
         # Save with exact dimensions (no bbox_inches='tight' which crops)
