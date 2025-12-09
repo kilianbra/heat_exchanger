@@ -6,27 +6,58 @@ from matplotlib.widgets import Button, Slider
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
-# Fluid models (global)
-FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
-FLUID_COLD = PerfectGasFluid.from_name("air")
 
-# Initial values for sliders
-INIT_T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
-INIT_SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
-INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
-INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
-INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
-INIT_AQ_BASELINE = 43.0
-INIT_A_FR_BASELINE = 0.5
+case = "B"  # "Brewer"
+if case == "Heli":
+    # Fluid models (global)
+    FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
+    FLUID_COLD = PerfectGasFluid.from_name("air")
 
-# Fluid inputs initial values
-INIT_M_DOT_HOT = 1.6  # kg/s
-INIT_M_DOT_COLD = 1.6  # kg/s
-INIT_TH_IN = 980  # K
-INIT_PH_IN = 1.06e5  # Pa (1.06 bar)
-INIT_TC_IN = 576  # K
-INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
-INIT_DP_MAX = 0.2
+    # Initial values for sliders
+    INIT_T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    INIT_SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    INIT_SIGMA_W = 2.0  # Ratio of heat transfer areas (Ah/Ac)
+    INIT_D_H_C = 4e-3  # m, cold side hydraulic diameter
+    INIT_LS_OVER_DH = 5.0  # Strip length to hydraulic diameter ratio
+    INIT_AQ_BASELINE = 43.0
+    INIT_A_FR_BASELINE = 5.0
+
+    # Fluid inputs initial values
+    INIT_M_DOT_HOT = 1.6  # kg/s
+    INIT_M_DOT_COLD = 1.6  # kg/s
+    INIT_TH_IN = 980  # K
+    INIT_PH_IN = 1.06e5  # Pa (1.06 bar)
+    INIT_TC_IN = 576  # K
+    INIT_PC_IN = 7.2e5  # Pa (7.2 bar)
+    INIT_DP_MAX = 0.2
+
+else:
+    # Fluid models (global)
+    FLUID_COLD = PerfectGasFluid.from_name("para_h2")
+    FLUID_HOT = PerfectGasFluid(
+        M=27.5, S=150.0, T_ref=350.0, mu_ref=1.12e-5, gamma=1.37, Pr=0.74, cp=1170.0
+    )  # 1170 from dT
+
+    INIT_M_DOT_HOT = 19.07  # kg/s
+    INIT_M_DOT_COLD = 0.166  # kg/s
+    INIT_TH_IN = 778  # K
+    INIT_PH_IN = 0.388e5  # Pa (1.06 bar)
+    INIT_TC_IN = 264  # K
+    INIT_PC_IN = 16.8e5  # Pa (7.2 bar)
+
+    # Geometry
+    INIT_T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
+    INIT_SIGMA_R = 250.0  # Ratio of free flow areas (Ao_h/Ao_c)
+    INIT_SIGMA_W = 1.14  # Ratio of heat transfer areas (Ah/Ac)
+    INIT_A_FR_OVER_AO_C = (1 + INIT_SIGMA_R) + 2 * INIT_T_OVER_DHC * (
+        1 + INIT_SIGMA_W
+    )  # Ratio of frontal area to cold side free flow area
+    INIT_D_H_C = 1e-3  # m, cold side hydraulic diameter
+    INIT_LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
+    INIT_AQ_BASELINE = 16.0
+    INIT_A_FR_BASELINE = 1.0
+    INIT_DP_MAX = 0.15
+
 
 F_IN = FluidInputs(
     hot=FLUID_HOT,
@@ -38,6 +69,7 @@ F_IN = FluidInputs(
     Tc_in=INIT_TC_IN,
     Pc_in=INIT_PC_IN,
 )
+
 
 # Initial boolean values
 INIT_PLOT_AQ_SWEEP_NOT_AFR = True
@@ -62,7 +94,13 @@ def calculate_plot(
 
     # Generate x values
     if plot_aq_sweep_not_afr:
-        x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        if case == "Heli":
+            x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        else:
+            if a_fr_baseline < 1:
+                x = np.geomspace(0.5, 500 / a_fr_baseline, 200)
+            else:
+                x = np.geomspace(0.5, 500 * a_fr_baseline, 200)
         Aq = x
         A_fr = a_fr_baseline
         title = "Heat transfer area variation Aq (m²) (HEx mass, length changes)"
@@ -97,7 +135,19 @@ def calculate_plot(
     else:
         y_hot = dp_hot
         y_cold = dp_cold
-    over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max)
+    over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max) | (dp_hot < 0)
+    if np.any(over_limit):
+        idx_exceed = np.where(over_limit)[0]
+        print("Exceeded dp_max or negative dp at indices:", idx_exceed)
+        for i in idx_exceed[:5]:
+            reasons = []
+            if dp_hot[i] >= dp_max:
+                reasons.append(f"dp_hot[{i}]={dp_hot[i]:.3g} >= dp_max={dp_max:.3g}")
+            if dp_cold[i] >= dp_max:
+                reasons.append(f"dp_cold[{i}]={dp_cold[i]:.3g} >= dp_max={dp_max:.3g}")
+            if dp_hot[i] < 0:
+                reasons.append(f"dp_hot[{i}]={dp_hot[i]:.3g} < 0")
+            print(f"  At index {i}: " + ", ".join(reasons))
     if np.any(over_limit):
         first_exceed = np.argmax(over_limit)
         validity_mask = np.zeros_like(dp_hot, dtype=bool)
@@ -186,7 +236,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "SIGMA_R",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 1000.0,
         valinit=INIT_SIGMA_R,
         valfmt="%.2f",
     )
@@ -206,7 +256,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "D_H_C (m)",
         1e-4,
-        0.01,
+        0.01 if case == "Heli" else 5e-2,
         valinit=INIT_D_H_C,
         valfmt="%.4f",
     )
@@ -247,7 +297,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "m_dot_hot",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 30.0,
         valinit=INIT_M_DOT_HOT,
         valfmt="%.2f",
     )
@@ -257,7 +307,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "m_dot_cold",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 30.0,
         valinit=INIT_M_DOT_COLD,
         valfmt="%.2f",
     )
@@ -297,7 +347,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "Pc_in (Pa)",
         1e4,
-        1e6,
+        1e6 if case == "Heli" else 3e6,
         valinit=INIT_PC_IN,
         valfmt="%.0e",
     )
@@ -306,8 +356,8 @@ if __name__ == "__main__":
     slider_dp_max = Slider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "DP_MAX",
-        0.2,
-        0.8,
+        0.2 if case == "Heli" else 0.1,
+        0.8 if case == "Heli" else 0.3,
         valinit=INIT_DP_MAX,
         valfmt="%.2f",
     )
@@ -386,7 +436,13 @@ if __name__ == "__main__":
         ax2.set_ylim(0, slider_dp_max.val)
         ax.set_ylim(0, 1)
         if not plot_aq_sweep_not_afr:
-            ax.set_xlim(0, x_plot[validity_mask][-1])
+            # Find first invalid point to show up to that point
+            if np.any(~validity_mask):
+                first_invalid_idx = np.where(~validity_mask)[0][0]
+                x_max = x_plot[first_invalid_idx]
+            else:
+                x_max = x_plot[-1]
+            ax.set_xlim(0, x_max)
 
         ax.autoscale_view()
         # Combine legend handles and labels from ax and ax2

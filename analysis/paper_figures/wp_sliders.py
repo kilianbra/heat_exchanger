@@ -53,10 +53,10 @@ else:
         1 + INIT_SIGMA_W
     )  # Ratio of frontal area to cold side free flow area
     INIT_D_H_C = 4.7e-2  # m, cold side hydraulic diameter
-    INIT_LS_OVER_DH = 0.7  # Strip length to hydraulic diameter ratio
+    INIT_LS_OVER_DH = 60  # Strip length to hydraulic diameter ratio
     INIT_AQ_BASELINE = 16.0
     INIT_A_FR_BASELINE = 1.0
-    INIT_DP_MAX = 0.5
+    INIT_DP_MAX = 0.15
 
 
 F_IN = FluidInputs(
@@ -93,7 +93,10 @@ def calculate_plot(
 
     # Generate x values
     if plot_aq_sweep_not_afr:
-        x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        if case == "Heli":
+            x = np.geomspace(2, 2000 / a_fr_baseline, 100)
+        else:
+            x = np.geomspace(2, 50 * a_fr_baseline, 100)
         Aq = x
         A_fr = a_fr_baseline
         title = "Heat transfer area variation Aq (m²) (HEx mass, length changes)"
@@ -117,7 +120,7 @@ def calculate_plot(
     # Find validity mask
     dp_hot = r_s["dp_hot"]
     dp_cold = r_s["dp_cold"]
-    over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max)
+    over_limit = (dp_hot >= dp_max) | (dp_cold >= dp_max) | (dp_hot < 0)
     if np.any(over_limit):
         first_exceed = np.argmax(over_limit)
         validity_mask = np.zeros_like(dp_hot, dtype=bool)
@@ -207,7 +210,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "SIGMA_R",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 15.0,
         valinit=INIT_SIGMA_R,
         valfmt="%.2f",
     )
@@ -227,7 +230,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "D_H_C (m)",
         1e-4,
-        0.01,
+        0.01 if case == "Heli" else 5e-2,
         valinit=INIT_D_H_C,
         valfmt="%.4f",
     )
@@ -268,7 +271,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "m_dot_hot",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 30.0,
         valinit=INIT_M_DOT_HOT,
         valfmt="%.2f",
     )
@@ -278,7 +281,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "m_dot_cold",
         0.1,
-        10.0,
+        10.0 if case == "Heli" else 30.0,
         valinit=INIT_M_DOT_COLD,
         valfmt="%.2f",
     )
@@ -318,7 +321,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "Pc_in (Pa)",
         1e4,
-        1e6,
+        1e6 if case == "Heli" else 3e6,
         valinit=INIT_PC_IN,
         valfmt="%.0e",
     )
@@ -327,8 +330,8 @@ if __name__ == "__main__":
     slider_dp_max = Slider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         "DP_MAX",
-        0.2,
-        0.8,
+        0.2 if case == "Heli" else 0.1,
+        0.8 if case == "Heli" else 0.3,
         valinit=INIT_DP_MAX,
         valfmt="%.2f",
     )

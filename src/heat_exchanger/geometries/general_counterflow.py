@@ -111,7 +111,7 @@ def calculate_pressure_ratio(
         # Calculate new pressure ratio using the iteration formula
         # Based on momentum equation with friction and density change
         p_o_pi_new = 1 - gd2 * (1 / p_i_pd) ** 2 * t_i_td * (
-            0.5 * f * 4 * l_dh * (1 + t_o_ti * 1 / p_o_pi) / 2 + (t_o_ti * 1 / p_o_pi - 1)
+            0.5 * f * 4 * l_dh * (1 + t_o_ti * 1 / p_o_pi) / 2 + 0 * (t_o_ti * 1 / p_o_pi - 1)
         )
 
         # Apply relaxation for stability
