@@ -133,7 +133,7 @@ def smooth_line(x: np.ndarray, y: np.ndarray, sigma: float = 2.0) -> tuple[np.nd
 
 # plotting options
 PLOT_EUERGY_NOT_EXERGY = True
-PLOT_BOTH_PER_AQ = False # false for fig 6 and true for fig 7
+PLOT_BOTH_PER_AQ = True # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
 
 
@@ -267,7 +267,8 @@ if len(results_euergy) > 0:
             * FUEL_PER_HEAT
             / 1000
             * Q_max
-            / ETA_OV_OVER_ETA_TURB,
+            / ETA_OV_OVER_ETA_TURB
+            / 1.6,
             "r--",
             lw=2,
             label=r"$\eta_{ov} = 20\%$",  # "Euergy (euergy-optimal A_fr)",
@@ -280,7 +281,8 @@ if len(results_euergy) > 0:
             * FUEL_PER_HEAT
             / 1000
             * Q_max
-            / ETA_OV_RECUP_MAX_OVER_ETA_TURB,
+            / ETA_OV_RECUP_MAX_OVER_ETA_TURB
+            / 1.6,
             "k-.",
             lw=2,
             label=r"$\eta_{ov} = 40\%$",  # "Euergy (euergy-optimal A_fr)",
@@ -314,13 +316,14 @@ if len(results_euergy) > 0:
         # Use larger padding to ensure ylabel is included
         plt.tight_layout(pad=0.5)
         plt.legend(labelspacing=0.05, edgecolor='black', frameon=True, loc='lower right')
-        plt.ylim(0, 6)
+        plt.ylim(0, 4)
         plt.xlim(5, 30)
         
         # Save with exact dimensions (no bbox_inches='tight' which crops)
         fig.savefig(os.path.join(save_dir, "figure7.tiff"), dpi=300, facecolor='white', 
                    format='tiff', bbox_inches=None, pad_inches=0)
-
+        fig.savefig(os.path.join(save_dir, "figure7.pdf"), dpi=300, facecolor='white', 
+                   format='pdf', bbox_inches=None, pad_inches=0)
 
     else:
         if PLOT_DIMENSIONAL:
