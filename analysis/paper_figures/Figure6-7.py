@@ -176,7 +176,7 @@ for Aq in Aq_sweep:
             ls_over_dh=LS_OVER_DH,
         )
 
-        if r_s["dp_hot"] > DP_MAX or r_s["dp_cold"] > DP_MAX:
+        if r_s["dp_hot"] > DP_MAX or r_s["dp_cold"] > DP_MAX or r_s["dp_hot"] < 0:
             break
         else:
             # r_s["eps"]
@@ -245,7 +245,7 @@ if len(results_euergy) > 0:
     fig_width = 9 / 2.54  # 9 cm to inches
     fig_height = 7.5 / 2.54  # 7.5 cm to inches
     fig = plt.figure(figsize=(fig_width, fig_height))
-    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_cold
+    dimensionalisation_x = RHO_WALL_T / F_IN.m_dot_hot
     x_label = "m_hex / mdot_air (kg/(kg/s))"
 
     if PLOT_BOTH_PER_AQ:
