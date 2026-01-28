@@ -9,7 +9,8 @@ from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 # region fixed inputs
-case = "Brewer"  # "Brewer"
+# Case selection controls baseline fluids, geometry, and engine assumptions.
+case = "Heli"  # "Brewer"
 if case == "Heli":
     # Fluid models (global)
     FLUID_HOT = PerfectGasFluid.from_name("kerocomb_helicopter")
@@ -26,7 +27,7 @@ if case == "Heli":
         Tc_in=576,  # K
         Pc_in=7.2e5,  # Pa (7.2 bar)
     )
-    # Geometry
+    # Geometry: ratios and dimensions defining the HX core
     LS_OVER_DH = 0.7  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.02  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
     SIGMA_R = 2.0  # Ratio of free flow areas (Ao_h/Ao_c)
@@ -36,6 +37,7 @@ if case == "Heli":
     RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
     MASS_ENGINE = 250  # kg,250 kg of fuel  72kg mass of the engine from TUM paper
 
+    # Mission and fuel accounting used to convert work potential to fuel saved
     MISSION_HOURS = 2
     LHV_KWH_PER_KG_FUEL = 43.2 / 3.6
     FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
@@ -43,6 +45,7 @@ if case == "Heli":
     ETA_OV_OVER_ETA_TURB = 0.2 / 0.8
     ETA_OV_RECUP_MAX_OVER_ETA_TURB = 0.4 / 0.8
 
+    # Mass model: fixed packaging + proportional to matrix area
     KG_HEX_FIXED = 6  # kg of hex per kg/s of air
     ALPHA_HEX_KG = 0.7  # kg of hex packaging per kg of matrix
 
@@ -70,7 +73,7 @@ elif case == "Brewer":
         Tc_in=264,  # K
         Pc_in=16.8e5,  # Pa (7.2 bar)
     )
-    # Geometry
+    # Geometry: ratios and dimensions defining the HX core
     LS_OVER_DH = 60.0  # Strip length to hydraulic diameter ratio
     T_OVER_DHC = 0.06  # t/d_h_c = 0.02 (85 micron t over 4 mm walls)
     SIGMA_R = 250.0  # Ratio of free flow areas (Ao_h/Ao_c)
@@ -80,6 +83,7 @@ elif case == "Brewer":
     RHO_WALL_T = 8000 * T_OVER_DHC * D_H_C  # kg/m³, wall material density * thickness -> weight per m² of wall
     MASS_ENGINE = 6000  # kg, mass of the engine from TUM paper
 
+    # Mission and fuel accounting used to convert work potential to fuel saved
     MISSION_HOURS = 10
     LHV_KWH_PER_KG_FUEL = 120 / 3.6
     FUEL_PER_HEAT = MISSION_HOURS / LHV_KWH_PER_KG_FUEL
@@ -88,6 +92,7 @@ elif case == "Brewer":
     ETA_OV_RECUP_MAX_OVER_ETA_TURB = 0.4 / 0.88
     A_fr_start = 10.0
 
+    # Mass model: fixed packaging + proportional to matrix area
     KG_HEX_FIXED = 0.2  # kg of hex per kg/s of air
     ALPHA_HEX_KG = 0.9  # kg of hex packaging per kg of matrix
     DP_MAX = 0.1
@@ -96,6 +101,7 @@ elif case == "Brewer":
     AQ_BASELINE = 15.0 * scale_everything  # m², baseline total heat transfer area (Ah + Ac)
 
 
+# Heat capacity rate and maximum possible heat transfer
 Cmin = min(
     F_IN.m_dot_hot * F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).cp,
     F_IN.m_dot_cold * F_IN.cold.state(T=F_IN.Tc_in, P=F_IN.Pc_in).cp,
@@ -106,9 +112,7 @@ Q_max = Cmin * (F_IN.Th_in - F_IN.Tc_in)
 TD = 300  # K
 PD = 1e5  # Pa
 
-# Geometry parameters
-
-
+# Output containers for the Aq/Afr sweep
 results_euergy = []
 results_exergy = []
 A_fr_list = []
@@ -116,6 +120,9 @@ Aq_list = []
 # endregion
 
 # plotting options
+# - PLOT_EUERGY_NOT_EXERGY: choose objective for contour plot
+# - PLOT_BOTH_PER_AQ: if True, plot 1D slices vs Aq instead of 2D contour
+# - PLOT_DIMENSIONAL: switch to dimensional axes on contour plot
 PLOT_EUERGY_NOT_EXERGY = True
 PLOT_BOTH_PER_AQ = True  # false for fig 6 and true for fig 7
 PLOT_DIMENSIONAL = False
@@ -124,6 +131,7 @@ PLOT_DIMENSIONAL = False
 A_FR_OVER_AO_H = SIGMA_R * A_FR_OVER_AO_C
 
 
+# Sweep range for total heat transfer area (Aq)
 if PLOT_EUERGY_NOT_EXERGY:
     Afr_start = A_fr_start * scale_everything
     if case == "Heli":
@@ -133,12 +141,14 @@ if PLOT_EUERGY_NOT_EXERGY:
 else:
     Afr_start = A_fr_start * scale_everything
     Aq_sweep = np.linspace(2, 100, 50) * scale_everything
+# Geometric conversion from frontal area to hot-side flow area
 AOH_OVER_AFR_RATIO = SIGMA_R / A_FR_OVER_AO_C
 Ao_h_start = Afr_start * AOH_OVER_AFR_RATIO
 RHO_IN_HOT = F_IN.hot.state(T=F_IN.Th_in, P=F_IN.Ph_in).rho
 g_in2_start = (F_IN.m_dot_hot / Ao_h_start) ** 2 / F_IN.Ph_in / RHO_IN_HOT
 
 
+# Iterative search controls: shrink A_fr progressively to explore constraints
 A_fr_decrease_ratio_start = 0.999
 
 
@@ -150,6 +160,7 @@ for Aq in Aq_sweep:
     A_fr_decrease_ratio = A_fr_decrease_ratio_start
     it = 0
     while it < 10:
+        # Compute performance for a given (A_fr, A_q)
         r_s = rate_hex_simple(
             A_fr=A_fr,
             A_q=Aq,
@@ -161,10 +172,11 @@ for Aq in Aq_sweep:
             ls_over_dh=LS_OVER_DH,
         )
 
+        # Reject designs that exceed pressure drop limits or are non-physical
         if r_s["dp_hot"] > DP_MAX or r_s["dp_cold"] > DP_MAX or r_s["dp_hot"] < 0:
             break
         else:
-            # r_s["eps"]
+            # Store normalized work potential metrics for post-processing
             results_euergy.append(-r_s["dW_pot_Eu_norm"])
             results_exergy.append(-r_s["dW_pot_Ex_norm"])
             A_fr_list.append(A_fr)
@@ -173,6 +185,7 @@ for Aq in Aq_sweep:
             A_fr = A_fr * A_fr_decrease_ratio
             it += 1
         else:
+            # Reduce ratio and continue searching smaller frontal areas
             it = 0
             A_fr_decrease_ratio = A_fr_decrease_ratio * A_fr_decrease_ratio_start
             A_fr = A_fr * A_fr_decrease_ratio
@@ -193,16 +206,14 @@ if len(results_euergy) > 0:
     Xi, Yi = np.meshgrid(xi, yi)
 
     # Interpolate scattered data to grid
-
     Zi_euergy = griddata((Aq_array, Afr_array), euergy_array, (Xi, Yi), method="linear")
     Zi_exergy = griddata((Aq_array, Afr_array), exergy_array, (Xi, Yi), method="linear")
 
-    # For each Aq value find best A_fr
+    # For each Aq value, find the optimal A_fr (max euergy)
     max_euergy_creation_for_Aq = np.nanmax(Zi_euergy, axis=0)
     idx_max_euergy_creation = np.nanargmax(Zi_euergy, axis=0)  # For each column (Aq value), row index of max
     y_at_max_euergy_creation = yi[idx_max_euergy_creation]  # yi is the array of A_fr (y axis)
-    # Plot the (Aq, A_fr) where max occurs as a red line
-
+    # For each A_fr value, find the optimal Aq (max euergy)
     max_euergy_creation_for_Afr = np.nanmax(Zi_euergy, axis=1)
     idx_max_euergy_creation_for_Afr = np.nanargmax(Zi_euergy, axis=1)  # For each row (A_fr value), column index of max
     x_at_max_euergy_creation_for_Afr = xi[idx_max_euergy_creation_for_Afr]  # xi corresponds to A_q (x axis)
@@ -212,10 +223,11 @@ if len(results_euergy) > 0:
 
     print(f"For Area {xi[0]:.2f} m² and mass of {xi[0] * RHO_WALL_T:.2f} kg, opt{A_fr_opt_min:.2f} m2 frontal area")
 
+    # Exergy-optimal A_fr for each Aq (max of Zi_exergy)
     min_exergy_destr_for_Aq = np.nanmax(Zi_exergy, axis=0)
     idx_min_exergy_destr = np.nanargmax(Zi_exergy, axis=0)  # For each column (Aq value), row index of min
     y_at_min_exergy_destr = yi[idx_min_exergy_destr]  # yi is the array of A_fr (y axis)
-    # Filter out points where y >= threshold by masking the y-values (not the indices)
+    # Filter out points where A_fr hits the search boundary
     afr_threshold = Afr_start * A_fr_decrease_ratio_start**2
     mask_exergy = y_at_min_exergy_destr >= afr_threshold
     y_at_min_exergy_destr_filtered = y_at_min_exergy_destr.copy()
@@ -281,7 +293,7 @@ if len(results_euergy) > 0:
             # Extract euergy values at fixed A_fr (horizontal slice through Zi_euergy)
             euergy_at_fixed_afr = Zi_euergy[idx_closest_afr, :]  # Row corresponds to fixed A_fr, columns are Aq values
 
-            # Calculate x values
+            # Calculate x values (total HX mass per air mass flow)
             x_plot = xi * dimensionalisation_x * (1 + ALPHA_HEX_KG) + KG_HEX_FIXED
 
             # Calculate y values for both lines
@@ -385,7 +397,6 @@ if len(results_euergy) > 0:
 
         # Add optimal (maximum) results/Zi for each individual Aq value
         # For each column in Xi (corresponding to fixed Aq), find the max(Zi) and its index, ignoring nans
-
         if PLOT_EUERGY_NOT_EXERGY:
             plt.title("Contour plot of Euergy creation / Q_max vs Aq and A_fr")
 
@@ -431,6 +442,7 @@ if len(results_euergy) > 0:
     plt.tight_layout()
     plt.show()
 
+# Quick consistency check at the minimum-A_fr point for the first Aq
 r_s = rate_hex_simple(
     A_fr=A_fr_opt_min,
     A_q=Aq_sweep[0],
@@ -447,6 +459,7 @@ print(
 )
 
 
+# Correlation sanity check (j/f ratio and single-stream cutoff)
 j_hot = general_hex_j_factor(r_s["re_hot"], LS_OVER_DH)
 f_hot = general_hex_friction_factor(r_s["re_hot"], LS_OVER_DH)
 j_cold = general_hex_j_factor(r_s["re_cold"], LS_OVER_DH)
