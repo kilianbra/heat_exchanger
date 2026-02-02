@@ -120,7 +120,7 @@ Aq_list = []
 # endregion
 
 # plotting options
-# - PLOT_EUERGY_NOT_EXERGY: choose objective for contour plot
+# - PLOT_EUERGY_NOT_EXERGY: choose objective for which to select best and output chosen
 # - PLOT_BOTH_PER_AQ: if True, plot 1D slices vs Aq instead of 2D contour
 # - PLOT_DIMENSIONAL: switch to dimensional axes on contour plot
 PLOT_EUERGY_NOT_EXERGY = True
