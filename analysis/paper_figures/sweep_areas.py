@@ -72,9 +72,7 @@ def get_case_config(case: str) -> dict:
 
     elif case == "Brewer":
         fluid_cold = PerfectGasFluid.from_name("para_h2")
-        fluid_hot = PerfectGasFluid(
-            M=27.5, S=150.0, T_ref=350.0, mu_ref=1.12e-5, gamma=1.37, Pr=0.74, cp=1170.0
-        )
+        fluid_hot = PerfectGasFluid(M=27.5, S=150.0, T_ref=350.0, mu_ref=1.12e-5, gamma=1.37, Pr=0.74, cp=1170.0)
 
         f_in = FluidInputs(
             hot=fluid_hot,
@@ -183,16 +181,18 @@ def run_sweep(case: str) -> pd.DataFrame:
             if r_s["dp_hot"] > cfg["dp_max"] or r_s["dp_cold"] > cfg["dp_max"] or r_s["dp_hot"] < 0:
                 break
 
-            results.append({
-                "case": case,
-                "A_q": aq,
-                "A_fr": a_fr,
-                "euergy": -r_s["dW_pot_Eu_norm"],
-                "exergy": -r_s["dW_pot_Ex_norm"],
-                "dp_hot": r_s["dp_hot"],
-                "dp_cold": r_s["dp_cold"],
-                "effectiveness": r_s.get("effectiveness", np.nan),
-            })
+            results.append(
+                {
+                    "case": case,
+                    "A_q": aq,
+                    "A_fr": a_fr,
+                    "euergy": -r_s["dW_pot_Eu_norm"],
+                    "exergy": -r_s["dW_pot_Ex_norm"],
+                    "dp_hot": r_s["dp_hot"],
+                    "dp_cold": r_s["dp_cold"],
+                    "effectiveness": r_s.get("effectiveness", np.nan),
+                }
+            )
 
             if it < 9:
                 a_fr = a_fr * a_fr_decrease_ratio
@@ -327,7 +327,7 @@ def plot_delta_m_to(df: pd.DataFrame, case: str):
     max_euergy_for_aq = np.nanmax(Zi_euergy, axis=0)
 
     # X-axis: total HEx mass per unit mass flow (kg/(kg/s))
-     
+
     m_hex = area_q * cfg["rho_wall_t"] * (1 + cfg["alpha_hex_kg"]) + cfg["kg_hex_fixed"]
 
     # Fuel saved per unit mass flow (kg/(kg/s))
@@ -350,7 +350,7 @@ def plot_delta_m_to(df: pd.DataFrame, case: str):
     m_fuel_saved_recup_max = (
         max_euergy_for_aq
         * derived["q_max"]
-        / cfg[" "]
+        / cfg["eta_ov_recup_max_over_eta_turb"]
         * derived["fuel_per_heat"]
         / 1000
         / f_in.m_dot_hot
@@ -383,13 +383,19 @@ def plot_delta_m_to(df: pd.DataFrame, case: str):
         plt.scatter(
             m_hex[idx_opt_base] / f_in.m_dot_hot,
             delta_m_to_over_mdot[idx_opt_base],
-            color="r", s=80, zorder=5, marker="o"
+            color="r",
+            s=80,
+            zorder=5,
+            marker="o",
         )
     if not np.isnan(delta_m_to_recup_max[idx_opt_recup]):
         plt.scatter(
             m_hex[idx_opt_recup] / f_in.m_dot_hot,
             delta_m_to_recup_max[idx_opt_recup],
-            color="k", s=80, zorder=5, marker="o"
+            color="k",
+            s=80,
+            zorder=5,
+            marker="o",
         )
 
     plt.legend()
