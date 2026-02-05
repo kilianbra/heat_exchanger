@@ -1,8 +1,9 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 from matplotlib.widgets import RadioButtons, Slider
-import os
 
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 
@@ -547,12 +548,12 @@ def create_plot(
 
     elif framework == "classical":
         # Plot classical metric for each g^2 value
-        linestyles = ["-.", "--", "-"]
-        colors_list = ["r", "b", "k"]
+        linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+        dark_blue = "k"  # Dark blue color from Fig 3
         line_list = []
         all_classical_metrics = []
 
-        for i, g2_val in enumerate(g2_values):
+        for i, g2_val in enumerate(reversed(g2_values)):
             # Calculate for this g^2 value
             ntu_g2, eps_g2, dp_hot_g2, dp_cold_g2, validity_mask_g2 = calculate_epsilon_ntu_curve(
                 c_cold_over_c_hot,
@@ -569,14 +570,13 @@ def create_plot(
             )
             all_classical_metrics.append(classical_metric_g2)
 
-            # Plot with different linestyle/color for each g^2
-            linestyle_idx = i % len(linestyles)
-            color_idx = i % len(colors_list)
+            # Plot with different linestyle for each g^2 (all dark blue)
+            linestyle_idx = (len(g2_values) - 1 - i) % len(linestyles)
             label = rf"$g^2$ = {g2_val:.0e}"
             line = ax.plot(
                 ntu_g2[validity_mask_g2],
                 classical_metric_g2,
-                color=colors_list[color_idx],
+                color=dark_blue,
                 linestyle=linestyles[linestyle_idx],
                 label=label,
                 zorder=3,
@@ -606,12 +606,12 @@ def create_plot(
 
     elif framework == "practical":
         # Plot practical metric for each g^2 value
-        linestyles = ["-.", "--", "-"]
-        colors_list = ["r", "b", "k"]
+        linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+        dark_blue = "k"  # black
         line_list = []
         all_metrics = []
 
-        for i, g2_val in enumerate(g2_values):
+        for i, g2_val in enumerate(reversed(g2_values)):
             # Calculate for this g^2 value
             ntu_g2, eps_g2, dp_hot_g2, dp_cold_g2, validity_mask_g2 = calculate_epsilon_ntu_curve(
                 c_cold_over_c_hot,
@@ -635,14 +635,13 @@ def create_plot(
             )
             all_metrics.append(practical_metric_g2)
 
-            # Plot with different linestyle/color for each g^2
-            linestyle_idx = i % len(linestyles)
-            color_idx = i % len(colors_list)
+            # Plot with different linestyle for each g^2 (all dark blue)
+            linestyle_idx = (len(g2_values) - 1 - i) % len(linestyles)
             label = rf"$g^2$ = {g2_val:.0e}"
             line = ax.plot(
                 ntu_g2[validity_mask_g2],
                 practical_metric_g2,
-                color=colors_list[color_idx],
+                color=dark_blue,
                 linestyle=linestyles[linestyle_idx],
                 label=label,
                 zorder=3,
