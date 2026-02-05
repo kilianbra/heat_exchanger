@@ -238,7 +238,7 @@ def create_plot(
                 c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_val, ntu_max=ntu_max, dp_max=dp_max
             )
             linestyle_idx = len(g2_values) - 1 - i  # Reverse linestyle order too
-            label = rf"hot $\Delta p/p_{{\mathrm{{in}}}}$ ($g^2$ = {g2_val:.0e})"
+            label = rf"$g^2$ = {g2_val:.0e}"
             line_dp = ax_twin.plot(
                 ntu_dp[validity_mask_dp],
                 dp_over_p_in_hot[validity_mask_dp] * 100,
@@ -382,10 +382,10 @@ if __name__ == "__main__":
     import sys
 
     # Boolean to control triple g^2 mode (True = three lines, False = single line)
-    PLOT_TRIPLE_G2 = False
+    PLOT_TRIPLE_G2 = True
 
     # Check if we should use sliders or save figures
-    use_sliders = False
+    use_sliders = True
     if len(sys.argv) > 1 and sys.argv[1] == "save":
         use_sliders = False
 
