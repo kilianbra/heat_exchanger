@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
-from matplotlib.widgets import Button, Slider
+from matplotlib.widgets import RadioButtons, Slider
 import os
 
 from heat_exchanger.epsilon_ntu import epsilon_ntu
@@ -74,7 +74,7 @@ C_COLD_OVER_C_HOT_RANGE = (0.1, 10.0)  # Will use exponential slider
 ST_OVER_F_RANGE = (0.2, 0.5)
 F_C_OVER_F_H_RANGE = (0.1, 10.0)  # Will use exponential slider
 D_R_RANGE = (0.1, 10.0)  # Will use exponential slider
-G2_H_RANGE = (1e-5, 5e-3)  # Will use exponential slider
+G2_H_RANGE = (1e-5, 8e-2)  # Will use exponential slider
 
 # NTU sweep range
 NTU_SWEEP = np.linspace(0.1, 15, 200)
@@ -101,6 +101,181 @@ def calculate_capacity_ratios(c_cold_over_c_hot):
         C_min_over_C_cold = C_hot_over_C_cold  # C_hot/C_cold
 
     return C_min_over_C_hot, C_min_over_C_cold, C_hot_over_C_cold
+
+
+def calculate_temperature_ratio(eps, t, hot_fluid=True):
+    """
+    Calculate the outlet/inlet temperature ratio for a given effectiveness and temperature ratio.
+
+    Parameters:
+    -----------
+    eps : float
+        Heat exchanger effectiveness
+    t : float
+        Temperature ratio T_h_in/T_c_in
+    hot_fluid : bool
+        Whether this is for the hot fluid (True) or cold fluid (False)
+
+    Returns:
+    --------
+    float
+        Temperature ratio T_out/T_in
+    """
+    if hot_fluid:
+        return 1 - eps * (1 - 1 / t)
+    else:
+        return 1 + eps * (t - 1)
+
+
+def classical_unavailable_creation_hex(
+    epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask, t_dead_over_t_cold_in=1.0, gamma=1.4
+):
+    """
+    Calculate entropy generation normalized by mass flow rate and specific heat capacity.
+
+    This function implements the classical thermodynamic framework for evaluating heat exchanger
+    performance based on entropy generation. It assumes ideal gas behavior, equal mass flow rates
+    and specific heat capacities for both fluids, and no change in kinetic energy.
+
+    Parameters:
+    -----------
+    epsilon : array_like
+        Heat exchanger effectiveness values
+    t : float
+        Temperature ratio T_hot_in / T_cold_in
+    dp_over_p_in_hot : array_like
+        Hot side pressure drop as fraction of inlet pressure
+    dp_over_p_in_cold : array_like
+        Cold side pressure drop as fraction of inlet pressure
+    validity_mask : array_like, bool
+        Boolean mask indicating valid pressure drop points (dp < dp_max)
+    t_dead_over_t_cold_in : float, optional
+        Dead state temperature normalized by cold inlet temperature. Default is 1.0.
+        This is a significant assumption in the classical framework.
+    gamma : float, optional
+        Specific heat ratio (cp/cv). Default is 1.4 for air.
+
+    Returns:
+    --------
+    array_like
+        Classical unavailable energy creation normalized by Q_max.
+        This represents the entropy generation times dead state temperature,
+        normalized by the maximum possible heat transfer rate.
+    """
+    gm1og = (gamma - 1) / gamma
+
+    # Calculate temperature ratios
+    t_hot_out_over_t_hot_in = calculate_temperature_ratio(epsilon, t, hot_fluid=True)
+    t_cold_out_over_t_cold_in = calculate_temperature_ratio(epsilon, t, hot_fluid=False)
+
+    # Calculate pressure ratios
+    p_hot_out_over_p_hot_in = 1 - dp_over_p_in_hot
+    p_cold_out_over_p_cold_in = 1 - dp_over_p_in_cold
+
+    # Entropy generation per unit mass flow and specific heat
+    # For ideal gas: s_gen/(mdot*cp) = ln(T_out/T_in) - (gamma-1)/gamma * ln(p_out/p_in)
+    s_gen_over_mdot_cp = (
+        np.log(t_hot_out_over_t_hot_in[validity_mask])
+        + np.log(t_cold_out_over_t_cold_in[validity_mask])
+        - gm1og * (np.log(p_hot_out_over_p_hot_in[validity_mask]) + np.log(p_cold_out_over_p_cold_in[validity_mask]))
+    )
+
+    # Classical unavailable energy creation normalized by Q_max
+    # Q_max = C_min * (T_hot_in - T_cold_in) = mdot*cp * (T_hot_in - T_cold_in) for equal capacities
+    # Normalization factor: 1/(t-1) = T_cold_in / (T_hot_in - T_cold_in)
+    classical_unavailable_creation = s_gen_over_mdot_cp * t_dead_over_t_cold_in / (t - 1)
+
+    return classical_unavailable_creation
+
+
+def practical_unavailable_creation_hex(
+    epsilon,
+    t,
+    dp_over_p_in_hot,
+    dp_over_p_in_cold,
+    validity_mask,
+    p_cold_in_over_p_hot_in=1.0,
+    p_dead_over_p_hot_in=1.0,
+    gamma=1.4,
+):
+    """
+    Calculate work potential change normalized by maximum heat transfer rate.
+
+    This function implements the practical framework for evaluating heat exchanger performance
+    based on work potential relative to a dead state. It assumes perfect gas behavior (constant cp)
+    and that performance depends only on inlet and outlet temperatures and pressures. No change in
+    kinetic energy is assumed when calculating static temperatures from effectiveness.
+
+    Parameters:
+    -----------
+    epsilon : array_like
+        Heat exchanger effectiveness values
+    t : float
+        Temperature ratio T_hot_in / T_cold_in
+    dp_over_p_in_hot : array_like
+        Hot side pressure drop as fraction of inlet pressure
+    dp_over_p_in_cold : array_like
+        Cold side pressure drop as fraction of inlet pressure
+    validity_mask : array_like, bool
+        Boolean mask indicating valid pressure drop points (dp < dp_max)
+    p_cold_in_over_p_hot_in : float, optional
+        Cold inlet pressure normalized by hot inlet pressure. Default is 1.0.
+    p_dead_over_p_hot_in : float, optional
+        Dead state pressure normalized by hot inlet pressure. Default is 1.0.
+    gamma : float, optional
+        Specific heat ratio (cp/cv). Default is 1.4 for air.
+
+    Returns:
+    --------
+    array_like
+        Practical work potential change normalized by Q_max.
+        Negative values indicate work potential destruction (irreversibility).
+        Positive values indicate work potential creation (as in recuperation).
+    """
+    gm1og = (gamma - 1) / gamma
+
+    # Calculate temperature ratios
+    t_hot_out_over_t_hot_in = calculate_temperature_ratio(epsilon, t, hot_fluid=True)
+    t_cold_out_over_t_cold_in = calculate_temperature_ratio(epsilon, t, hot_fluid=False)
+
+    # Calculate pressure ratios
+    p_hot_out_over_p_hot_in = 1 - dp_over_p_in_hot
+    p_cold_out_over_p_cold_in = 1 - dp_over_p_in_cold
+
+    # Apply validity mask BEFORE power operations to avoid invalid values
+    # Only calculate for valid pressure drop points
+    p_hot_out_over_p_hot_in_valid = p_hot_out_over_p_hot_in[validity_mask]
+    p_cold_out_over_p_cold_in_valid = p_cold_out_over_p_cold_in[validity_mask]
+    t_hot_out_over_t_hot_in_valid = t_hot_out_over_t_hot_in[validity_mask]
+    t_cold_out_over_t_cold_in_valid = t_cold_out_over_t_cold_in[validity_mask]
+
+    # Pressure ratio for cold side relative to dead state
+    p_cold_in_over_p_dead = p_cold_in_over_p_hot_in / p_dead_over_p_hot_in
+
+    # Hot side work potential contribution (only for valid points)
+    # Dimensionalized by mdot*cp*T_dead, normalized by Q_max
+    # Q_max = C_min * (T_hot_in - T_cold_in) = mdot*cp * (T_hot_in - T_cold_in) for equal capacities
+    # Normalization: 1/(1-1/t) = T_hot_in / (T_hot_in - T_cold_in) for hot side
+    work_pot_hot = (
+        (p_dead_over_p_hot_in) ** gm1og
+        * 1
+        / (1 - 1 / t)
+        * (t_hot_out_over_t_hot_in_valid * (1 / p_hot_out_over_p_hot_in_valid) ** gm1og - 1)
+    )
+
+    # Cold side work potential contribution (only for valid points)
+    # Normalization: 1/(t-1) = T_cold_in / (T_hot_in - T_cold_in) for cold side
+    work_pot_cold = (
+        (1 / p_cold_in_over_p_dead) ** gm1og
+        * 1
+        / (t - 1)
+        * (t_cold_out_over_t_cold_in_valid * (1 / p_cold_out_over_p_cold_in_valid) ** gm1og - 1)
+    )
+
+    # Total work potential change (already masked)
+    practical_unavailable_creation = work_pot_hot + work_pot_cold
+
+    return practical_unavailable_creation
 
 
 def calculate_epsilon_ntu_curve(
@@ -166,10 +341,15 @@ def calculate_epsilon_ntu_curve(
     # Pressure drop varies linearly with NTU
     dp_over_p_in_hot_array = dp_coeff * ntu_array
 
-    # Create validity mask: stop when dp/p_in >= dp_max
-    validity_mask = dp_over_p_in_hot_array < dp_max
+    # Calculate cold side pressure drop coefficient
+    # Cold side contribution: g2_h * (1/f_c_over_f_h * 1/st_over_f_c * d_r * C_min/C_cold)
+    dp_coeff_cold = g2_h * (1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold)
+    dp_over_p_in_cold_array = dp_coeff_cold * ntu_array
 
-    return ntu_array, epsilon, dp_over_p_in_hot_array, validity_mask
+    # Create validity mask: stop when dp/p_in >= dp_max for either side
+    validity_mask = (dp_over_p_in_hot_array < dp_max) & (dp_over_p_in_cold_array < dp_max)
+
+    return ntu_array, epsilon, dp_over_p_in_hot_array, dp_over_p_in_cold_array, validity_mask
 
 
 def create_plot(
@@ -182,27 +362,41 @@ def create_plot(
     dp_max=0.2,
     ax=None,
     ax_twin=None,
-    plot_triple_g2=False,
+    plot_triple_g2=None,
+    framework="agnostic",
+    t=2.0,
+    t_dead_over_t_cold_in=1.0,
+    p_cold_in_over_p_hot_in=1.0,
+    p_dead_over_p_hot_in=1.0,
+    gamma=1.4,
 ):
     """
     Create or update the plot with given parameters.
 
     Parameters:
-        plot_triple_g2: If True, plot three g^2 values (1e-5, 2e-5, 5e-5) instead of single g2_h
+        plot_triple_g2: If False/None, use single g2_h value. If True, use default [1e-5, 2e-5, 5e-5].
+                        If a list/array, use those g^2 values for plotting multiple lines.
+        framework: Framework to use for right axis. Options: "agnostic" (pressure drop),
+                   "classical" (entropy generation), "practical" (work potential).
+        t: Temperature ratio T_hot_in / T_cold_in. Default 2.0.
+        t_dead_over_t_cold_in: Dead state temperature normalized by cold inlet temperature. Default 1.0.
+        p_cold_in_over_p_hot_in: Cold inlet pressure normalized by hot inlet pressure. Default 1.0.
+        p_dead_over_p_hot_in: Dead state pressure normalized by hot inlet pressure. Default 1.0.
+        gamma: Specific heat ratio. Default 1.4.
 
     Returns:
         line_eps: Line object for epsilon curve
-        line_dp: Line object(s) for pressure drop curve(s) - list if triple mode, single if not
+        line_dp: Line object(s) for right axis curve(s) - list if multiple g2 values, single if not
     """
-    if plot_triple_g2:
-        # Use three g^2 values: 1e-5, 2e-5, 5e-5
-        g2_values = [1e-5, 2e-5, 5e-5]
-    else:
+    if plot_triple_g2 is None or plot_triple_g2 is False:
         # Use single g^2 value
         g2_values = [g2_h]
+    else:
+        # plot_triple_g2 is a list/array of g^2 values
+        g2_values = list(plot_triple_g2)
 
-    # Calculate epsilon (same for all g^2 values)
-    ntu, epsilon, _, validity_mask = calculate_epsilon_ntu_curve(
+    # Calculate epsilon and pressure drops (same for all g^2 values)
+    ntu, epsilon, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask = calculate_epsilon_ntu_curve(
         c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_values[0], ntu_max=ntu_max, dp_max=dp_max
     )
 
@@ -215,104 +409,251 @@ def create_plot(
     ax.clear()
     ax_twin.clear()
 
-    # Plot epsilon on left axis (only valid points)
-    eps_label = r"$\varepsilon$ (all)" if plot_triple_g2 else r"$\varepsilon$"
-    line_eps = ax.plot(ntu[validity_mask], epsilon[validity_mask], "-", label=eps_label, color="black", zorder=3)[0]
-    ax.set_ylim(0, 1)
-    ax.set_xlabel("NTU [-]")
-    ax.set_ylabel(r"$\varepsilon$ [%]")
-    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
-    # Always fix NTU max at 15
-    ax.set_xlim(0, 15)
+    # Check if we're plotting multiple g2 values
+    is_multiple_g2 = len(g2_values) > 1
 
-    # Plot pressure drop lines
+    # Calculate right axis metric based on framework
     line_dp_list = []
     dark_blue = "b"  # Dark blue color from Fig 3
 
-    if plot_triple_g2:
-        # Plot three lines: lowest g^2 (dotted), middle (dashed), highest (dot-dashed)
-        # Order: highest g^2 first (for legend ordering)
-        linestyles = ["-.", "--", ":"]
-        for i, g2_val in enumerate(reversed(g2_values)):  # Reverse to plot highest first
-            ntu_dp, _, dp_over_p_in_hot, validity_mask_dp = calculate_epsilon_ntu_curve(
-                c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_val, ntu_max=ntu_max, dp_max=dp_max
-            )
-            linestyle_idx = len(g2_values) - 1 - i  # Reverse linestyle order too
-            label = rf"$g^2$ = {g2_val:.0e}"
+    if framework == "agnostic":
+        # Make sure twin axis is visible for agnostic framework
+        ax_twin.set_visible(True)
+        # Plot epsilon on left axis (only valid points)
+        eps_label = r"$\varepsilon$ (all)" if is_multiple_g2 else r"$\varepsilon$"
+        line_eps = ax.plot(ntu[validity_mask], epsilon[validity_mask], "-", label=eps_label, color="black", zorder=3)[0]
+        ax.set_ylim(0, 1)
+        ax.set_xlabel("NTU [-]")
+        ax.set_ylabel(r"$\varepsilon$ [%]")
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+        # Always fix NTU max at 15
+        ax.set_xlim(0, 15)
+        # Plot pressure drop
+        if is_multiple_g2:
+            linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+            for i, g2_val in enumerate(reversed(g2_values)):
+                ntu_dp, _, dp_hot_dp, _, validity_mask_dp = calculate_epsilon_ntu_curve(
+                    c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_val, ntu_max=ntu_max, dp_max=dp_max
+                )
+                linestyle_idx = (len(g2_values) - 1 - i) % len(linestyles)
+                label = rf"$g^2$ = {g2_val:.0e}"
+                line_dp = ax_twin.plot(
+                    ntu_dp[validity_mask_dp],
+                    dp_hot_dp[validity_mask_dp],  # Plot as fraction (0-0.2), PercentFormatter converts to %
+                    color=dark_blue,
+                    linestyle=linestyles[linestyle_idx],
+                    label=label,
+                    zorder=1,
+                )[0]
+                line_dp_list.append(line_dp)
+            ylabel = r"hot $\Delta p/p_{\mathrm{in}}$ (%)"
+            ylim_max = dp_max  # Keep as fraction (0.2), PercentFormatter will show as 20%
+            axis_color = dark_blue
+        else:
             line_dp = ax_twin.plot(
-                ntu_dp[validity_mask_dp],
-                dp_over_p_in_hot[validity_mask_dp] * 100,
-                color=dark_blue,
-                linestyle=linestyles[linestyle_idx],
-                label=label,
+                ntu[validity_mask],
+                dp_over_p_in_hot[validity_mask],  # Plot as fraction (0-0.2), PercentFormatter converts to %
+                "r--",
+                label=r"$\Delta p/p_{\mathrm{in}}$",
                 zorder=1,
             )[0]
-            line_dp_list.append(line_dp)
-    else:
-        # Single pressure drop line
-        ntu_dp, _, dp_over_p_in_hot, validity_mask_dp = calculate_epsilon_ntu_curve(
-            c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_h, ntu_max=ntu_max, dp_max=dp_max
+            line_dp_list = [line_dp]
+            ylabel = r"hot $\Delta p/p_{\mathrm{in}}$ (%)"
+            ylim_max = dp_max  # Keep as fraction (0.2), PercentFormatter will show as 20%
+            axis_color = "r"
+
+        ax_twin.set_ylim(0, ylim_max)
+        ax_twin.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
+
+    elif framework == "classical":
+        # Plot classical metric for each g^2 value
+        linestyles = ["-.", "--", "-"]
+        colors_list = ["r", "b", "k"]
+        line_list = []
+        all_classical_metrics = []
+        
+        for i, g2_val in enumerate(g2_values):
+            # Calculate for this g^2 value
+            ntu_g2, eps_g2, dp_hot_g2, dp_cold_g2, validity_mask_g2 = calculate_epsilon_ntu_curve(
+                c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_val, ntu_max=ntu_max, dp_max=dp_max
+            )
+            classical_metric_g2 = classical_unavailable_creation_hex(
+                eps_g2, t, dp_hot_g2, dp_cold_g2, validity_mask_g2, t_dead_over_t_cold_in, gamma
+            )
+            all_classical_metrics.append(classical_metric_g2)
+            
+            # Plot with different linestyle/color for each g^2
+            linestyle_idx = i % len(linestyles)
+            color_idx = i % len(colors_list)
+            label = rf"$g^2$ = {g2_val:.0e}"
+            line = ax.plot(
+                ntu_g2[validity_mask_g2],
+                classical_metric_g2,
+                color=colors_list[color_idx],
+                linestyle=linestyles[linestyle_idx],
+                label=label,
+                zorder=3,
+            )[0]
+            line_list.append(line)
+        
+        line_eps = line_list[0] if len(line_list) > 0 else None
+        ax.set_xlabel("NTU [-]")
+        ax.set_ylabel("Net classical unavailable energy creation [-]")
+        # Always fix NTU max at 15
+        ax.set_xlim(0, 15)
+        # Auto-scale y-axis for classical metric
+        if len(all_classical_metrics) > 0:
+            all_values = np.concatenate([m for m in all_classical_metrics if len(m) > 0])
+            if len(all_values) > 0:
+                ylim_max = np.max(all_values) * 1.1
+                ax.set_ylim(0, max(ylim_max, 0.01))
+            else:
+                ax.set_ylim(0, 0.01)
+        else:
+            ax.set_ylim(0, 0.01)
+        # Hide twin axis
+        ax_twin.set_visible(False)
+        line_dp_list = line_list
+        axis_color = "k"
+        ylabel = "Net classical unavailable energy creation [-]"
+
+    elif framework == "practical":
+        # Plot practical metric for each g^2 value
+        linestyles = ["-.", "--", "-"]
+        colors_list = ["r", "b", "k"]
+        line_list = []
+        all_metrics = []
+        
+        for i, g2_val in enumerate(g2_values):
+            # Calculate for this g^2 value
+            ntu_g2, eps_g2, dp_hot_g2, dp_cold_g2, validity_mask_g2 = calculate_epsilon_ntu_curve(
+                c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_val, ntu_max=ntu_max, dp_max=dp_max
+            )
+            practical_metric_g2 = practical_unavailable_creation_hex(
+                eps_g2,
+                t,
+                dp_hot_g2,
+                dp_cold_g2,
+                validity_mask_g2,
+                p_cold_in_over_p_hot_in,
+                p_dead_over_p_hot_in,
+                gamma,
+            )
+            all_metrics.append(practical_metric_g2)
+            
+            # Plot with different linestyle/color for each g^2
+            linestyle_idx = i % len(linestyles)
+            color_idx = i % len(colors_list)
+            label = rf"$g^2$ = {g2_val:.0e}"
+            line = ax.plot(
+                ntu_g2[validity_mask_g2],
+                practical_metric_g2,
+                color=colors_list[color_idx],
+                linestyle=linestyles[linestyle_idx],
+                label=label,
+                zorder=3,
+            )[0]
+            line_list.append(line)
+        
+        line_eps = line_list[0] if len(line_list) > 0 else None
+        ax.set_xlabel("NTU [-]")
+        ax.set_ylabel("Net practical unavailable energy creation [-]")
+        # Always fix NTU max at 15
+        ax.set_xlim(0, 15)
+        # Auto-scale y-axis for practical metric (only negative values, y_max = 0)
+        if len(all_metrics) > 0:
+            all_values = np.concatenate([m for m in all_metrics if len(m) > 0])
+            if len(all_values) > 0:
+                ylim_min = np.min(all_values) * 1.1
+                ax.set_ylim(ylim_min, 0)
+            else:
+                ax.set_ylim(-0.01, 0)
+        else:
+            ax.set_ylim(-0.01, 0)
+        # Hide twin axis
+        ax_twin.set_visible(False)
+        line_dp_list = line_list
+        axis_color = "k"
+        ylabel = "Net practical unavailable energy creation [-]"
+
+    # Set up axis labels and colors based on framework
+    if framework == "agnostic":
+        # Set ylabel and ensure it's on the right side for twin axis
+        ax_twin.set_ylabel(ylabel)
+        ax_twin.yaxis.set_label_position("right")
+        # Make axis labels, ticks, and tick labels same color
+        ax_twin.spines["right"].set_color(axis_color)
+        ax_twin.yaxis.label.set_color(axis_color)
+        ax_twin.tick_params(axis="y", colors=axis_color)
+        # Combine legend handles and labels
+        handles1, labels1 = ax.get_legend_handles_labels()
+        handles2, labels2 = ax_twin.get_legend_handles_labels()
+        legend = ax.legend(
+            handles1 + handles2,
+            labels1 + labels2,
+            loc="lower right",
+            labelspacing=0.05,
+            edgecolor="black",
+            frameon=True,
+            facecolor="white",
+            framealpha=1.0,
+            fancybox=True,
         )
-        line_dp = ax_twin.plot(
-            ntu_dp[validity_mask_dp],
-            dp_over_p_in_hot[validity_mask_dp] * 100,
-            "r--",
-            label=r"$\Delta p/p_{\mathrm{in}}$",
-            zorder=1,
-        )[0]
-        line_dp_list = [line_dp]
-
-    # Always fix upper bound at 20%
-    ax_twin.set_ylim(0, dp_max)
-    ax_twin.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
-    # Set ylabel and ensure it's on the right side
-    ax_twin.set_ylabel(r"hot $\Delta p/p_{\mathrm{in}}$ (%)")
-    ax_twin.yaxis.set_label_position("right")
-
-    # Make pressure drop axis labels, ticks, and tick labels same color (dark blue if triple, red if single)
-    if plot_triple_g2:
-        ax_twin.spines["right"].set_color(dark_blue)
-        ax_twin.yaxis.label.set_color(dark_blue)
-        ax_twin.tick_params(axis="y", colors=dark_blue)
+        legend.get_frame().set_facecolor("white")
+        legend.get_frame().set_alpha(1.0)
+        legend.get_frame().set_edgecolor("black")
     else:
-        ax_twin.spines["right"].set_color("r")
-        ax_twin.yaxis.label.set_color("r")
-        ax_twin.tick_params(axis="y", colors="r")
+        # For classical and practical, show legend with g^2 labels
+        if len(line_dp_list) > 0:
+            legend = ax.legend(
+                loc="upper right",
+                labelspacing=0.05,
+                edgecolor="black",
+                frameon=True,
+                facecolor="white",
+                framealpha=1.0,
+                fancybox=True,
+            )
+            legend.get_frame().set_facecolor("white")
+            legend.get_frame().set_alpha(1.0)
+            legend.get_frame().set_edgecolor("black")
 
-    # Combine legend handles and labels
-    handles1, labels1 = ax.get_legend_handles_labels()
-    handles2, labels2 = ax_twin.get_legend_handles_labels()
-    legend = ax.legend(
-        handles1 + handles2,
-        labels1 + labels2,
-        loc="lower right",
-        labelspacing=0.05,
-        edgecolor="black",
-        frameon=True,
-        facecolor="white",
-        framealpha=1.0,
-        fancybox=True,
-    )
-    legend.get_frame().set_facecolor("white")
-    legend.get_frame().set_alpha(1.0)
-    legend.get_frame().set_edgecolor("black")
-
-    if plot_triple_g2:
-        return line_eps, line_dp_list, ax, ax_twin
+    if framework == "agnostic":
+        if is_multiple_g2:
+            return line_eps, line_dp_list, ax, ax_twin
+        else:
+            return line_eps, line_dp_list[0], ax, ax_twin
     else:
-        return line_eps, line_dp_list[0], ax, ax_twin
+        # For classical and practical, return list of lines
+        if len(line_dp_list) > 0:
+            return line_dp_list[0], line_dp_list, ax, ax_twin
+        else:
+            return None, None, ax, ax_twin
 
 
-def save_figures(
-    c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, g2_h, dp_max=0.2, base_name="xflow", plot_triple_g2=True
-):
-    """
-    Save figures as SVG, TIFF, and HD PNG for given parameter values.
+if __name__ == "__main__":
+    # Boolean to control triple g^2 mode (True = three lines, False = single line)
+    PLOT_TRIPLE_G2 = None
 
-    Parameters:
-        plot_triple_g2: If True, plot three g^2 values (1e-5, 2e-5, 5e-5) instead of single g2_h
-    """
-    # Set font sizes to match Word (10pt = 10 points)
+    # Framework selection: "agnostic", "classical", "practical"
+    FRAMEWORK = "agnostic"
+    FRAMEWORKS = ["agnostic", "classical", "practical"]
+
+    # Default parameters for framework calculations
+    DEFAULT_T = 2.0  # T_hot_in / T_cold_in
+    DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
+    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0  # p_cold_in / p_hot_in
+    DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1  # p_hot_in / p_dead (slider value)
+    DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD  # p_dead / p_hot_in (for calculations)
+    DEFAULT_GAMMA = 1.4
+
+    # Create figure with space for sliders on the right
+    fig = plt.figure(figsize=(12, 8))
+    ax = plt.subplot(111)
+    ax_twin = ax.twinx()
+    plt.subplots_adjust(right=0.7)  # Make room for sliders on the right
+
+    # Set font sizes
     plt.rcParams.update(
         {
             "font.size": 10,
@@ -325,225 +666,264 @@ def save_figures(
         }
     )
 
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
-    ax = plt.subplot(111)
-    ax_twin = ax.twinx()
+    # Default NTU max fixed at 15
+    DEFAULT_NTU_MAX = 15.0
+    DEFAULT_DP_MAX = 0.2
 
+    # Store framework in a mutable container to allow modification in nested function
+    framework_state = {"value": FRAMEWORK}
+
+    # Initial plot
     create_plot(
-        c_cold_over_c_hot,
-        st_over_f,
-        f_c_over_f_h,
-        d_r,
-        g2_h,
-        ntu_max=15.0,
-        dp_max=dp_max,
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_ST_OVER_F,
+        DEFAULT_F_C_OVER_F_H,
+        DEFAULT_D_R,
+        DEFAULT_G2_H,
+        ntu_max=DEFAULT_NTU_MAX,
+        dp_max=DEFAULT_DP_MAX,
         ax=ax,
         ax_twin=ax_twin,
-        plot_triple_g2=plot_triple_g2,
+        plot_triple_g2=PLOT_TRIPLE_G2,
+        framework=framework_state["value"],
+        t=DEFAULT_T,
+        t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+        p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+        gamma=DEFAULT_GAMMA,
     )
 
-    plt.tight_layout(pad=0.5)
+    # Create sliders on the right side
+    slider_height = 0.03
+    slider_spacing = 0.04
+    start_y = 0.8
+    slider_left = 0.8
+    slider_width = 0.1
+    button_height = 0.04
 
-    # Save as SVG
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.svg"),
-        dpi=300,
-        facecolor="white",
-        format="svg",
-        bbox_inches=None,
-        pad_inches=0,
+    y_pos = start_y
+
+    # Framework radio buttons at the top
+    radio_framework = RadioButtons(
+        plt.axes([slider_left, y_pos, slider_width, button_height * 3]),
+        FRAMEWORKS,
+        active=FRAMEWORKS.index(FRAMEWORK),
     )
+    y_pos -= button_height * 3 + slider_spacing
 
-    # Save as TIFF
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.tiff"),
-        dpi=300,
-        facecolor="white",
-        format="tiff",
-        bbox_inches=None,
-        pad_inches=0,
+    # C_cold/C_hot slider (exponential)
+    slider_c_cold_over_c_hot = ExpSlider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "C_cold/C_hot",
+        C_COLD_OVER_C_HOT_RANGE[0],
+        C_COLD_OVER_C_HOT_RANGE[1],
+        valinit=DEFAULT_C_COLD_OVER_C_HOT,
+        valstep=0.1,
+        valfmt="%.1f",
     )
+    y_pos -= slider_spacing
 
-    # Save as HD PNG
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.png"),
-        dpi=300,
-        facecolor="white",
-        format="png",
-        bbox_inches=None,
-        pad_inches=0,
+    # St_over_f slider (linear)
+    slider_st_over_f = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "St/f",
+        ST_OVER_F_RANGE[0],
+        ST_OVER_F_RANGE[1],
+        valinit=DEFAULT_ST_OVER_F,
+        valfmt="%.2f",
     )
+    y_pos -= slider_spacing
 
-    plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png")
+    # f_c/f_h slider (exponential)
+    slider_f_c_over_f_h = ExpSlider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "f_c/f_h",
+        F_C_OVER_F_H_RANGE[0],
+        F_C_OVER_F_H_RANGE[1],
+        valinit=DEFAULT_F_C_OVER_F_H,
+        valstep=0.01,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
 
+    # d_r slider (exponential)
+    slider_d_r = ExpSlider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "d_r",
+        D_R_RANGE[0],
+        D_R_RANGE[1],
+        valinit=DEFAULT_D_R,
+        valstep=0.01,
+        valfmt="%.2f",
+    )
+    y_pos -= slider_spacing
 
-if __name__ == "__main__":
-    import sys
+    # g2_h slider (exponential)
+    slider_g2_h = ExpSlider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        "g2_h",
+        G2_H_RANGE[0],
+        G2_H_RANGE[1],
+        valinit=DEFAULT_G2_H,
+        valstep=1e-5,
+        valfmt="%.1e",
+    )
+    y_pos -= slider_spacing
 
-    # Boolean to control triple g^2 mode (True = three lines, False = single line)
-    PLOT_TRIPLE_G2 = True
+    # Conditional sliders for framework-specific parameters
+    # Temperature ratio slider (for classical and practical)
+    # Note: matplotlib Slider valfmt only accepts format strings, so we format via label
+    slider_t_hot_over_t_cold = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        r"$T_h$",
+        1.01,
+        3.0,
+        valinit=DEFAULT_T,
+        valstep=0.01,
+        valfmt="%.2f",
+    )
+    # Update the label to show ratio format
+    slider_t_hot_over_t_cold.label.set_text(r"$T_h$ / $T_c$")
+    slider_t_hot_over_t_cold.ax.set_visible(False)  # Hidden by default
+    y_pos -= slider_spacing
 
-    # Check if we should use sliders or save figures
-    use_sliders = True
-    if len(sys.argv) > 1 and sys.argv[1] == "save":
-        use_sliders = False
+    # Dead state temperature slider (for classical and practical)
+    slider_t_dead_over_t_cold = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        r"$T_{dead}$ / $T_c$",
+        1.01,
+        1.3,
+        valinit=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+        valstep=0.01,
+        valfmt="%.2f",
+    )
+    slider_t_dead_over_t_cold.ax.set_visible(False)  # Hidden by default
+    y_pos -= slider_spacing
 
-    if use_sliders:
-        # Create figure with space for sliders on the right
-        fig = plt.figure(figsize=(12, 8))
-        ax = plt.subplot(111)
-        ax_twin = ax.twinx()
-        plt.subplots_adjust(right=0.6)  # Make room for sliders on the right
+    # Cold/hot pressure ratio slider (for practical only)
+    slider_p_cold_over_p_hot = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        r"$p_c$ / $p_h$",
+        5.0,
+        20.0,
+        valinit=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        valstep=0.1,
+        valfmt="%.1f",
+    )
+    slider_p_cold_over_p_hot.ax.set_visible(False)  # Hidden by default
+    y_pos -= slider_spacing
 
-        # Set font sizes
-        plt.rcParams.update(
-            {
-                "font.size": 10,
-                "axes.titlesize": 10,
-                "axes.labelsize": 10,
-                "xtick.labelsize": 10,
-                "ytick.labelsize": 10,
-                "legend.fontsize": 10,
-                "figure.titlesize": 10,
-            }
-        )
+    # Hot/dead pressure ratio slider (for practical only)
+    # Note: Slider represents p_h_in / p_dead, but function needs p_dead / p_h_in
+    # So we'll invert the value when using it
+    slider_p_hot_over_p_dead = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        r"$p_h$ / $p_{dead}$",
+        1.01,
+        1.2,
+        valinit=DEFAULT_P_HOT_IN_OVER_P_DEAD,
+        valstep=0.01,
+        valfmt="%.2f",
+    )
+    slider_p_hot_over_p_dead.ax.set_visible(False)  # Hidden by default
 
-        # Default NTU max fixed at 15
-        DEFAULT_NTU_MAX = 15.0
-        DEFAULT_DP_MAX = 0.2
+    def update_plot(val=None):
+        """Update the plot when any slider changes"""
+        # ExpSlider.val already returns the actual value (no conversion needed)
+        c_cold_over_c_hot = slider_c_cold_over_c_hot.val
+        st_over_f = slider_st_over_f.val
+        f_c_over_f_h = slider_f_c_over_f_h.val
+        d_r = slider_d_r.val
+        g2_h = slider_g2_h.val
+        # NTU max is always fixed at 15
+        ntu_max = DEFAULT_NTU_MAX
 
-        # Initial plot
+        # Get framework-specific parameters from sliders if they exist
+        current_framework = framework_state["value"]
+        t = DEFAULT_T
+        t_dead_over_t_cold_in = DEFAULT_T_DEAD_OVER_T_COLD_IN
+        p_cold_in_over_p_hot_in = DEFAULT_P_COLD_IN_OVER_P_HOT_IN
+        p_dead_over_p_hot_in = DEFAULT_P_DEAD_OVER_P_HOT_IN
+
+        if current_framework in ["classical", "practical"]:
+            if slider_t_hot_over_t_cold is not None:
+                t = slider_t_hot_over_t_cold.val
+            if slider_t_dead_over_t_cold is not None:
+                t_dead_over_t_cold_in = slider_t_dead_over_t_cold.val
+
+        if current_framework == "practical":
+            if slider_p_cold_over_p_hot is not None:
+                p_cold_in_over_p_hot_in = slider_p_cold_over_p_hot.val
+            if slider_p_hot_over_p_dead is not None:
+                # Slider is p_h_in / p_dead, but function needs p_dead / p_h_in
+                p_dead_over_p_hot_in = 1.0 / slider_p_hot_over_p_dead.val
+
+        # Clear and recreate plot with current settings
+        ax.clear()
+        ax_twin.clear()
+
         create_plot(
-            DEFAULT_C_COLD_OVER_C_HOT,
-            DEFAULT_ST_OVER_F,
-            DEFAULT_F_C_OVER_F_H,
-            DEFAULT_D_R,
-            DEFAULT_G2_H,
-            ntu_max=DEFAULT_NTU_MAX,
+            c_cold_over_c_hot,
+            st_over_f,
+            f_c_over_f_h,
+            d_r,
+            g2_h,
+            ntu_max=ntu_max,
             dp_max=DEFAULT_DP_MAX,
             ax=ax,
             ax_twin=ax_twin,
             plot_triple_g2=PLOT_TRIPLE_G2,
+            framework=current_framework,
+            t=t,
+            t_dead_over_t_cold_in=t_dead_over_t_cold_in,
+            p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+            p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+            gamma=DEFAULT_GAMMA,
         )
 
-        # Create sliders on the right side
-        slider_height = 0.03
-        slider_spacing = 0.04
-        start_y = 0.8
-        slider_left = 0.8
-        slider_width = 0.1
+        fig.canvas.draw_idle()
 
-        y_pos = start_y
+    def select_framework(label):
+        """Handle framework selection from radio buttons"""
+        framework_state["value"] = label
+        update_slider_visibility()
+        update_plot()
 
-        # C_cold/C_hot slider (exponential)
-        slider_c_cold_over_c_hot = ExpSlider(
-            plt.axes([slider_left, y_pos, slider_width, slider_height]),
-            "C_cold/C_hot",
-            C_COLD_OVER_C_HOT_RANGE[0],
-            C_COLD_OVER_C_HOT_RANGE[1],
-            valinit=DEFAULT_C_COLD_OVER_C_HOT,
-            valstep=0.01,
-            valfmt="%.2f",
-        )
-        y_pos -= slider_spacing
+    def update_slider_visibility():
+        """Show/hide sliders based on current framework"""
+        current_framework = framework_state["value"]
 
-        # St_over_f slider (linear)
-        slider_st_over_f = Slider(
-            plt.axes([slider_left, y_pos, slider_width, slider_height]),
-            "St/f",
-            ST_OVER_F_RANGE[0],
-            ST_OVER_F_RANGE[1],
-            valinit=DEFAULT_ST_OVER_F,
-            valfmt="%.2f",
-        )
-        y_pos -= slider_spacing
+        # Temperature sliders (for classical and practical)
+        show_temp_sliders = current_framework in ["classical", "practical"]
+        if slider_t_hot_over_t_cold is not None:
+            slider_t_hot_over_t_cold.ax.set_visible(show_temp_sliders)
+        if slider_t_dead_over_t_cold is not None:
+            slider_t_dead_over_t_cold.ax.set_visible(show_temp_sliders)
 
-        # f_c/f_h slider (exponential)
-        slider_f_c_over_f_h = ExpSlider(
-            plt.axes([slider_left, y_pos, slider_width, slider_height]),
-            "f_c/f_h",
-            F_C_OVER_F_H_RANGE[0],
-            F_C_OVER_F_H_RANGE[1],
-            valinit=DEFAULT_F_C_OVER_F_H,
-            valstep=0.01,
-            valfmt="%.2f",
-        )
-        y_pos -= slider_spacing
+        # Pressure sliders (only for practical)
+        show_pressure_sliders = current_framework == "practical"
+        if slider_p_cold_over_p_hot is not None:
+            slider_p_cold_over_p_hot.ax.set_visible(show_pressure_sliders)
+        if slider_p_hot_over_p_dead is not None:
+            slider_p_hot_over_p_dead.ax.set_visible(show_pressure_sliders)
 
-        # d_r slider (exponential)
-        slider_d_r = ExpSlider(
-            plt.axes([slider_left, y_pos, slider_width, slider_height]),
-            "d_r",
-            D_R_RANGE[0],
-            D_R_RANGE[1],
-            valinit=DEFAULT_D_R,
-            valstep=0.01,
-            valfmt="%.2f",
-        )
-        y_pos -= slider_spacing
+    # Connect sliders to update function
+    slider_c_cold_over_c_hot.on_changed(update_plot)
+    slider_st_over_f.on_changed(update_plot)
+    slider_f_c_over_f_h.on_changed(update_plot)
+    slider_d_r.on_changed(update_plot)
+    slider_g2_h.on_changed(update_plot)
 
-        # g2_h slider (exponential)
-        slider_g2_h = ExpSlider(
-            plt.axes([slider_left, y_pos, slider_width, slider_height]),
-            "g2_h",
-            G2_H_RANGE[0],
-            G2_H_RANGE[1],
-            valinit=DEFAULT_G2_H,
-            valstep=1e-5,
-            valfmt="%.3e",
-        )
+    # Connect conditional sliders
+    slider_t_hot_over_t_cold.on_changed(update_plot)
+    slider_t_dead_over_t_cold.on_changed(update_plot)
+    slider_p_cold_over_p_hot.on_changed(update_plot)
+    slider_p_hot_over_p_dead.on_changed(update_plot)
 
-        def update_plot(val=None):
-            """Update the plot when any slider changes"""
-            # ExpSlider.val already returns the actual value (no conversion needed)
-            c_cold_over_c_hot = slider_c_cold_over_c_hot.val
-            st_over_f = slider_st_over_f.val
-            f_c_over_f_h = slider_f_c_over_f_h.val
-            d_r = slider_d_r.val
-            g2_h = slider_g2_h.val
-            # NTU max is always fixed at 15
-            ntu_max = DEFAULT_NTU_MAX
+    # Connect framework radio buttons
+    radio_framework.on_clicked(select_framework)
 
-            # Clear and recreate plot with current settings
-            ax.clear()
-            ax_twin.clear()
+    # Initialize slider visibility
+    update_slider_visibility()
 
-            create_plot(
-                c_cold_over_c_hot,
-                st_over_f,
-                f_c_over_f_h,
-                d_r,
-                g2_h,
-                ntu_max=ntu_max,
-                dp_max=DEFAULT_DP_MAX,
-                ax=ax,
-                ax_twin=ax_twin,
-                plot_triple_g2=PLOT_TRIPLE_G2,
-            )
-
-            fig.canvas.draw_idle()
-
-        # Connect sliders to update function
-        slider_c_cold_over_c_hot.on_changed(update_plot)
-        slider_st_over_f.on_changed(update_plot)
-        slider_f_c_over_f_h.on_changed(update_plot)
-        slider_d_r.on_changed(update_plot)
-        slider_g2_h.on_changed(update_plot)
-
-        plt.show()
-
-    else:
-        # Boolean to control triple g^2 mode (True = three lines, False = single line)
-        PLOT_TRIPLE_G2 = True
-        # Save figures with default values
-        save_figures(
-            DEFAULT_C_COLD_OVER_C_HOT,
-            DEFAULT_ST_OVER_F,
-            DEFAULT_F_C_OVER_F_H,
-            DEFAULT_D_R,
-            DEFAULT_G2_H,
-            dp_max=0.2,
-            base_name="xflow",
-            plot_triple_g2=PLOT_TRIPLE_G2,
-        )
+    plt.show()
