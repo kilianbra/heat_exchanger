@@ -1,6 +1,9 @@
-import matplotlib.pyplot as plt
 import os
-from xflow import create_plot
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.signal import find_peaks
+from xflow import calculate_pressure_drop_ratio, create_plot
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -14,12 +17,24 @@ DEFAULT_G2_H = 1e-5  # g2_h
 DEFAULT_DP_MAX = 0.2
 
 # Three g^2 values for plotting
-PLOT_TRIPLE_G2 = [1e-5, 2e-5, 5e-5]
+PLOT_TRIPLE_G2 = [1e-3, 5e-3, 8e-3]
 
 # Framework-specific parameters for classical
 DEFAULT_T = 2.0  # T_hot_in / T_cold_in
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
 DEFAULT_GAMMA = 1.4
+
+# Pressure drop assumption: "dp_c=dp_h", "dp_c<<dp_h", or "inlet_density"
+# For inlet_density, also need:
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c=dp_h"  # Essential input for accurate cold pressure drop
+if DEFAULT_PRESSURE_DROP_ASSUMPTION == "inlet_density":
+    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0  # p_cold_in / p_hot_in (needed for inlet_density calculation)
+    DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
+    DEFAULT_SIGMA_R = 0.1  # sigma_r (cold/hot)
+else:
+    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = None
+    DEFAULT_MOLAR_MASS_RATIO = None
+    DEFAULT_SIGMA_R = None
 
 
 def save_figures(
@@ -34,6 +49,10 @@ def save_figures(
     t=DEFAULT_T,
     t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
     gamma=DEFAULT_GAMMA,
+    pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
+    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
+    sigma_r=DEFAULT_SIGMA_R,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for classical framework with multiple g^2 values.
@@ -54,11 +73,16 @@ def save_figures(
         }
     )
 
+    # Calculate pressure drop ratio based on assumption
+    pressure_drop_ratio = calculate_pressure_drop_ratio(
+        pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
+    )
+
     fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
     ax_twin = ax.twinx()  # Created but will be hidden for classical framework
 
-    create_plot(
+    _, line_list, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -72,10 +96,49 @@ def save_figures(
         framework="classical",
         t=t,
         t_dead_over_t_cold_in=t_dead_over_t_cold_in,
-        p_cold_in_over_p_hot_in=1.0,
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
         p_dead_over_p_hot_in=1.0,
         gamma=gamma,
+        pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
+
+    # Update ylabel and x-axis formatting
+    ax.set_ylabel(r"HEX $\Delta Q_0/Q_{\mathrm{max}}$")
+    ax.set_xticks([0, 5, 10, 15])
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+    
+    # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
+    legend = ax.get_legend()
+    if legend:
+        legend.remove()
+    # Use line_list order directly - lines are plotted in reversed order (8e-3, 5e-3, 1e-3)
+    if line_list:
+        handles = line_list
+        labels = [line.get_label() for line in line_list]
+        ax.legend(handles, labels, loc="upper right")
+        
+        # Add optimum point markers (minimum after first peak) for each line
+        for line in line_list:
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            # Filter out invalid/masked data
+            valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
+            if np.any(valid_mask):
+                x_plot = x_data[valid_mask]
+                y_plot = y_data[valid_mask]
+                # Find peaks in the data
+                peaks, _ = find_peaks(y_plot)
+                if len(peaks) > 0:
+                    first_peak = peaks[0]
+                    # Find minimum after first peak
+                    y_local_min_idx = first_peak + np.argmin(y_plot[first_peak:])
+                    ax.scatter(
+                        x_plot[y_local_min_idx],
+                        y_plot[y_local_min_idx],
+                        color="black",
+                        marker="o",
+                        zorder=5,
+                    )
 
     plt.tight_layout(pad=0.5)
 
@@ -127,4 +190,8 @@ if __name__ == "__main__":
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         gamma=DEFAULT_GAMMA,
+        pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
+        p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
+        sigma_r=DEFAULT_SIGMA_R,
     )
