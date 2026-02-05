@@ -1,8 +1,9 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 from scipy.interpolate import griddata
-import os
 
 plt.rcParams.update(
     {

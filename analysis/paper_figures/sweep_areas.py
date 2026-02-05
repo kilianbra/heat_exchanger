@@ -11,14 +11,14 @@ Figure 7: Δm_TO / ṁ vs m_hex/ṁ for Helicopter case
 Figure 8: Δm_TO / ṁ vs m_hex/ṁ for Brewer case
 """
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.ticker import PercentFormatter
-from pathlib import Path
 from scipy.interpolate import griddata
 
-from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
@@ -421,7 +421,7 @@ if __name__ == "__main__":
     # Load or generate data
     df = load_or_generate_data()
 
-    print(f"\nData summary:")
+    print("\nData summary:")
     print(f"  Heli points: {len(df[df['case'] == 'Heli'])}")
     print(f"  Brewer points: {len(df[df['case'] == 'Brewer'])}")
 

@@ -1,10 +1,11 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FuncFormatter
 from scipy.signal import find_peaks
 from wp_sliders import calculate_plot
 
-import os
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid

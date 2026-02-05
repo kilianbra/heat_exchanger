@@ -5,8 +5,8 @@ This script uses the same parameters as Q_Pdot_sliders.py but displays all outpu
 from r_s in a comprehensive format, with special attention to high NTU values.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from tabulate import tabulate
 
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
@@ -432,7 +432,7 @@ with open(output_file, "w") as f:
             + "\n"
         )
 
-print(f"Saved!")
+print("Saved!")
 print()
 
 # ============================================================================

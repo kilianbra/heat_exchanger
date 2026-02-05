@@ -6,7 +6,6 @@ from matplotlib.widgets import Button, Slider
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
-
 case = "B"  # "Brewer"
 if case == "Heli":
     # Fluid models (global)

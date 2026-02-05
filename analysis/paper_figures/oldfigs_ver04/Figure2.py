@@ -1,10 +1,12 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
 from heat_exchanger.geometries.general_counterflow import rate_hex_simple
-import os
+
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Fluid models (global)
