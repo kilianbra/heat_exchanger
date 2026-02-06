@@ -189,10 +189,32 @@ def run_sweep_and_plot(
     # Outer loop over Ao/Ao_ref, inner loop over NTU
     # For each Ao, g2_h is modified: g2_h = DEFAULT_G2_H / (Ao/Ao_ref)**2
     # This accounts for the change in heat transfer area
+    # Stop NTU sweep early when pressure drop exceeds dp_max
     xx, yy, zz, ntu_sweep_vals, ao_sweep_vals = [], [], [], [], []
+    
+    # Pre-calculate capacity ratios and pressure drop coefficient components (constant for all points)
+    C_min_over_C_hot, C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
+    st_over_f_h = st_over_f
+    st_over_f_c = st_over_f
+    
     for ao in AO_OVER_AO_REF_VALUES:
+        # Calculate modified g2_h based on Ao
+        g2_h = DEFAULT_G2_H / (ao**2)
+        # Pressure drop coefficient (constant for this Ao)
+        dp_coeff_normal = g2_h * (
+            1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
+        )
+        
         ntu_sweep = np.linspace(0.1, NTU_MAX, NTU_NUM)
         for ntu in ntu_sweep:
+            # Check pressure drop before computing full result
+            dp_hot = dp_coeff_normal * ntu
+            dp_cold = pressure_drop_ratio * dp_hot
+            
+            # Stop if pressure drop exceeds maximum
+            if dp_hot >= dp_max or dp_cold >= dp_max:
+                break
+            
             z = _practical_at_ao_ntu(
                 ao,
                 ntu,
@@ -240,6 +262,7 @@ def run_sweep_and_plot(
         ao_opt_line = ao_opt_line[valid_opt]
         a_over_a_ref_opt_line = a_over_a_ref_opt_line[valid_opt]
         y_opt_line = y_opt_line[valid_opt]
+
     valid = np.isfinite(zz)
     if not np.any(valid):
         print("No valid practical values in sweep.")
@@ -327,7 +350,9 @@ def run_sweep_and_plot(
         # At (A/A_ref=1, Ao/Ao_ref=1) gives g^2_h = DEFAULT_G2_H / (1^2) = DEFAULT_G2_H
         ref_x, ref_y = 1.0, DEFAULT_G2_H
     ax.scatter([ref_x], [ref_y], marker="x", s=80, color="grey", linewidths=2, zorder=5, label="ref")
-    ax.legend(loc="lower right", fontsize=9)
+    # Legend location: upper left for g^2_h log plot, lower right otherwise
+    legend_loc = "upper right" if not y_axis_Ao_rather_than_g2h else "lower right"
+    ax.legend(loc=legend_loc, fontsize=9)
     ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$")
     plt.colorbar(cs, ax=ax, format=mtick.FormatStrFormatter("%.2f"))
     plt.tight_layout(pad=0.5)
