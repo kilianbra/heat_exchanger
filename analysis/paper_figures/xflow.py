@@ -4,10 +4,87 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import PercentFormatter
 from matplotlib.widgets import RadioButtons, Slider
+from scipy.signal import find_peaks
 
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Default modeling assumptions
+DEFAULT_C_COLD_OVER_C_HOT = 1.0  # C_cold / C_hot
+DEFAULT_ST_OVER_F = 0.4  # Same for both fluids
+DEFAULT_F_C_OVER_F_H = 1.0  # f_c/f_h
+DEFAULT_D_R = 1.0  # d_r = sigma_r/A_r (cold/hot ratio)
+DEFAULT_G2_H = 1e-5  # g2_h
+
+# Default NTU max fixed at 15
+DEFAULT_NTU_MAX = 15.0
+DEFAULT_DP_MAX = 0.2
+
+# Parameter ranges for sliders
+C_COLD_OVER_C_HOT_RANGE = (0.1, 10.0)  # Will use exponential slider
+ST_OVER_F_RANGE = (0.2, 0.5)
+F_C_OVER_F_H_RANGE = (0.1, 10.0)  # Will use exponential slider
+D_R_RANGE = (0.1, 10.0)  # Will use exponential slider
+G2_H_RANGE = (1e-5, 8e-2)  # Will use exponential slider
+
+
+# NTU sweep range
+NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
+# Pressure drop assumption options
+PRESSURE_DROP_OPTIONS = ["dp_c=dp_h", "dp_c<<dp_h", "inlet_density"]
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
+
+# Default values for inlet density assumption (option 3)
+DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
+DEFAULT_SIGMA_R = 1.0  # sigma_r (cold/hot)
+DEFAULT_SIGMA_R_MIN = 0.1
+
+# Default parameters for framework calculations
+DEFAULT_T = 2.0  # T_hot_in / T_cold_in
+DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0  # p_cold_in / p_hot_in
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1  # p_hot_in / p_dead (slider value)
+DEFAULT_GAMMA = 1.4
+TARGET_EPS = 0.8
+
+
+defaults = "Helicopter"
+match defaults:
+    case "Brewer":
+        DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
+        DEFAULT_C_COLD_OVER_C_HOT = 0.11  # C_cold / C_hot
+        DEFAULT_ST_OVER_F = 0.4  # Same for both fluids
+
+        DEFAULT_G2_H = 7e-2  # g2_h
+
+        # These values are fudged to achieve the right eps and dp values (could also fudge further to get right St/f)
+        DEFAULT_F_C_OVER_F_H = 10  # f_c/f_h
+        DEFAULT_D_R = 0.01  # d_r = sigma_r/A_r (cold/hot ratio)
+        D_R_RANGE = (0.0035, 10.0)  # Will use exponential slider
+        F_C_OVER_F_H_RANGE = (0.1, 100)  # Will use exponential slider
+
+        DEFAULT_MOLAR_MASS_RATIO = 0.07  # M_cold / M_hot (cold/hot)
+        DEFAULT_SIGMA_R = 4e-3
+        DEFAULT_SIGMA_R_MIN = 4e-3
+
+        DEFAULT_T = 2.95  # 778/264 T static in ratio
+        DEFAULT_T_DEAD_OVER_T_COLD_IN = 219 / 288
+
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 17.3 / 0.4  # 43.25
+
+        DEFAULT_P_HOT_IN_OVER_P_DEAD = 0.4 / 0.24  # 0.4/0.24 abt 1.7
+        TARGET_EPS = 0.8043
+    case "Helicopter":
+        DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c=dp_h"
+        DEFAULT_C_COLD_OVER_C_HOT = 0.95  # C_cold / C_hot
+        # g2h = 2e-2
+        DEFAULT_G2_H = 2e-2
+        DEFAULT_T = 1.7  # 980/576
+        DEFAULT_T_DEAD_OVER_T_COLD_IN = 0.52  # 300/576
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
+        DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
+        TARGET_EPS = 0.6
 
 
 class ExpSlider(Slider):
@@ -61,24 +138,6 @@ class ExpSlider(Slider):
     @val.setter
     def val(self, val):
         self._val = val  # val is already in log space from the slider
-
-
-# Default modeling assumptions
-DEFAULT_C_COLD_OVER_C_HOT = 1.0  # C_cold / C_hot
-DEFAULT_ST_OVER_F = 0.4  # Same for both fluids
-DEFAULT_F_C_OVER_F_H = 1.0  # f_c/f_h
-DEFAULT_D_R = 1.0  # d_r = sigma_r/A_r (cold/hot ratio)
-DEFAULT_G2_H = 1e-5  # g2_h
-
-# Parameter ranges for sliders
-C_COLD_OVER_C_HOT_RANGE = (0.1, 10.0)  # Will use exponential slider
-ST_OVER_F_RANGE = (0.2, 0.5)
-F_C_OVER_F_H_RANGE = (0.1, 10.0)  # Will use exponential slider
-D_R_RANGE = (0.1, 10.0)  # Will use exponential slider
-G2_H_RANGE = (1e-5, 8e-2)  # Will use exponential slider
-
-# NTU sweep range
-NTU_SWEEP = np.linspace(0.1, 15, 200)
 
 
 def calculate_capacity_ratios(c_cold_over_c_hot):
@@ -342,12 +401,17 @@ def calculate_epsilon_ntu_curve(
     st_over_f_c = st_over_f
 
     # Pressure drop coefficient (constant part)
-    dp_coeff = g2_h * (
+    dp_coeff_normal = g2_h * (
         1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
     )
-
     # Pressure drop varies linearly with NTU
-    dp_over_p_in_hot_array = dp_coeff * ntu_array
+    dp_over_p_in_hot_array = dp_coeff_normal * ntu_array
+
+    # Now we are doing for the g2_h that contains the heat transfer area that is fixed rather than free flow area
+    NTU_match = 1.747
+    closest_idx = np.argmin(np.abs(ntu_array - NTU_match))
+    dp_coeff_cubic = dp_over_p_in_hot_array[closest_idx] / (ntu_array[closest_idx] ** 3)
+    # dp_over_p_in_hot_array = dp_coeff_cubic * ntu_array**3
 
     # Calculate cold side pressure drop based on pressure_drop_percent_ratio_cold_over_hot
     # dp_cold_over_p_cold_in = pressure_drop_percent_ratio_cold_over_hot * dp_hot_over_p_hot_in
@@ -449,6 +513,26 @@ def create_plot(
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         # Always fix NTU max at 15
         ax.set_xlim(0, 15)
+
+        # Find point closest to TARGET_EPS and add title with values
+
+        # Use only valid points for finding closest
+        eps_valid = epsilon[validity_mask]
+        ntu_valid = ntu[validity_mask]
+        dp_hot_valid = dp_over_p_in_hot[validity_mask]
+        dp_cold_valid = dp_over_p_in_cold[validity_mask]
+        if len(eps_valid) > 0:
+            closest_idx = np.argmin(np.abs(eps_valid - TARGET_EPS))
+            eps_closest = eps_valid[closest_idx]
+            ntu_closest = ntu_valid[closest_idx]
+            dp_hot_closest = dp_hot_valid[closest_idx]
+            dp_cold_closest = dp_cold_valid[closest_idx]
+            # Format title with epsilon, NTU, and dp_hot/p_hot_in
+            ax.set_title(
+                rf"Hot $\Delta p/p_{{in}}$ at $\varepsilon$ = {eps_closest:.4f}: "
+                rf"NTU = {ntu_closest:.3f}, $\Delta p/p_{{in}}$ = {dp_hot_closest * 100:.1f}%(hot), {dp_cold_closest * 100:.1f}%(cold)",
+                fontsize=10,
+            )
 
         # Determine pressure drop plotting based on ratio
         plot_both_sides = pressure_drop_percent_ratio_cold_over_hot > 0.0
@@ -604,6 +688,42 @@ def create_plot(
         axis_color = "k"
         ylabel = "Net classical unavailable energy creation [-]"
 
+        # Add optimum point markers (minimum after first peak) for each line
+        # Also find optimum for title (use first line if multiple g^2 values)
+        optimum_found = False
+        optimum_energy = None
+        optimum_ntu = None
+        for line_idx, line in enumerate(line_list):
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            # Filter out invalid/masked data
+            valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
+            if np.any(valid_mask):
+                x_plot = x_data[valid_mask]
+                y_plot = y_data[valid_mask]
+                # Find peaks in the data
+                peaks, _ = find_peaks(y_plot)
+                if len(peaks) > 0:
+                    first_peak = peaks[0]
+                    # Find minimum after first peak
+                    y_local_min_idx = first_peak + np.argmin(y_plot[first_peak:])
+                    ax.scatter(
+                        x_plot[y_local_min_idx],
+                        y_plot[y_local_min_idx],
+                        color="black",
+                        marker="o",
+                        zorder=5,
+                    )
+                    # Store optimum values for title (use first line)
+                    if line_idx == 0:
+                        optimum_found = True
+                        optimum_energy = y_plot[y_local_min_idx]
+                        optimum_ntu = x_plot[y_local_min_idx]
+
+        # Add title with optimum point values if found
+        if optimum_found:
+            ax.set_title(rf"Optimum: Energy creation = {optimum_energy:.3f}, NTU = {optimum_ntu:.3f}", fontsize=10)
+
     elif framework == "practical":
         # Plot practical metric for each g^2 value
         linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
@@ -668,6 +788,38 @@ def create_plot(
         line_dp_list = line_list
         axis_color = "k"
         ylabel = "Net practical unavailable energy creation [-]"
+
+        # Add optimum point markers (minimum) for each line
+        # Also find optimum for title (use first line if multiple g^2 values)
+        optimum_found = False
+        optimum_energy = None
+        optimum_ntu = None
+        for line_idx, line in enumerate(line_list):
+            x_data = line.get_xdata()
+            y_data = line.get_ydata()
+            # Filter out invalid/masked data
+            valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
+            if np.any(valid_mask):
+                x_plot = x_data[valid_mask]
+                y_plot = y_data[valid_mask]
+                # Find minimum
+                arg_y_min = np.argmin(y_plot)
+                ax.scatter(
+                    x_plot[arg_y_min],
+                    y_plot[arg_y_min],
+                    color="black",
+                    marker="o",
+                    zorder=5,
+                )
+                # Store optimum values for title (use first line)
+                if line_idx == 0:
+                    optimum_found = True
+                    optimum_energy = y_plot[arg_y_min]
+                    optimum_ntu = x_plot[arg_y_min]
+
+        # Add title with optimum point values if found
+        if optimum_found:
+            ax.set_title(rf"Optimum: Energy creation = {optimum_energy:.3f}, NTU = {optimum_ntu:.3f}", fontsize=10)
 
     # Set up axis labels and colors based on framework
     if framework == "agnostic":
@@ -765,14 +917,6 @@ if __name__ == "__main__":
     FRAMEWORK = "agnostic"
     FRAMEWORKS = ["agnostic", "classical", "practical"]
 
-    # Default parameters for framework calculations
-    DEFAULT_T = 2.0  # T_hot_in / T_cold_in
-    DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
-    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0  # p_cold_in / p_hot_in
-    DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1  # p_hot_in / p_dead (slider value)
-    DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD  # p_dead / p_hot_in (for calculations)
-    DEFAULT_GAMMA = 1.4
-
     # Create figure with space for sliders on the right
     fig = plt.figure(figsize=(12, 8))
     ax = plt.subplot(111)
@@ -791,18 +935,6 @@ if __name__ == "__main__":
             "figure.titlesize": 10,
         }
     )
-
-    # Default NTU max fixed at 15
-    DEFAULT_NTU_MAX = 15.0
-    DEFAULT_DP_MAX = 0.2
-
-    # Pressure drop assumption options
-    PRESSURE_DROP_OPTIONS = ["dp_c=dp_h", "dp_c<<dp_h", "inlet_density"]
-    DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
-
-    # Default values for inlet density assumption (option 3)
-    DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
-    DEFAULT_SIGMA_R = 1.0  # sigma_r (cold/hot)
 
     # Store framework in a mutable container to allow modification in nested function
     framework_state = {"value": FRAMEWORK}
@@ -835,7 +967,7 @@ if __name__ == "__main__":
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
-        p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+        p_dead_over_p_hot_in=1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD,
         gamma=DEFAULT_GAMMA,
         pressure_drop_percent_ratio_cold_over_hot=initial_pressure_drop_ratio,
     )
@@ -909,7 +1041,7 @@ if __name__ == "__main__":
         D_R_RANGE[1],
         valinit=DEFAULT_D_R,
         valstep=0.01,
-        valfmt="%.2f",
+        valfmt="%.1e",
     )
     y_pos -= slider_spacing
 
@@ -944,7 +1076,7 @@ if __name__ == "__main__":
     slider_t_dead_over_t_cold = Slider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         r"$T_{dead}$",
-        1.01,
+        0.7,
         1.3,
         valinit=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         valstep=0.01,
@@ -958,7 +1090,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         r"$p_c$",
         5.0,
-        20.0,
+        50.0,
         valinit=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
         valstep=0.1,
         valfmt="%.1f" + r"$p_{h}$",
@@ -973,7 +1105,7 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         r"$p_h$",
         1.01,
-        1.2,
+        1.8,
         valinit=DEFAULT_P_HOT_IN_OVER_P_DEAD,
         valstep=0.01,
         valfmt="%.2f" + r"$p_{d}$",
@@ -998,11 +1130,11 @@ if __name__ == "__main__":
     slider_sigma_r = ExpSlider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         r"$A_{o,c}$",
-        0.1,
+        DEFAULT_SIGMA_R_MIN,
         10.0,
         valinit=DEFAULT_SIGMA_R,
         valstep=0.1,
-        valfmt="%.2f" + r"$A_{o,h}$",
+        valfmt="%.1e" + r"$A_{o,h}$",
     )
     slider_sigma_r.ax.set_visible(False)  # Hidden by default
     y_pos -= slider_spacing
@@ -1040,7 +1172,7 @@ if __name__ == "__main__":
         t = DEFAULT_T
         t_dead_over_t_cold_in = DEFAULT_T_DEAD_OVER_T_COLD_IN
         p_cold_in_over_p_hot_in = DEFAULT_P_COLD_IN_OVER_P_HOT_IN
-        p_dead_over_p_hot_in = DEFAULT_P_DEAD_OVER_P_HOT_IN
+        p_dead_over_p_hot_in = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD  # p_dead / p_hot_in (for calculations)
 
         # Temperature ratio needed for classical, practical, or agnostic with inlet_density
         if current_framework in ["classical", "practical"] or (
