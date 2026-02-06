@@ -29,8 +29,6 @@ D_R_RANGE = (0.1, 10.0)  # Will use exponential slider
 G2_H_RANGE = (1e-5, 8e-2)  # Will use exponential slider
 
 
-# NTU sweep range
-NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
 # Pressure drop assumption options
 PRESSURE_DROP_OPTIONS = ["dp_c=dp_h", "dp_c<<dp_h", "inlet_density"]
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
@@ -47,6 +45,9 @@ DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0  # p_cold_in / p_hot_in
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1  # p_hot_in / p_dead (slider value)
 DEFAULT_GAMMA = 1.4
 TARGET_EPS = 0.8
+
+SHOW_CUBIC = False
+NTU_MATCH = None  # Will be set in match case if SHOW_CUBIC is True
 
 
 defaults = "Helicopter"
@@ -75,9 +76,11 @@ match defaults:
 
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 0.4 / 0.24  # 0.4/0.24 abt 1.7
         TARGET_EPS = 0.8043
+        NTU_MATCH = 1.747
     case "Helicopter":
-        DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c=dp_h"
+        DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
         DEFAULT_C_COLD_OVER_C_HOT = 0.95  # C_cold / C_hot
+        DEFAULT_D_R = 0.44
         # g2h = 2e-2
         DEFAULT_G2_H = 2e-2
         DEFAULT_T = 1.7  # 980/576
@@ -85,6 +88,12 @@ match defaults:
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
         TARGET_EPS = 0.6
+        NTU_MATCH = 1.479
+        DEFAULT_NTU_MAX = 5.0
+        SHOW_CUBIC = True
+
+# NTU sweep range
+NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
 
 
 class ExpSlider(Slider):
@@ -345,7 +354,7 @@ def calculate_epsilon_ntu_curve(
     d_r,
     g2_h,
     ntu_array=NTU_SWEEP,
-    ntu_max=None,
+    ntu_max=DEFAULT_NTU_MAX,
     dp_max=0.2,
     pressure_drop_percent_ratio_cold_over_hot=0.0,
 ):
@@ -408,10 +417,12 @@ def calculate_epsilon_ntu_curve(
     dp_over_p_in_hot_array = dp_coeff_normal * ntu_array
 
     # Now we are doing for the g2_h that contains the heat transfer area that is fixed rather than free flow area
-    NTU_match = 1.747
-    closest_idx = np.argmin(np.abs(ntu_array - NTU_match))
-    # dp_coeff_cubic = dp_over_p_in_hot_array[closest_idx] / (ntu_array[closest_idx] ** 3)
-    # dp_over_p_in_hot_array = dp_coeff_cubic * ntu_array**3
+    if SHOW_CUBIC and NTU_MATCH is not None:
+        closest_idx = np.argmin(np.abs(ntu_array - NTU_MATCH))
+
+        dp_over_p_in_hot_array = dp_over_p_in_hot_array[closest_idx] * np.power(
+            (ntu_array / ntu_array[closest_idx]), 4.407
+        )
 
     # Calculate cold side pressure drop based on pressure_drop_percent_ratio_cold_over_hot
     # dp_cold_over_p_cold_in = pressure_drop_percent_ratio_cold_over_hot * dp_hot_over_p_hot_in
@@ -511,8 +522,8 @@ def create_plot(
         ax.set_xlabel("NTU [-]")
         ax.set_ylabel(r"$\varepsilon$ [%]")
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
-        # Always fix NTU max at 15
-        ax.set_xlim(0, 15)
+        # Set NTU max from parameter
+        ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
 
         # Find point closest to TARGET_EPS and add title with values
 
@@ -630,6 +641,10 @@ def create_plot(
         ax_twin.set_ylim(0, ylim_max)
         ax_twin.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
 
+        # Add grey vertical line at NTU_MATCH when SHOW_CUBIC is True to indicate where cubic and linear plots match
+        if SHOW_CUBIC and NTU_MATCH is not None:
+            ax.axvline(x=NTU_MATCH, color="grey", linestyle="--", linewidth=1, zorder=2)
+
     elif framework == "classical":
         # Plot classical metric for each g^2 value
         linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
@@ -670,8 +685,8 @@ def create_plot(
         line_eps = line_list[0] if len(line_list) > 0 else None
         ax.set_xlabel("NTU [-]")
         ax.set_ylabel("Net classical unavailable energy creation [-]")
-        # Always fix NTU max at 15
-        ax.set_xlim(0, 15)
+        # Set NTU max from parameter
+        ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
         # Auto-scale y-axis for classical metric
         if len(all_classical_metrics) > 0:
             all_values = np.concatenate([m for m in all_classical_metrics if len(m) > 0])
@@ -687,6 +702,10 @@ def create_plot(
         line_dp_list = line_list
         axis_color = "k"
         ylabel = "Net classical unavailable energy creation [-]"
+
+        # Add grey vertical line at NTU_MATCH when SHOW_CUBIC is True to indicate where cubic and linear plots match
+        if SHOW_CUBIC and NTU_MATCH is not None:
+            ax.axvline(x=NTU_MATCH, color="grey", linestyle="--", linewidth=1, zorder=2)
 
         # Add optimum point markers (minimum after first peak) for each line
         # Also find optimum for title (use first line if multiple g^2 values)
@@ -719,10 +738,21 @@ def create_plot(
                         optimum_found = True
                         optimum_energy = y_plot[y_local_min_idx]
                         optimum_ntu = x_plot[y_local_min_idx]
+                        opt_eps = epsilon[y_local_min_idx]
+                        opt_dp_hot = dp_over_p_in_hot[y_local_min_idx]
+                        opt_dp_cold = dp_over_p_in_cold[y_local_min_idx]
 
         # Add title with optimum point values if found
         if optimum_found:
-            ax.set_title(rf"Optimum: Energy creation = {optimum_energy:.3f}, NTU = {optimum_ntu:.3f}", fontsize=10)
+            ax.set_title(
+                rf"Optimum: {optimum_energy:.3f}, "
+                rf"NTU = {optimum_ntu:.3f}, "
+                rf"$\varepsilon$ = {opt_eps:.3f},"
+                rf"$\Delta p/p_{{in}}$ = {opt_dp_hot * 100:.1f}% (hot) + "
+                rf"{opt_dp_cold * 100:.1f}% (cold) = "
+                rf"{(opt_dp_hot + opt_dp_cold) * 100:.1f}% (total)",
+                fontsize=10,
+            )
 
     elif framework == "practical":
         # Plot practical metric for each g^2 value
@@ -771,8 +801,8 @@ def create_plot(
         line_eps = line_list[0] if len(line_list) > 0 else None
         ax.set_xlabel("NTU [-]")
         ax.set_ylabel("Net practical unavailable energy creation [-]")
-        # Always fix NTU max at 15
-        ax.set_xlim(0, 15)
+        # Set NTU max from parameter
+        ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
         # Auto-scale y-axis for practical metric (only negative values, y_max = 0)
         if len(all_metrics) > 0:
             all_values = np.concatenate([m for m in all_metrics if len(m) > 0])
@@ -788,6 +818,10 @@ def create_plot(
         line_dp_list = line_list
         axis_color = "k"
         ylabel = "Net practical unavailable energy creation [-]"
+
+        # Add grey vertical line at NTU_MATCH when SHOW_CUBIC is True to indicate where cubic and linear plots match
+        if SHOW_CUBIC and NTU_MATCH is not None:
+            ax.axvline(x=NTU_MATCH, color="grey", linestyle="--", linewidth=1, zorder=2)
 
         # Add optimum point markers (minimum) for each line
         # Also find optimum for title (use first line if multiple g^2 values)
@@ -816,10 +850,21 @@ def create_plot(
                     optimum_found = True
                     optimum_energy = y_plot[arg_y_min]
                     optimum_ntu = x_plot[arg_y_min]
+                    opt_eps = epsilon[arg_y_min]
+                    opt_dp_hot = dp_over_p_in_hot[arg_y_min]
+                    opt_dp_cold = dp_over_p_in_cold[arg_y_min]
 
         # Add title with optimum point values if found
         if optimum_found:
-            ax.set_title(rf"Optimum: Energy creation = {optimum_energy:.3f}, NTU = {optimum_ntu:.3f}", fontsize=10)
+            ax.set_title(
+                rf"Optimum: {optimum_energy:.3f}, "
+                rf"NTU = {optimum_ntu:.3f}, "
+                rf"$\varepsilon$ = {opt_eps:.3f},"
+                rf"$\Delta p/p_{{in}}$ = {opt_dp_hot * 100:.1f}% (hot) + "
+                rf"{opt_dp_cold * 100:.1f}% (cold) = "
+                rf"{(opt_dp_hot + opt_dp_cold) * 100:.1f}% (total)",
+                fontsize=10,
+            )
 
     # Set up axis labels and colors based on framework
     if framework == "agnostic":
@@ -1165,7 +1210,7 @@ if __name__ == "__main__":
         f_c_over_f_h = slider_f_c_over_f_h.val
         d_r = slider_d_r.val
         g2_h = slider_g2_h.val
-        # NTU max is always fixed at 15
+        # NTU max from default (can be overridden by defaults case)
         ntu_max = DEFAULT_NTU_MAX
 
         # Get framework-specific parameters from sliders if they exist

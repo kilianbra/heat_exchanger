@@ -1,6 +1,7 @@
 import os
 
 import matplotlib.pyplot as plt
+import xflow
 from xflow import create_plot
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
@@ -46,6 +47,9 @@ def save_figures(
         }
     )
 
+    # Ensure SHOW_CUBIC is False for this figure
+    xflow.SHOW_CUBIC = False
+
     fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
     ax_twin = ax.twinx()
@@ -81,6 +85,9 @@ def save_figures(
     handles2, labels2 = ax_twin.get_legend_handles_labels()
     # ax.legend(handles1 + handles2, labels1 + labels2, loc="center right") # incl eps
     ax.legend(handles2, labels2, loc="center right")  # just have g^2 values
+    
+    # Remove title if present
+    ax.set_title("")
     
     # Ensure x-axis shows only 0, 5, 10, 15 with integer formatting
     ax.set_xticks([0, 5, 10, 15])

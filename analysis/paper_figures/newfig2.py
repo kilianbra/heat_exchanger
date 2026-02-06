@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import xflow
 from scipy.signal import find_peaks
 from xflow import calculate_pressure_drop_ratio, create_plot
 
@@ -80,6 +81,9 @@ def save_figures(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
+    # Ensure SHOW_CUBIC is False for this figure
+    xflow.SHOW_CUBIC = False
+
     fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
     ax_twin = ax.twinx()  # Created but will be hidden for classical framework
@@ -105,7 +109,11 @@ def save_figures(
     )
 
     # Update ylabel and x-axis formatting
-    ax.set_ylabel(r"HEX $\Delta Q_0/Q_{\mathrm{max}}$")
+    ax.set_ylabel(r"HEx $\Delta Q_0/Q_{\mathrm{max}}$")
+    
+    # Remove title if present
+    ax.set_title("")
+    
     ax.set_xticks([0, 5, 10, 15])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
 
