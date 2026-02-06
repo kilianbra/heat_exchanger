@@ -29,7 +29,7 @@ SHOW_CUBIC = True
 DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot) - default when not specified
 DEFAULT_A_R = 1.0  # A_r (cold/hot) - default when not specified
 
-DEFAULT_DP_MAX = 0.2
+DEFAULT_DP_MAX = 0.3
 
 # Single g^2 value for plotting
 PLOT_TRIPLE_G2 = None

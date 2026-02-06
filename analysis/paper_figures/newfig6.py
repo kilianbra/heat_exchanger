@@ -261,7 +261,7 @@ def run_sweep_and_plot(
     else:
         # For log scale, ensure positive values
         y_min = max(y_min * 0.95, 1e-6)
-        y_max = min(y_max * 1.05, 1.0)
+        y_max = min(y_max * 1.05, DEFAULT_G2_H * 10)
     grid_x = np.linspace(x_min, x_max, CONTOUR_GRID_N)
     grid_y = np.linspace(y_min, y_max, CONTOUR_GRID_N)
     X, Y = np.meshgrid(grid_x, grid_y)
@@ -293,7 +293,7 @@ def run_sweep_and_plot(
         ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
     else:
         ax.set_ylabel(r"$g^2_h$")
-        ax.set_yscale('log')
+        ax.set_yscale("log")
 
     # Contour plot (practical availability)
     levels = np.linspace(np.nanmin(Z), min(0, np.nanmax(Z)), 15)
