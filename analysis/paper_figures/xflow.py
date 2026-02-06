@@ -90,7 +90,7 @@ match defaults:
         TARGET_EPS = 0.6
         NTU_MATCH = 1.479
         DEFAULT_NTU_MAX = 5.0
-        SHOW_CUBIC = True
+        SHOW_CUBIC = False
 
 # NTU sweep range
 NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
@@ -516,11 +516,17 @@ def create_plot(
         # Make sure twin axis is visible for agnostic framework
         ax_twin.set_visible(True)
         # Plot epsilon on left axis (only valid points)
-        eps_label = r"$\varepsilon$ (all)" if is_multiple_g2 else r"$\varepsilon$"
-        line_eps = ax.plot(ntu[validity_mask], epsilon[validity_mask], "-", label=eps_label, color="black", zorder=3)[0]
+        eps_label = r"$\varepsilon$"
+        if is_multiple_g2:
+            left_axis_color = "r"
+        else:
+            left_axis_color = "k"
+        line_eps = ax.plot(
+            ntu[validity_mask], epsilon[validity_mask], "-", label=eps_label, color=left_axis_color, zorder=3
+        )[0]
         ax.set_ylim(0, 1)
         ax.set_xlabel("NTU [-]")
-        ax.set_ylabel(r"$\varepsilon$ [%]")
+        ax.set_ylabel(r"$\varepsilon$ [%]" + " (all)" if is_multiple_g2 else "")
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         # Set NTU max from parameter
         ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
@@ -577,7 +583,7 @@ def create_plot(
                 line_dp = ax_twin.plot(
                     ntu_dp[validity_mask_dp],
                     dp_hot_dp[validity_mask_dp],  # Plot as fraction (0-0.2), PercentFormatter converts to %
-                    color=dark_blue,
+                    color="k",
                     linestyle=linestyles[linestyle_idx],
                     label=label,
                     zorder=1,
@@ -588,7 +594,7 @@ def create_plot(
             else:
                 ylabel = r"hot $\Delta p/p_{\mathrm{in}}$ (%)"
             ylim_max = dp_max  # Keep as fraction (0.2), PercentFormatter will show as 20%
-            axis_color = dark_blue
+            axis_color = "k"
         else:
             # Single g^2 value
             if plot_both_sides:
@@ -875,6 +881,14 @@ def create_plot(
         ax_twin.spines["right"].set_color(axis_color)
         ax_twin.yaxis.label.set_color(axis_color)
         ax_twin.tick_params(axis="y", colors=axis_color)
+
+        ax.spines["left"].set_color(left_axis_color)
+        ax.yaxis.label.set_color(left_axis_color)
+        ax.tick_params(axis="y", colors=left_axis_color)
+
+        # Also ensure ax_twin does not overpaint the left spine:
+        ax_twin.spines["left"].set_visible(False)
+
         # Combine legend handles and labels
         handles1, labels1 = ax.get_legend_handles_labels()
         handles2, labels2 = ax_twin.get_legend_handles_labels()

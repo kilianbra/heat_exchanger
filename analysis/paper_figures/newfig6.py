@@ -129,10 +129,11 @@ def _optimal_ntu_line_ao(
     gamma,
     dp_max,
 ):
-    """Find optimal NTU for each Ao/Ao_ref, return (ao_values, ntu_opt_values, a_over_a_ref_values, ao_values)."""
+    """Find optimal NTU for each Ao/Ao_ref, return (ao_values, ntu_opt_values, a_over_a_ref_values, dq_o_m_over_qmax_values)."""
     ao_vals = []
     ntu_opt_vals = []
     a_over_a_ref_vals = []
+    dq_o_m_over_qmax_vals = []
 
     for ao in AO_OVER_AO_REF_VALUES:
         ntu_fine = np.linspace(0.15, NTU_MAX, 200)
@@ -159,11 +160,13 @@ def _optimal_ntu_line_ao(
             idx = np.nanargmin(vals)
             ntu_opt = float(ntu_fine[idx])
             a_over_a_ref_opt = _a_over_a_ref(ao, ntu_opt)
+            dq_o_m_over_qmax_opt = float(vals[idx])
             ao_vals.append(ao)
             ntu_opt_vals.append(ntu_opt)
             a_over_a_ref_vals.append(a_over_a_ref_opt)
+            dq_o_m_over_qmax_vals.append(dq_o_m_over_qmax_opt)
 
-    return np.array(ao_vals), np.array(ntu_opt_vals), np.array(a_over_a_ref_vals)
+    return np.array(ao_vals), np.array(ntu_opt_vals), np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
 
 
 def run_sweep_and_plot(
@@ -194,7 +197,7 @@ def run_sweep_and_plot(
     )
 
     # Optimal NTU line: for each Ao, find optimal NTU
-    ao_opt_line, ntu_opt_line, a_over_a_ref_opt_line = _optimal_ntu_line_ao(
+    ao_opt_line, ntu_opt_line, a_over_a_ref_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ntu_line_ao(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -249,7 +252,7 @@ def run_sweep_and_plot(
     y_min, y_max = AO_OVER_AO_REF_VALUES.min(), AO_OVER_AO_REF_VALUES.max()
     # Slightly extend for nicer contours
     x_min = max(x_min * 0.95, 1e-5)
-    x_max = min(x_max * 1.05, 15.0)
+    x_max = min(x_max * 1.05, 10.0)
     y_min = max(y_min * 0.95, 0.4)
     y_max = min(y_max * 1.05, 2.5)
     grid_x = np.linspace(x_min, x_max, CONTOUR_GRID_N)

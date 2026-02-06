@@ -15,7 +15,7 @@ DEFAULT_G2_H = 1e-5  # g2_h
 
 DEFAULT_DP_MAX = 0.2
 
-PLOT_TRIPLE_G2 = [1e-3, 5e-3, 8e-3]  # or None for single g2_h
+PLOT_TRIPLE_G2 = [1e-3, 5e-3, 20e-3]  # or None for single g2_h
 
 
 def save_figures(
@@ -84,11 +84,25 @@ def save_figures(
     handles1, labels1 = ax.get_legend_handles_labels()
     handles2, labels2 = ax_twin.get_legend_handles_labels()
     # ax.legend(handles1 + handles2, labels1 + labels2, loc="center right") # incl eps
-    ax.legend(handles2, labels2, loc="center right")  # just have g^2 values
-    
+    # ax.legend(handles2, labels2, loc="center right")  # just have g^2 values
+    # Add new legend using handles2 with custom labels High, Medium, Low and a title
+    custom_labels = ["High", "Medium", "Low"]
+    legend = ax.legend(
+        handles=handles2,
+        labels=custom_labels,
+        title="Mass Velocity",
+        loc="center right",
+        bbox_to_anchor=(1, 0.62),  # Move legend up (y value: 0=bottom, 1=top)
+        frameon=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=True,
+    )
+
     # Remove title if present
     ax.set_title("")
-    
+
     # Ensure x-axis shows only 0, 5, 10, 15 with integer formatting
     ax.set_xticks([0, 5, 10, 15])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))

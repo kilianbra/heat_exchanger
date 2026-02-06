@@ -15,10 +15,10 @@ DEFAULT_F_C_OVER_F_H = 1.0  # f_c/f_h
 DEFAULT_D_R = 1.0  # d_r = sigma_r/A_r (cold/hot ratio)
 DEFAULT_G2_H = 1e-5  # g2_h
 
-DEFAULT_DP_MAX = 0.2
+DEFAULT_DP_MAX = 0.3
 
 # Three g^2 values for plotting
-PLOT_TRIPLE_G2 = [1e-3, 5e-3, 8e-3]
+PLOT_TRIPLE_G2 = [1e-3, 5e-3, 20e-3]
 
 # Framework-specific parameters for classical
 DEFAULT_T = 2.0  # T_hot_in / T_cold_in
@@ -110,22 +110,38 @@ def save_figures(
 
     # Update ylabel and x-axis formatting
     ax.set_ylabel(r"HEx $\Delta Q_0/Q_{\mathrm{max}}$")
-    
+
     # Remove title if present
     ax.set_title("")
-    
+
     ax.set_xticks([0, 5, 10, 15])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+    ax.set_ylim(0, 0.3)
 
     # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
     legend = ax.get_legend()
     if legend:
         legend.remove()
-    # Use line_list order directly - lines are plotted in reversed order (8e-3, 5e-3, 1e-3)
+    # # Use line_list order directly - lines are plotted in reversed order (8e-3, 5e-3, 1e-3)
+    # if line_list:
+    #     handles = line_list
+    #     labels = [line.get_label() for line in line_list]
+    #     ax.legend(handles, labels, loc="upper right")
+
+    # Add new legend matching newfig1 style with custom labels and title
     if line_list:
-        handles = line_list
-        labels = [line.get_label() for line in line_list]
-        ax.legend(handles, labels, loc="upper right")
+        custom_labels = ["High", "Medium", "Low"]
+        ax.legend(
+            handles=line_list,
+            labels=custom_labels,
+            title="Mass Velocity",
+            loc="upper right",
+            frameon=True,
+            facecolor="white",
+            framealpha=1.0,  # Set to 1.0 for fully opaque legend face
+            edgecolor="black",
+            fancybox=True,
+        )
 
         # Add optimum point markers (minimum after first peak) for each line
         for line in line_list:
