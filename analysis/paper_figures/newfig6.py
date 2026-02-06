@@ -47,6 +47,10 @@ NTU_MAX = 15.0
 NTU_NUM = 1000  # number of NTU points per Ao
 CONTOUR_GRID_N = 300  # grid size for interpolation
 
+# Y-axis option: True = Ao/Ao_ref, False = g^2_h
+# g^2_h = DEFAULT_G2_H / (Ao/Ao_ref)^2
+y_axis_Ao_rather_than_g2h = False
+
 
 def _a_over_a_ref(ao_over_ao_ref, ntu):
     """X-axis coordinate: NTU/NTU_MATCH * (Ao/Ao_ref)**(0.587)."""
@@ -117,56 +121,40 @@ def _practical_at_ao_ntu(
     return float(out[0]) if len(out) > 0 else np.nan
 
 
-def _optimal_ntu_line_ao(
-    c_cold_over_c_hot,
-    st_over_f,
-    f_c_over_f_h,
-    d_r,
-    pressure_drop_ratio,
-    t,
-    p_cold_in_over_p_hot_in,
-    p_dead_over_p_hot_in,
-    gamma,
-    dp_max,
-):
-    """Find optimal NTU for each Ao/Ao_ref, return (ao_values, ntu_opt_values, a_over_a_ref_values, dq_o_m_over_qmax_values)."""
-    ao_vals = []
-    ntu_opt_vals = []
-    a_over_a_ref_vals = []
-    dq_o_m_over_qmax_vals = []
+def _find_optimal_line_from_sweep(ao_values, ntu_values, z_values):
+    """Find optimal NTU for each Ao/Ao_ref from sweep results.
+    Returns (ao_opt_values, a_over_a_ref_opt_values) for plotting the optimal line.
+    """
+    ao_opt_vals = []
+    a_over_a_ref_opt_vals = []
 
-    for ao in AO_OVER_AO_REF_VALUES:
-        ntu_fine = np.linspace(0.15, NTU_MAX, 200)
-        vals = []
-        for ntu in ntu_fine:
-            z = _practical_at_ao_ntu(
-                ao,
-                ntu,
-                c_cold_over_c_hot,
-                st_over_f,
-                f_c_over_f_h,
-                d_r,
-                pressure_drop_ratio,
-                t,
-                p_cold_in_over_p_hot_in,
-                p_dead_over_p_hot_in,
-                gamma,
-                dp_max,
-            )
-            vals.append(z)
-        vals = np.array(vals)
-        valid = np.isfinite(vals)
-        if np.any(valid):
-            idx = np.nanargmin(vals)
-            ntu_opt = float(ntu_fine[idx])
-            a_over_a_ref_opt = _a_over_a_ref(ao, ntu_opt)
-            dq_o_m_over_qmax_opt = float(vals[idx])
-            ao_vals.append(ao)
-            ntu_opt_vals.append(ntu_opt)
-            a_over_a_ref_vals.append(a_over_a_ref_opt)
-            dq_o_m_over_qmax_vals.append(dq_o_m_over_qmax_opt)
+    # Group by unique Ao values (using tolerance to handle floating point issues)
+    unique_ao = np.unique(ao_values)
 
-    return np.array(ao_vals), np.array(ntu_opt_vals), np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
+    for ao in unique_ao:
+        # Find all points with this Ao value (within tolerance)
+        mask = np.abs(ao_values - ao) < 1e-10
+        if not np.any(mask):
+            continue
+
+        # Get z values for this Ao
+        z_at_ao = z_values[mask]
+        ntu_at_ao = ntu_values[mask]
+
+        # Find valid (finite) values
+        valid = np.isfinite(z_at_ao)
+        if not np.any(valid):
+            continue
+
+        # Find minimum z value
+        idx_min = np.nanargmin(z_at_ao[valid])
+        ntu_opt = ntu_at_ao[valid][idx_min]
+        a_over_a_ref_opt = _a_over_a_ref(ao, ntu_opt)
+
+        ao_opt_vals.append(ao)
+        a_over_a_ref_opt_vals.append(a_over_a_ref_opt)
+
+    return np.array(ao_opt_vals), np.array(a_over_a_ref_opt_vals)
 
 
 def run_sweep_and_plot(
@@ -186,6 +174,7 @@ def run_sweep_and_plot(
 ):
     """Build 2D sweep (Ao/Ao_ref, NTU) and plot contour of practical availability."""
     sigma_r = d_r * a_r if a_r is not None else None
+    # Is cold pressure ratio equal, much smaller or to be calculated from hot based on fluid properties?
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption,
         c_cold_over_c_hot,
@@ -196,25 +185,11 @@ def run_sweep_and_plot(
         p_cold_in_over_p_hot_in,
     )
 
-    # Optimal NTU line: for each Ao, find optimal NTU
-    ao_opt_line, ntu_opt_line, a_over_a_ref_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ntu_line_ao(
-        c_cold_over_c_hot,
-        st_over_f,
-        f_c_over_f_h,
-        d_r,
-        pressure_drop_ratio,
-        t,
-        p_cold_in_over_p_hot_in,
-        p_dead_over_p_hot_in,
-        gamma,
-        dp_max,
-    )
-
     # 2D sweep: for each Ao, sweep NTU
     # Outer loop over Ao/Ao_ref, inner loop over NTU
     # For each Ao, g2_h is modified: g2_h = DEFAULT_G2_H / (Ao/Ao_ref)**2
     # This accounts for the change in heat transfer area
-    xx, yy, zz = [], [], []
+    xx, yy, zz, ntu_sweep_vals, ao_sweep_vals = [], [], [], [], []
     for ao in AO_OVER_AO_REF_VALUES:
         ntu_sweep = np.linspace(0.1, NTU_MAX, NTU_NUM)
         for ntu in ntu_sweep:
@@ -233,14 +208,38 @@ def run_sweep_and_plot(
                 dp_max,
             )
             x = _a_over_a_ref(ao, ntu)
-            y = ao  # Y-axis is Ao/Ao_ref
+            # Y-axis: either Ao/Ao_ref or g^2_h
+            if y_axis_Ao_rather_than_g2h:
+                y = ao  # Y-axis is Ao/Ao_ref
+            else:
+                # g^2_h = DEFAULT_G2_H / (Ao/Ao_ref)^2
+                y = DEFAULT_G2_H / (ao**2) if ao > 0 else np.nan
             xx.append(x)
             yy.append(y)
             zz.append(z)
+            ntu_sweep_vals.append(ntu)
+            ao_sweep_vals.append(ao)
 
     xx = np.array(xx)
     yy = np.array(yy)
     zz = np.array(zz)
+    ntu_sweep_vals = np.array(ntu_sweep_vals)
+    ao_sweep_vals = np.array(ao_sweep_vals)
+
+    # Find optimal NTU line from sweep results (group by ao values, not y values)
+    ao_opt_line, a_over_a_ref_opt_line = _find_optimal_line_from_sweep(ao_sweep_vals, ntu_sweep_vals, zz)
+
+    # Calculate y-coordinates for optimal line based on chosen axis
+    if y_axis_Ao_rather_than_g2h:
+        y_opt_line = ao_opt_line
+    else:
+        # Calculate g^2_h for optimal points: DEFAULT_G2_H / (Ao/Ao_ref)^2
+        y_opt_line = DEFAULT_G2_H / (ao_opt_line**2)
+        # Filter out invalid points
+        valid_opt = np.isfinite(y_opt_line) & (ao_opt_line > 0)
+        ao_opt_line = ao_opt_line[valid_opt]
+        a_over_a_ref_opt_line = a_over_a_ref_opt_line[valid_opt]
+        y_opt_line = y_opt_line[valid_opt]
     valid = np.isfinite(zz)
     if not np.any(valid):
         print("No valid practical values in sweep.")
@@ -249,12 +248,20 @@ def run_sweep_and_plot(
     # Interpolate onto regular grid for contour
     # Convert irregular (x, y, z) points from sweep to regular grid for contour plotting
     x_min, x_max = xx[valid].min(), xx[valid].max()
-    y_min, y_max = AO_OVER_AO_REF_VALUES.min(), AO_OVER_AO_REF_VALUES.max()
+    if y_axis_Ao_rather_than_g2h:
+        y_min, y_max = AO_OVER_AO_REF_VALUES.min(), AO_OVER_AO_REF_VALUES.max()
+    else:
+        y_min, y_max = yy[valid].min(), yy[valid].max()
     # Slightly extend for nicer contours
     x_min = max(x_min * 0.95, 1e-5)
     x_max = min(x_max * 1.05, 10.0)
-    y_min = max(y_min * 0.95, 0.4)
-    y_max = min(y_max * 1.05, 2.5)
+    if y_axis_Ao_rather_than_g2h:
+        y_min = max(y_min * 0.95, 0.4)
+        y_max = min(y_max * 1.05, 2.5)
+    else:
+        # For log scale, ensure positive values
+        y_min = max(y_min * 0.95, 1e-6)
+        y_max = min(y_max * 1.05, 1.0)
     grid_x = np.linspace(x_min, x_max, CONTOUR_GRID_N)
     grid_y = np.linspace(y_min, y_max, CONTOUR_GRID_N)
     X, Y = np.meshgrid(grid_x, grid_y)
@@ -278,8 +285,15 @@ def run_sweep_and_plot(
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
-    ax.set_xlabel(r"$A / A_{\mathrm{ref}}$")
-    ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
+    # X-axis label options
+    # ax.set_xlabel(r"$A / A_{\mathrm{ref}}$")
+    ax.set_xlabel(r"$V_{\mathrm{metal}} / V_{\mathrm{metal,ref}}$")
+    # Y-axis label and scale based on chosen option
+    if y_axis_Ao_rather_than_g2h:
+        ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
+    else:
+        ax.set_ylabel(r"$g^2_h$")
+        ax.set_yscale('log')
 
     # Contour plot (practical availability)
     levels = np.linspace(np.nanmin(Z), min(0, np.nanmax(Z)), 15)
@@ -292,21 +306,27 @@ def run_sweep_and_plot(
         mask = (
             (a_over_a_ref_opt_line >= x_min)
             & (a_over_a_ref_opt_line <= x_max)
-            & (ao_opt_line >= y_min)
-            & (ao_opt_line <= y_max)
+            & (y_opt_line >= y_min)
+            & (y_opt_line <= y_max)
         )
         if np.any(mask):
             ax.plot(
                 a_over_a_ref_opt_line[mask],
-                ao_opt_line[mask],
+                y_opt_line[mask],
                 "k-",
                 linewidth=1.5,
                 zorder=6,
-                label="optimal Ao/Ao_ref",
+                label="optimal Ao/Ao_ref" if y_axis_Ao_rather_than_g2h else "optimal",
             )
 
-    # Ref at (1, 1): grey cross (A/A_ref=1, Ao/Ao_ref=1)
-    ax.scatter([1.0], [1.0], marker="x", s=80, color="grey", linewidths=2, zorder=5, label="ref")
+    # Ref point: grey cross
+    if y_axis_Ao_rather_than_g2h:
+        # At (A/A_ref=1, Ao/Ao_ref=1)
+        ref_x, ref_y = 1.0, 1.0
+    else:
+        # At (A/A_ref=1, Ao/Ao_ref=1) gives g^2_h = DEFAULT_G2_H / (1^2) = DEFAULT_G2_H
+        ref_x, ref_y = 1.0, DEFAULT_G2_H
+    ax.scatter([ref_x], [ref_y], marker="x", s=80, color="grey", linewidths=2, zorder=5, label="ref")
     ax.legend(loc="lower right", fontsize=9)
     ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$")
     plt.colorbar(cs, ax=ax, format=mtick.FormatStrFormatter("%.2f"))
