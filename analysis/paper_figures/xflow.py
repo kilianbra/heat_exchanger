@@ -37,8 +37,8 @@ DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
 
 # Default values for inlet density assumption (option 3)
 DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
-DEFAULT_SIGMA_R = 1.0  # sigma_r (cold/hot)
-DEFAULT_SIGMA_R_MIN = 0.1
+DEFAULT_A_R = 1.0  # A_r (cold/hot) - sigma_r is calculated as d_r * A_r
+DEFAULT_A_R_MIN = 0.1
 
 # Default parameters for framework calculations
 DEFAULT_T = 2.0  # T_hot_in / T_cold_in
@@ -65,8 +65,8 @@ match defaults:
         F_C_OVER_F_H_RANGE = (0.1, 100)  # Will use exponential slider
 
         DEFAULT_MOLAR_MASS_RATIO = 0.07  # M_cold / M_hot (cold/hot)
-        DEFAULT_SIGMA_R = 4e-3
-        DEFAULT_SIGMA_R_MIN = 4e-3
+        DEFAULT_A_R = 0.4  # A_r (cold/hot) - sigma_r is calculated as d_r * A_r
+        DEFAULT_A_R_MIN = 0.1
 
         DEFAULT_T = 2.95  # 778/264 T static in ratio
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 219 / 288
@@ -410,7 +410,7 @@ def calculate_epsilon_ntu_curve(
     # Now we are doing for the g2_h that contains the heat transfer area that is fixed rather than free flow area
     NTU_match = 1.747
     closest_idx = np.argmin(np.abs(ntu_array - NTU_match))
-    dp_coeff_cubic = dp_over_p_in_hot_array[closest_idx] / (ntu_array[closest_idx] ** 3)
+    # dp_coeff_cubic = dp_over_p_in_hot_array[closest_idx] / (ntu_array[closest_idx] ** 3)
     # dp_over_p_in_hot_array = dp_coeff_cubic * ntu_array**3
 
     # Calculate cold side pressure drop based on pressure_drop_percent_ratio_cold_over_hot
@@ -530,7 +530,7 @@ def create_plot(
             # Format title with epsilon, NTU, and dp_hot/p_hot_in
             ax.set_title(
                 rf"Hot $\Delta p/p_{{in}}$ at $\varepsilon$ = {eps_closest:.4f}: "
-                rf"NTU = {ntu_closest:.3f}, $\Delta p/p_{{in}}$ = {dp_hot_closest * 100:.1f}%(hot), {dp_cold_closest * 100:.1f}%(cold)",
+                rf"NTU = {ntu_closest:.3f}, $\Delta p/p_{{in}}$ = {dp_hot_closest * 100:.1f}%(hot) + {dp_cold_closest * 100:.1f}%(cold) = {(dp_hot_closest + dp_cold_closest) * 100:.1f}%(total)",
                 fontsize=10,
             )
 
@@ -941,13 +941,15 @@ if __name__ == "__main__":
     pressure_drop_assumption_state = {"value": DEFAULT_PRESSURE_DROP_ASSUMPTION}
 
     # Calculate initial pressure drop ratio
+    # Calculate sigma_r from d_r * A_r
+    initial_sigma_r = DEFAULT_D_R * DEFAULT_A_R
     initial_pressure_drop_ratio = calculate_pressure_drop_ratio(
         DEFAULT_PRESSURE_DROP_ASSUMPTION,
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_T,
         DEFAULT_D_R,
         DEFAULT_MOLAR_MASS_RATIO,
-        DEFAULT_SIGMA_R,
+        initial_sigma_r,
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
     )
 
@@ -1126,17 +1128,17 @@ if __name__ == "__main__":
     slider_molar_mass_ratio.ax.set_visible(False)  # Hidden by default
     y_pos -= slider_spacing
 
-    # Sigma_r slider (for inlet density assumption, option 3)
-    slider_sigma_r = ExpSlider(
+    # A_r slider (for inlet density assumption, option 3)
+    slider_a_r = ExpSlider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
-        r"$A_{o,c}$",
-        DEFAULT_SIGMA_R_MIN,
+        r"$A_r$",
+        DEFAULT_A_R_MIN,
         10.0,
-        valinit=DEFAULT_SIGMA_R,
+        valinit=DEFAULT_A_R,
         valstep=0.1,
-        valfmt="%.1e" + r"$A_{o,h}$",
+        valfmt="%.2f" + r"$A_{h}$",
     )
-    slider_sigma_r.ax.set_visible(False)  # Hidden by default
+    slider_a_r.ax.set_visible(False)  # Hidden by default
     y_pos -= slider_spacing
 
     def update_pressure_drop_slider_visibility():
@@ -1144,10 +1146,10 @@ if __name__ == "__main__":
         assumption = pressure_drop_assumption_state["value"]
         if assumption == "inlet_density":
             slider_molar_mass_ratio.ax.set_visible(True)
-            slider_sigma_r.ax.set_visible(True)
+            slider_a_r.ax.set_visible(True)
         else:
             slider_molar_mass_ratio.ax.set_visible(False)
-            slider_sigma_r.ax.set_visible(False)
+            slider_a_r.ax.set_visible(False)
 
     def select_pressure_drop_assumption(label):
         """Handle pressure drop assumption selection"""
@@ -1195,13 +1197,16 @@ if __name__ == "__main__":
 
         # Calculate pressure drop ratio based on assumption
         molar_mass_ratio = DEFAULT_MOLAR_MASS_RATIO
-        sigma_r = DEFAULT_SIGMA_R
+        a_r = DEFAULT_A_R
         if assumption == "inlet_density":
             # Get values from sliders
             if slider_molar_mass_ratio is not None:
                 molar_mass_ratio = slider_molar_mass_ratio.val
-            if slider_sigma_r is not None:
-                sigma_r = slider_sigma_r.val
+            if slider_a_r is not None:
+                a_r = slider_a_r.val
+
+        # Calculate sigma_r from d_r * A_r
+        sigma_r = d_r * a_r
 
         pressure_drop_ratio = calculate_pressure_drop_ratio(
             assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
@@ -1281,7 +1286,7 @@ if __name__ == "__main__":
     slider_p_hot_over_p_dead.on_changed(update_plot)
 
     # Connect pressure drop assumption sliders
-    slider_sigma_r.on_changed(update_plot)
+    slider_a_r.on_changed(update_plot)
     slider_molar_mass_ratio.on_changed(update_plot)
 
     # Connect framework radio buttons

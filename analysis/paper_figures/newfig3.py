@@ -30,10 +30,10 @@ DEFAULT_GAMMA = 1.4
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"  # Essential input for accurate cold pressure drop
 if DEFAULT_PRESSURE_DROP_ASSUMPTION == "inlet_density":
     DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
-    DEFAULT_SIGMA_R = 0.1  # sigma_r (cold/hot)
+    DEFAULT_A_R = 0.1  # A_r (cold/hot) - sigma_r is calculated as d_r * A_r
 else:
     DEFAULT_MOLAR_MASS_RATIO = None
-    DEFAULT_SIGMA_R = None
+    DEFAULT_A_R = None
 
 
 def save_figures(
@@ -51,7 +51,7 @@ def save_figures(
     gamma=DEFAULT_GAMMA,
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
-    sigma_r=DEFAULT_SIGMA_R,
+    a_r=DEFAULT_A_R,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for practical framework with multiple g^2 values.
@@ -73,6 +73,8 @@ def save_figures(
     )
 
     # Calculate pressure drop ratio based on assumption
+    # Calculate sigma_r from d_r * A_r
+    sigma_r = d_r * a_r if a_r is not None else None
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
@@ -105,7 +107,7 @@ def save_figures(
     ax.set_ylabel(r"HEX $\Delta Q_0^M/Q_{\mathrm{max}}$")
     ax.set_xticks([0, 5, 10, 15])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
-    
+
     # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
     legend = ax.get_legend()
     if legend:
@@ -115,7 +117,7 @@ def save_figures(
         handles = line_list
         labels = [line.get_label() for line in line_list]
         ax.legend(handles, labels, loc="upper right")
-        
+
         # Add optimum point markers (minimum) for each line
         for line in line_list:
             x_data = line.get_xdata()
@@ -188,5 +190,5 @@ if __name__ == "__main__":
         gamma=DEFAULT_GAMMA,
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
-        sigma_r=DEFAULT_SIGMA_R,
+        a_r=DEFAULT_A_R,
     )
