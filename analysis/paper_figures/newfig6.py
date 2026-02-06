@@ -244,6 +244,7 @@ def run_sweep_and_plot(
         return
 
     # Interpolate onto regular grid for contour
+    # Convert irregular (x, y, z) points from sweep to regular grid for contour plotting
     x_min, x_max = xx[valid].min(), xx[valid].max()
     y_min, y_max = AO_OVER_AO_REF_VALUES.min(), AO_OVER_AO_REF_VALUES.max()
     # Slightly extend for nicer contours
