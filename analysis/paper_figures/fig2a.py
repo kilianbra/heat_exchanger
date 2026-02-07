@@ -25,7 +25,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="newfig1",
+    base_name="fig2a",
     plot_triple_g2=None,
 ):
     """
@@ -35,22 +35,26 @@ def save_figures(
         plot_triple_g2: If None, use g2_h, else except array of g2 values to plot
     """
     # Set font sizes to match Word (10pt = 10 points)
+    font_size = 8
     plt.rcParams.update(
         {
-            "font.size": 10,
-            "axes.titlesize": 10,
-            "axes.labelsize": 10,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 10,
-            "figure.titlesize": 10,
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "font.size": font_size,
+            "mathtext.fontset": "stix",
+            "axes.titlesize": font_size,
+            "axes.labelsize": font_size,
+            "xtick.labelsize": font_size,
+            "ytick.labelsize": font_size,
+            "legend.fontsize": font_size,
+            "figure.titlesize": font_size,
         }
     )
 
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
-
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
+    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54)) # IF DOUBLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=((7.1) / 2.54, 7 / 2.54)) # IF TRIPPLE COLUMN FIGURE, USE THIS
     ax = plt.subplot(111)
     ax_twin = ax.twinx()
 
@@ -81,24 +85,34 @@ def save_figures(
         legend_twin.remove()
 
     # Add legend at new location
-    handles1, labels1 = ax.get_legend_handles_labels()
-    handles2, labels2 = ax_twin.get_legend_handles_labels()
+    # handles1, labels1 = ax.get_legend_handles_labels()
+    # handles2, labels2 = ax_twin.get_legend_handles_labels()
     # ax.legend(handles1 + handles2, labels1 + labels2, loc="center right") # incl eps
     # ax.legend(handles2, labels2, loc="center right")  # just have g^2 values
     # Add new legend using handles2 with custom labels High, Medium, Low and a title
-    custom_labels = ["High", "Medium", "Low"]
+
+    # independet control for figure
+    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
+    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{in}$ [%])")
+    h_right, _ = ax_twin.get_legend_handles_labels()
     legend = ax.legend(
-        handles=handles2,
-        labels=custom_labels,
-        title="Mass Velocity",
-        loc="center right",
-        bbox_to_anchor=(1, 0.62),  # Move legend up (y value: 0=bottom, 1=top)
-        frameon=True,
-        edgecolor="black",
-        facecolor="white",
-        framealpha=1.0,
-        fancybox=True,
+        h_right,
+        [r"$20\times10^{-3}$", r"$5\times10^{-3}$", r"$1\times10^{-3}$"], 
+        loc="center right", 
+        bbox_to_anchor=(1, 0.62), 
+        frameon=True, edgecolor="black", 
+        facecolor="white", framealpha=1.0, 
+        fancybox=False,
+        title=(
+            "Dimensionless \nMass Velocity\n" 
+            + r"($\dot{m}/A_o)^2 / (2p_{\mathrm{in}} \rho$)"
+        )
     )
+    legend.get_title().set_ha("center")
+    legend._legend_box.align = "center"
+    for t in legend.get_texts():
+        t.set_ha("center")
 
     # Remove title if present
     ax.set_title("")
@@ -152,6 +166,6 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="newfig1",
+        base_name="fig2a",
         plot_triple_g2=PLOT_TRIPLE_G2,
     )

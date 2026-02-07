@@ -588,7 +588,7 @@ def create_plot(
         # Plot pressure drop
         if is_multiple_g2:
             # Multiple g^2 values - only plot hot side (cases 1 and 2 can't have multiple g^2 with both sides)
-            linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+            linestyles = ["-", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
             for i, g2_val in enumerate(reversed(g2_values)):
                 ntu_dp, _, dp_hot_dp, dp_cold_dp, validity_mask_dp = calculate_epsilon_ntu_curve(
                     c_cold_over_c_hot,
@@ -675,7 +675,7 @@ def create_plot(
 
     elif framework == "classical":
         # Plot classical metric for each g^2 value
-        linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+        linestyles = ["-", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
         dark_blue = "k"  # Dark blue color from Fig 3
         line_list = []
         all_classical_metrics = []
@@ -784,7 +784,7 @@ def create_plot(
 
     elif framework == "practical":
         # Plot practical metric for each g^2 value
-        linestyles = ["-.", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
+        linestyles = ["-", "--", ":", "-", (0, (3, 1, 1, 1)), (0, (5, 5))]
         dark_blue = "k"  # black
         line_list = []
         all_metrics = []
