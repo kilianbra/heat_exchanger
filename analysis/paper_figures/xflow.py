@@ -957,6 +957,158 @@ def create_plot(
             return None, None, ax, ax_twin
 
 
+def plot_unavailable_energy_breakdown(
+    c_cold_over_c_hot,
+    st_over_f,
+    f_c_over_f_h,
+    d_r,
+    g2_h,
+    ntu_max=None,
+    dp_max=0.2,
+    ax=None,
+    framework="classical",
+    t=2.0,
+    t_dead_over_t_cold_in=1.0,
+    p_cold_in_over_p_hot_in=1.0,
+    p_dead_over_p_hot_in=1.0,
+    gamma=1.4,
+    pressure_drop_percent_ratio_cold_over_hot=0.0,
+):
+    """
+    Plot unavailable energy creation breakdown: with and without pressure drop.
+    
+    This function plots two lines:
+    1. Unavailable energy creation assuming no pressure drop (p_out/p_in = 1 for both streams)
+    2. Unavailable energy creation with actual pressure drop
+    
+    This function plots directly on the provided axes. If ax is None, it creates a new figure
+    and axes. The function clears existing plots on the axes before plotting new data.
+
+    Parameters:
+        c_cold_over_c_hot: C_cold / C_hot ratio
+        st_over_f: St/f ratio (same for both fluids)
+        f_c_over_f_h: f_c / f_h ratio
+        d_r: d_r = sigma_r/A_r (cold/hot ratio)
+        g2_h: g2_h parameter
+        ntu_max: Maximum NTU to plot (None for default)
+        dp_max: Maximum pressure drop fraction (default 0.2 = 20%)
+        ax: Matplotlib axes object to plot on (creates new figure if None)
+        framework: Framework to use. Options: "classical" or "practical". Default "classical".
+        t: Temperature ratio T_hot_in / T_cold_in. Default 2.0.
+        t_dead_over_t_cold_in: Dead state temperature normalized by cold inlet temperature. Default 1.0.
+        p_cold_in_over_p_hot_in: Cold inlet pressure normalized by hot inlet pressure. Default 1.0.
+        p_dead_over_p_hot_in: Dead state pressure normalized by hot inlet pressure. Default 1.0.
+        gamma: Specific heat ratio. Default 1.4.
+        pressure_drop_percent_ratio_cold_over_hot: Ratio of (dp_cold/p_cold_in) / (dp_hot/p_hot_in).
+
+    Returns:
+        (line_no_dp, line_with_dp, ax): Tuple containing line objects and axes
+    """
+    # Calculate epsilon-NTU curve with actual pressure drop
+    ntu, epsilon, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask = calculate_epsilon_ntu_curve(
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r,
+        g2_h,
+        ntu_max=ntu_max,
+        dp_max=dp_max,
+        pressure_drop_percent_ratio_cold_over_hot=pressure_drop_percent_ratio_cold_over_hot,
+    )
+    
+    # Create axes if not provided
+    if ax is None:
+        fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
+        ax = plt.subplot(111)
+    
+    # Clear existing plots
+    ax.clear()
+    
+    # Calculate unavailable energy creation with no pressure drop
+    # Set dp_over_p_in = 0 for both streams (p_out/p_in = 1)
+    dp_over_p_in_hot_no_dp = np.zeros_like(dp_over_p_in_hot)
+    dp_over_p_in_cold_no_dp = np.zeros_like(dp_over_p_in_cold)
+    # All points are valid when there's no pressure drop
+    validity_mask_no_dp = np.ones_like(validity_mask, dtype=bool)
+    
+    if framework == "classical":
+        unavailable_no_dp = classical_unavailable_creation_hex(
+            epsilon, t, dp_over_p_in_hot_no_dp, dp_over_p_in_cold_no_dp, validity_mask_no_dp,
+            t_dead_over_t_cold_in, gamma
+        )
+        unavailable_with_dp = classical_unavailable_creation_hex(
+            epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask,
+            t_dead_over_t_cold_in, gamma
+        )
+        ylabel = r"HEx $\Delta Q_0/Q_{\mathrm{max}}$"
+    elif framework == "practical":
+        unavailable_no_dp = practical_unavailable_creation_hex(
+            epsilon, t, dp_over_p_in_hot_no_dp, dp_over_p_in_cold_no_dp, validity_mask_no_dp,
+            p_cold_in_over_p_hot_in, p_dead_over_p_hot_in, gamma
+        )
+        unavailable_with_dp = practical_unavailable_creation_hex(
+            epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask,
+            p_cold_in_over_p_hot_in, p_dead_over_p_hot_in, gamma
+        )
+        ylabel = r"HEx $\Delta Q_0^M/Q_{\mathrm{max}}$"
+    else:
+        raise ValueError(f"Unknown framework: {framework}. Must be 'classical' or 'practical'.")
+    
+    # Plot both lines
+    # For no pressure drop, use all valid points (which is all points)
+    line_no_dp = ax.plot(
+        ntu[validity_mask_no_dp],
+        unavailable_no_dp,
+        "k--",
+        label="No pressure drop",
+        zorder=2,
+    )[0]
+    
+    # For with pressure drop, use only points where pressure drop is valid
+    line_with_dp = ax.plot(
+        ntu[validity_mask],
+        unavailable_with_dp,
+        "k-",
+        label="With pressure drop",
+        zorder=3,
+    )[0]
+    
+    # Set axis labels and limits
+    ax.set_xlabel("NTU [-]")
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
+    
+    # Auto-scale y-axis
+    all_values = np.concatenate([unavailable_no_dp, unavailable_with_dp])
+    if len(all_values) > 0:
+        ylim_min = np.min(all_values) * 1.1
+        ylim_max = np.max(all_values) * 1.1
+        if framework == "practical":
+            # For practical, typically negative values, set y_max to 0
+            ax.set_ylim(ylim_min, 0)
+        else:
+            # For classical, typically positive values, set y_min to 0
+            ax.set_ylim(0, max(ylim_max, 0.01))
+    else:
+        if framework == "practical":
+            ax.set_ylim(-0.01, 0)
+        else:
+            ax.set_ylim(0, 0.01)
+    
+    # Add legend
+    ax.legend(
+        loc="upper right",
+        labelspacing=0.05,
+        edgecolor="black",
+        frameon=True,
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=True,
+    )
+    
+    return line_no_dp, line_with_dp, ax
+
+
 def calculate_pressure_drop_ratio(
     assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
 ):
