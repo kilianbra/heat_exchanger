@@ -203,8 +203,18 @@ def save_figures(
         pad_inches=0,
     )
 
+    # Save as HD PDF
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.pdf"),
+        dpi=300,
+        facecolor="white",
+        format="pdf",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png")
+    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
 
 
 if __name__ == "__main__":
