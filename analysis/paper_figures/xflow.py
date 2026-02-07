@@ -456,7 +456,7 @@ def create_plot(
 ):
     """
     Create or update the plot with given parameters.
-    
+
     This function plots directly on the provided axes (ax and ax_twin). If ax is None,
     it creates a new figure and axes. The function clears existing plots on the axes
     before plotting new data.
@@ -471,8 +471,8 @@ def create_plot(
         dp_max: Maximum pressure drop fraction (default 0.2 = 20%)
         ax: Matplotlib axes object to plot on (creates new figure if None)
         ax_twin: Matplotlib twin axes object for right y-axis (created if None and ax provided)
-        plot_triple_g2: If False/None, use single g2_h value. If a list/array, use those 
-                        g^2 values for plotting multiple lines. Note: True is treated as a 
+        plot_triple_g2: If False/None, use single g2_h value. If a list/array, use those
+                        g^2 values for plotting multiple lines. Note: True is treated as a
                         truthy value and will cause an error - pass a list/array instead.
         framework: Framework to use for right axis. Options: "conventional" (pressure drop),
                    "classical" availability (exergy), "practical" availability (euergy).
@@ -976,11 +976,11 @@ def plot_unavailable_energy_breakdown(
 ):
     """
     Plot unavailable energy creation breakdown: with and without pressure drop.
-    
+
     This function plots two lines:
     1. Unavailable energy creation assuming no pressure drop (p_out/p_in = 1 for both streams)
     2. Unavailable energy creation with actual pressure drop
-    
+
     This function plots directly on the provided axes. If ax is None, it creates a new figure
     and axes. The function clears existing plots on the axes before plotting new data.
 
@@ -1015,45 +1015,61 @@ def plot_unavailable_energy_breakdown(
         dp_max=dp_max,
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_percent_ratio_cold_over_hot,
     )
-    
+
     # Create axes if not provided
     if ax is None:
-        fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
+        plt.figure(figsize=(9 / 2.54, 7 / 2.54))
         ax = plt.subplot(111)
-    
+
     # Clear existing plots
     ax.clear()
-    
+
     # Calculate unavailable energy creation with no pressure drop
     # Set dp_over_p_in = 0 for both streams (p_out/p_in = 1)
     dp_over_p_in_hot_no_dp = np.zeros_like(dp_over_p_in_hot)
     dp_over_p_in_cold_no_dp = np.zeros_like(dp_over_p_in_cold)
     # All points are valid when there's no pressure drop
     validity_mask_no_dp = np.ones_like(validity_mask, dtype=bool)
-    
+
     if framework == "classical":
         unavailable_no_dp = classical_unavailable_creation_hex(
-            epsilon, t, dp_over_p_in_hot_no_dp, dp_over_p_in_cold_no_dp, validity_mask_no_dp,
-            t_dead_over_t_cold_in, gamma
+            epsilon,
+            t,
+            dp_over_p_in_hot_no_dp,
+            dp_over_p_in_cold_no_dp,
+            validity_mask_no_dp,
+            t_dead_over_t_cold_in,
+            gamma,
         )
         unavailable_with_dp = classical_unavailable_creation_hex(
-            epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask,
-            t_dead_over_t_cold_in, gamma
+            epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask, t_dead_over_t_cold_in, gamma
         )
         ylabel = r"HEx $\Delta Q_0/Q_{\mathrm{max}}$"
     elif framework == "practical":
         unavailable_no_dp = practical_unavailable_creation_hex(
-            epsilon, t, dp_over_p_in_hot_no_dp, dp_over_p_in_cold_no_dp, validity_mask_no_dp,
-            p_cold_in_over_p_hot_in, p_dead_over_p_hot_in, gamma
+            epsilon,
+            t,
+            dp_over_p_in_hot_no_dp,
+            dp_over_p_in_cold_no_dp,
+            validity_mask_no_dp,
+            p_cold_in_over_p_hot_in,
+            p_dead_over_p_hot_in,
+            gamma,
         )
         unavailable_with_dp = practical_unavailable_creation_hex(
-            epsilon, t, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask,
-            p_cold_in_over_p_hot_in, p_dead_over_p_hot_in, gamma
+            epsilon,
+            t,
+            dp_over_p_in_hot,
+            dp_over_p_in_cold,
+            validity_mask,
+            p_cold_in_over_p_hot_in,
+            p_dead_over_p_hot_in,
+            gamma,
         )
         ylabel = r"HEx $\Delta Q_0^M/Q_{\mathrm{max}}$"
     else:
         raise ValueError(f"Unknown framework: {framework}. Must be 'classical' or 'practical'.")
-    
+
     # Plot both lines
     # For no pressure drop, use all valid points (which is all points)
     line_no_dp = ax.plot(
@@ -1063,7 +1079,7 @@ def plot_unavailable_energy_breakdown(
         label="No pressure drop",
         zorder=2,
     )[0]
-    
+
     # For with pressure drop, use only points where pressure drop is valid
     line_with_dp = ax.plot(
         ntu[validity_mask],
@@ -1072,12 +1088,12 @@ def plot_unavailable_energy_breakdown(
         label="With pressure drop",
         zorder=3,
     )[0]
-    
+
     # Set axis labels and limits
     ax.set_xlabel("NTU [-]")
     ax.set_ylabel(ylabel)
     ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
-    
+
     # Auto-scale y-axis
     all_values = np.concatenate([unavailable_no_dp, unavailable_with_dp])
     if len(all_values) > 0:
@@ -1094,7 +1110,7 @@ def plot_unavailable_energy_breakdown(
             ax.set_ylim(-0.01, 0)
         else:
             ax.set_ylim(0, 0.01)
-    
+
     # Add legend
     ax.legend(
         loc="upper right",
@@ -1105,7 +1121,7 @@ def plot_unavailable_energy_breakdown(
         framealpha=1.0,
         fancybox=True,
     )
-    
+
     return line_no_dp, line_with_dp, ax
 
 
