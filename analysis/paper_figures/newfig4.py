@@ -53,8 +53,8 @@ def save_figures(
     a_r=DEFAULT_A_R,
 ):
     """
-    Save figures as SVG, TIFF, and HD PNG combining agnostic and practical frameworks.
-    Two subplots side by side: left shows agnostic (epsilon + pressure drops), right shows practical.
+    Save figures as SVG, TIFF, and HD PNG combining conventional and practical frameworks.
+    Two subplots side by side: left shows conventional (epsilon + pressure drops), right shows practical.
     """
     # Set font sizes to match Word (10pt = 10 points)
     plt.rcParams.update(
@@ -83,7 +83,7 @@ def save_figures(
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9 / 2.54, 7 / 2.54))
     ax1_twin = ax1.twinx()  # Will be used but both pressure drops go on left axis
 
-    # Left subplot: Agnostic framework
+    # Left subplot: Conventional framework
     # Plot epsilon and both pressure drops on left y-axis
     create_plot(
         c_cold_over_c_hot,
@@ -96,7 +96,7 @@ def save_figures(
         ax=ax1,
         ax_twin=ax1_twin,
         plot_triple_g2=PLOT_TRIPLE_G2,
-        framework="agnostic",
+        framework="conventional",
         t=t,
         t_dead_over_t_cold_in=t_dead_over_t_cold_in,
         p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
@@ -137,11 +137,11 @@ def save_figures(
 
     # Set x-axis limits to 0-2
     ax1.set_xlim(0, 2)
-    ax1.set_ylim(0, 0.6)
+    ax1.set_ylim(0, 0.7)
     ax1.set_xlabel("NTU [-]")
 
     # Add grey vertical line at NTU_MATCH
-    ax1.axvline(x=NTU_MATCH, color="grey", linestyle="--", linewidth=1, zorder=2)
+    # ax1.axvline(x=NTU_MATCH, color="grey", linestyle="--", linewidth=1, zorder=2)
 
     # Right subplot: Practical framework
     ax2_twin = ax2.twinx()  # Created but will be hidden

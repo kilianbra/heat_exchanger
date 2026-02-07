@@ -65,7 +65,7 @@ def save_figures(
         ax=ax,
         ax_twin=ax_twin,
         plot_triple_g2=plot_triple_g2,
-        framework="agnostic",  # Default framework for saved figures
+        framework="conventional",  # Default framework for saved figures
         t=2.0,
         t_dead_over_t_cold_in=1.0,
         p_cold_in_over_p_hot_in=1.0,

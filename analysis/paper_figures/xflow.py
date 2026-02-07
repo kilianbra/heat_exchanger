@@ -446,7 +446,7 @@ def create_plot(
     ax=None,
     ax_twin=None,
     plot_triple_g2=None,
-    framework="agnostic",
+    framework="conventional",
     t=2.0,
     t_dead_over_t_cold_in=1.0,
     p_cold_in_over_p_hot_in=1.0,
@@ -456,12 +456,26 @@ def create_plot(
 ):
     """
     Create or update the plot with given parameters.
+    
+    This function plots directly on the provided axes (ax and ax_twin). If ax is None,
+    it creates a new figure and axes. The function clears existing plots on the axes
+    before plotting new data.
 
     Parameters:
-        plot_triple_g2: If False/None, use single g2_h value. If True, use default [1e-5, 2e-5, 5e-5].
-                        If a list/array, use those g^2 values for plotting multiple lines.
-        framework: Framework to use for right axis. Options: "agnostic" (pressure drop),
-                   "classical" (entropy generation), "practical" (work potential).
+        c_cold_over_c_hot: C_cold / C_hot ratio
+        st_over_f: St/f ratio (same for both fluids)
+        f_c_over_f_h: f_c / f_h ratio
+        d_r: d_r = sigma_r/A_r (cold/hot ratio)
+        g2_h: g2_h parameter
+        ntu_max: Maximum NTU to plot (None for default)
+        dp_max: Maximum pressure drop fraction (default 0.2 = 20%)
+        ax: Matplotlib axes object to plot on (creates new figure if None)
+        ax_twin: Matplotlib twin axes object for right y-axis (created if None and ax provided)
+        plot_triple_g2: If False/None, use single g2_h value. If a list/array, use those 
+                        g^2 values for plotting multiple lines. Note: True is treated as a 
+                        truthy value and will cause an error - pass a list/array instead.
+        framework: Framework to use for right axis. Options: "conventional" (pressure drop),
+                   "classical" availability (exergy), "practical" availability (euergy).
         t: Temperature ratio T_hot_in / T_cold_in. Default 2.0.
         t_dead_over_t_cold_in: Dead state temperature normalized by cold inlet temperature. Default 1.0.
         p_cold_in_over_p_hot_in: Cold inlet pressure normalized by hot inlet pressure. Default 1.0.
@@ -474,8 +488,16 @@ def create_plot(
             - Calculated value: Based on inlet density assumption (requires additional parameters)
 
     Returns:
-        line_eps: Line object for epsilon curve
-        line_dp: Line object(s) for right axis curve(s) - list if multiple g2 values, single if not
+        For "conventional" framework:
+            - If multiple g2 values: (line_eps, line_dp_list, ax, ax_twin)
+            - If single g2 value: (line_eps, line_dp, ax, ax_twin)
+        For "classical" or "practical" frameworks:
+            - (line_dp_list[0], line_dp_list, ax, ax_twin)
+        where:
+            - line_eps: Line object for epsilon curve (only for conventional framework)
+            - line_dp or line_dp_list: Line object(s) for right axis curve(s)
+            - ax: The axes object used for plotting
+            - ax_twin: The twin axes object used for right y-axis (may be hidden for classical/practical)
     """
     if plot_triple_g2 is None or plot_triple_g2 is False:
         # Use single g^2 value
@@ -512,8 +534,8 @@ def create_plot(
     line_dp_list = []
     dark_blue = "b"  # Dark blue color from Fig 3
 
-    if framework == "agnostic":
-        # Make sure twin axis is visible for agnostic framework
+    if framework == "conventional":
+        # Make sure twin axis is visible for conventional framework
         ax_twin.set_visible(True)
         # Plot epsilon on left axis (only valid points)
         eps_label = r"$\varepsilon$"
@@ -873,7 +895,7 @@ def create_plot(
             )
 
     # Set up axis labels and colors based on framework
-    if framework == "agnostic":
+    if framework == "conventional":
         # Set ylabel and ensure it's on the right side for twin axis
         ax_twin.set_ylabel(ylabel)
         ax_twin.yaxis.set_label_position("right")
@@ -922,7 +944,7 @@ def create_plot(
             legend.get_frame().set_alpha(1.0)
             legend.get_frame().set_edgecolor("black")
 
-    if framework == "agnostic":
+    if framework == "conventional":
         if is_multiple_g2:
             return line_eps, line_dp_list, ax, ax_twin
         else:
@@ -972,9 +994,9 @@ if __name__ == "__main__":
     # Boolean to control triple g^2 mode (True = three lines, False = single line)
     PLOT_TRIPLE_G2 = None
 
-    # Framework selection: "agnostic", "classical", "practical"
-    FRAMEWORK = "agnostic"
-    FRAMEWORKS = ["agnostic", "classical", "practical"]
+    # Framework selection: "conventional", "classical", "practical"
+    FRAMEWORK = "conventional"
+    FRAMEWORKS = ["conventional", "classical", "practical"]
 
     # Create figure with space for sliders on the right
     fig = plt.figure(figsize=(12, 8))
@@ -1235,18 +1257,18 @@ if __name__ == "__main__":
         p_cold_in_over_p_hot_in = DEFAULT_P_COLD_IN_OVER_P_HOT_IN
         p_dead_over_p_hot_in = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD  # p_dead / p_hot_in (for calculations)
 
-        # Temperature ratio needed for classical, practical, or agnostic with inlet_density
+        # Temperature ratio needed for classical, practical, or conventional with inlet_density
         if current_framework in ["classical", "practical"] or (
-            current_framework == "agnostic" and assumption == "inlet_density"
+            current_framework == "conventional" and assumption == "inlet_density"
         ):
             if slider_t_hot_over_t_cold is not None and slider_t_hot_over_t_cold.ax.get_visible():
                 t = slider_t_hot_over_t_cold.val
             if slider_t_dead_over_t_cold is not None and slider_t_dead_over_t_cold.ax.get_visible():
                 t_dead_over_t_cold_in = slider_t_dead_over_t_cold.val
 
-        # Pressure ratio needed for practical, or classical/agnostic with inlet_density
+        # Pressure ratio needed for practical, or classical/conventional with inlet_density
         if current_framework == "practical" or (
-            current_framework in ["classical", "agnostic"] and assumption == "inlet_density"
+            current_framework in ["classical", "conventional"] and assumption == "inlet_density"
         ):
             if slider_p_cold_over_p_hot is not None and slider_p_cold_over_p_hot.ax.get_visible():
                 p_cold_in_over_p_hot_in = slider_p_cold_over_p_hot.val
@@ -1308,24 +1330,24 @@ if __name__ == "__main__":
         current_framework = framework_state["value"]
         assumption = pressure_drop_assumption_state["value"]
 
-        # Temperature sliders (for classical, practical, or agnostic with inlet_density)
+        # Temperature sliders (for classical, practical, or conventional with inlet_density)
         show_temp_sliders = current_framework in ["classical", "practical"] or (
-            current_framework == "agnostic" and assumption == "inlet_density"
+            current_framework == "conventional" and assumption == "inlet_density"
         )
         if slider_t_hot_over_t_cold is not None:
             slider_t_hot_over_t_cold.ax.set_visible(show_temp_sliders)
         if slider_t_dead_over_t_cold is not None:
-            # T_dead slider only for classical/practical, not for agnostic even with inlet_density
+            # T_dead slider only for classical/practical, not for conventional even with inlet_density
             slider_t_dead_over_t_cold.ax.set_visible(current_framework in ["classical", "practical"])
 
-        # Pressure sliders (for practical, or classical/agnostic with inlet_density)
+        # Pressure sliders (for practical, or classical/conventional with inlet_density)
         show_pressure_sliders = current_framework == "practical" or (
-            current_framework in ["classical", "agnostic"] and assumption == "inlet_density"
+            current_framework in ["classical", "conventional"] and assumption == "inlet_density"
         )
         if slider_p_cold_over_p_hot is not None:
             slider_p_cold_over_p_hot.ax.set_visible(show_pressure_sliders)
         if slider_p_hot_over_p_dead is not None:
-            # p_hot/p_dead slider only for practical, not for classical/agnostic even with inlet_density
+            # p_hot/p_dead slider only for practical, not for classical/conventional even with inlet_density
             slider_p_hot_over_p_dead.ax.set_visible(current_framework == "practical")
 
         # Update pressure drop assumption slider visibility
