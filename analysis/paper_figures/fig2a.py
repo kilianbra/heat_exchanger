@@ -94,7 +94,7 @@ def save_figures(
     # independet control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
-    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{in}$ [%])")
+    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
     h_right, _ = ax_twin.get_legend_handles_labels()
     legend = ax.legend(
         h_right,

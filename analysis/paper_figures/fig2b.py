@@ -134,19 +134,6 @@ def save_figures(
 
     # Add new legend matching newfig1 style with custom labels and title
     if line_list:
-        custom_labels = ["High", "Medium", "Low"]
-        ax.legend(
-            handles=line_list,
-            labels=custom_labels,
-            title="Mass Velocity",
-            loc="upper right",
-            frameon=True,
-            facecolor="white",
-            framealpha=1.0,  # Set to 1.0 for fully opaque legend face
-            edgecolor="black",
-            fancybox=True,
-        )
-
         # Add optimum point markers (minimum after first peak) for each line
         opt_xy = []
         for line in line_list:
@@ -197,7 +184,6 @@ def save_figures(
     # Independent control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Unavailable Energy ($\Delta Q_0/Q_{\mathrm{max}}$)")
-    ax.legend("")
 
     # Save as SVG
     fig.savefig(
