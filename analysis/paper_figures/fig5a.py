@@ -42,7 +42,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig3c",
+    base_name="fig5a",
     t=DEFAULT_T,
     t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
     p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
@@ -53,8 +53,8 @@ def save_figures(
     a_r=DEFAULT_A_R,
 ):
     """
-    Save figures as SVG, TIFF, and HD PNG for practical framework (right subplot from newfig4).
-    Shows HEx ΔQ_0^M/Q_max.
+    Save figures as SVG, TIFF, and HD PNG for conventional framework (left subplot from newfig4).
+    Shows epsilon and pressure drops.
     """
     # Set font sizes to match Word (10pt = 10 points)
     font_size = 8
@@ -83,11 +83,12 @@ def save_figures(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
-    # Create figure with single subplot
-    fig, ax = plt.subplots(1, 1, figsize=(9 / 2.54, 7 / 2.54))
-    ax_twin = ax.twinx()  # Created but will be hidden
+    # Create figure with single subplot (match fig2a: triple column 7.1 cm width)
+    fig, ax = plt.subplots(1, 1, figsize=(7.1 / 2.54, 7 / 2.54))
+    ax_twin = ax.twinx()  # Will be used but both pressure drops go on left axis
 
-    create_plot(
+    # Plot epsilon and both pressure drops; capture line_eps for styling and markers
+    line_eps, _, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -98,7 +99,7 @@ def save_figures(
         ax=ax,
         ax_twin=ax_twin,
         plot_triple_g2=PLOT_TRIPLE_G2,
-        framework="practical",
+        framework="conventional",
         t=t,
         t_dead_over_t_cold_in=t_dead_over_t_cold_in,
         p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
@@ -106,59 +107,77 @@ def save_figures(
         gamma=gamma,
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
-
-    # Move y-axis to right side
-    # Get ylabel and ylim from left axis (where create_plot set them)
-    ylim = ax.get_ylim()
-    # Remove the current title from ax
+    # Remove title if present
     ax.set_title("")
-    # Remove the current legend from ax, if it exists
-    legend = ax.get_legend()
-    if legend is not None:
-        legend.remove()
 
-    # Reuse ax_twin (which was hidden by create_plot) as the right axis
-    ax_twin.set_visible(True)
-    ax_twin.set_ylim(ylim)
-    ax_twin.spines["right"].set_visible(True)
-    ax_twin.yaxis.set_visible(True)
-    ax_twin.tick_params(axis="y", right=True, labelright=True)
+    # Remove grey vertical line at NTU_MATCH (drawn by xflow when SHOW_CUBIC is True)
+    for line in list(ax.get_lines()):
+        x_data = line.get_xdata()
+        if len(x_data) >= 2 and np.allclose(x_data, x_data[0]):
+            line.remove()
+            break
 
-    # Hide left y-axis completely
-    ax.yaxis.set_visible(False)
-    ax.spines["left"].set_visible(False)
-    ax.set_ylabel("")  # Clear ylabel from left axis
+    # Remove existing legends (keep pressure drop on right axis, match fig2a)
+    legend1 = ax.get_legend()
+    if legend1:
+        legend1.remove()
+    legend1_twin = ax_twin.get_legend()
+    if legend1_twin:
+        legend1_twin.remove()
 
-    # Set x-axis limits to 0-2
+    # Left axis red like fig2a: epsilon line and axis
+    line_eps.set_color("r")
+    ax.spines["left"].set_color("r")
+    ax.yaxis.label.set_color("r")
+    ax.tick_params(axis="y", colors="r")
+
+    # Pressure drop lines: both black, hot solid and cold dashed; legend Hot side / Cold side
+    lines_dp = ax_twin.get_lines()
+    if len(lines_dp) >= 2:
+        lines_dp[0].set_color("k")
+        lines_dp[0].set_linestyle("-")
+        lines_dp[1].set_color("k")
+        lines_dp[1].set_linestyle("--")
+        ax.legend(
+            handles=lines_dp,
+            labels=["Hot side", "Cold side"],
+            loc="upper left",
+            # bbox_to_anchor=(1.0, 0.5),
+            frameon=True,
+            facecolor="white",
+            edgecolor="black",
+            fancybox=False,
+        )
+
+    # Set x-axis limits to 0-2 and labels to match fig2a
     ax.set_xlim(0, 2)
+    ax.set_ylim(0, 0.7)
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax_twin.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
+    ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
+    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
 
     # NTU reference and optimum values
     NTU_REF = 1.48
     NTU_OPT = 1.18
 
-    # Get all lines from ax and add markers
-    lines = [line for line in ax.get_lines() if hasattr(line, 'get_xdata')]
+    # Markers only on the epsilon curve (not on axvline – that was causing the 4th grey x)
+    x_eps = np.array(line_eps.get_xdata())
+    y_eps = np.array(line_eps.get_ydata())
+    idx_ref = (np.abs(x_eps - NTU_REF)).argmin()
+    ax.scatter(NTU_REF, y_eps[idx_ref], marker="D", color="white", zorder=10, s=50, facecolor="black")
+    idx_opt = (np.abs(x_eps - NTU_OPT)).argmin()
+    ax.scatter(NTU_OPT, y_eps[idx_opt], marker="o", color="white", zorder=10, s=50, facecolor="black")
 
-    # Add grey crosses at NTU_REF and black filled circles at NTU_OPT on all lines
-    for line in lines:
-        x_data = line.get_xdata()
-        y_data = line.get_ydata()
-        valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
-        if np.any(valid_mask):
-            x_plot = x_data[valid_mask]
-            y_plot = y_data[valid_mask]
-            
-            # Find y-value at NTU_REF
-            idx_ref = (np.abs(x_plot - NTU_REF)).argmin()
-            y_ref = y_plot[idx_ref]
-            ax.scatter(NTU_REF, y_ref, marker="x", color="grey", zorder=10, s=60)
-            
-            # Find y-value at NTU_OPT
-            idx_opt = (np.abs(x_plot - NTU_OPT)).argmin()
-            y_opt = y_plot[idx_opt]
-            ax.scatter(NTU_OPT, y_opt, marker="o", color="black", zorder=10, s=60, facecolor="black")
+    # Same markers on right-axis (pressure drop) lines only (hot and cold, not other artists)
+    for line in lines_dp:
+        x_data = np.array(line.get_xdata())
+        y_data = np.array(line.get_ydata())
+        idx_ref = (np.abs(x_data - NTU_REF)).argmin()
+        y_ref = y_data[idx_ref]
+        ax_twin.scatter(NTU_REF, y_ref, marker="D", color="white", zorder=10, s=50, facecolor="black")
+        idx_opt = (np.abs(x_data - NTU_OPT)).argmin()
+        y_opt = y_data[idx_opt]
+        ax_twin.scatter(NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=50, facecolor="black")
 
     plt.tight_layout(pad=0.5)
 
@@ -192,8 +211,18 @@ def save_figures(
         pad_inches=0,
     )
 
+    # Save as HD PDF
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.pdf"),
+        dpi=300,
+        facecolor="white",
+        format="pdf",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png")
+    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
 
 
 if __name__ == "__main__":
@@ -205,7 +234,7 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig3c",
+        base_name="fig5a",
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,

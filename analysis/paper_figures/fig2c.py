@@ -148,9 +148,11 @@ def save_figures(
                 ax.scatter(
                     x_plot[arg_y_min],
                     y_plot[arg_y_min],
-                    color="black",
+                    color="white",
                     marker="o",
                     zorder=5,
+                    facecolor="black",
+                    s = 50,
                 )
 
     plt.tight_layout(pad=0.5)

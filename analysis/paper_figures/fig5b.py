@@ -42,7 +42,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig3b",
+    base_name="fig5b",
     plot_triple_g2=None,
     t=DEFAULT_T,
     t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
@@ -118,9 +118,17 @@ def save_figures(
     # Remove title if present
     ax.set_title("")
 
+    # Remove grey vertical line at NTU_MATCH (drawn by xflow when SHOW_CUBIC is True)
+    for line in list(ax.get_lines()):
+        x_data = line.get_xdata()
+        if len(x_data) >= 2 and np.allclose(x_data, x_data[0]):
+            line.remove()
+            break
+
     ax.set_xticks([0, 1, 2])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
     ax.set_ylim(0, 0.15)
+    ax.set_yticks([0, 0.05, 0.10, 0.15])
 
     # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
     legend = ax.get_legend()
@@ -132,6 +140,8 @@ def save_figures(
     NTU_OPT = 1.18
 
     # Add new legend matching newfig1 style with custom labels and title
+    y_ref_first = None
+    y_opt_first = None
     if line_list:
         # Add grey crosses at NTU_REF and black filled circles at NTU_OPT on all lines
         for line in line_list:
@@ -146,12 +156,38 @@ def save_figures(
                 # Find y-value at NTU_REF
                 idx_ref = (np.abs(x_plot - NTU_REF)).argmin()
                 y_ref = y_plot[idx_ref]
-                ax.scatter(NTU_REF, y_ref, marker="x", color="grey", zorder=10, s=60)
+                if y_ref_first is None:
+                    y_ref_first = y_ref
+                ax.scatter(NTU_REF, y_ref, marker="D", color="white", zorder=10, s=50, facecolor="black")
+
 
                 # Find y-value at NTU_OPT
                 idx_opt = (np.abs(x_plot - NTU_OPT)).argmin()
                 y_opt = y_plot[idx_opt]
-                ax.scatter(NTU_OPT, y_opt, marker="o", color="black", zorder=10, s=60, facecolor="black")
+                if y_opt_first is None:
+                    y_opt_first = y_opt
+                ax.scatter(NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=50, facecolor="black")
+
+        # Annotations with arrows (like fig2b): reference design at grey x, optimal design at circle
+        arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
+        if y_ref_first is not None:
+            ax.annotate(
+                "reference design",
+                xy=(NTU_REF, y_ref_first),
+                xytext=(0.2, 0.08),
+                fontsize=font_size,
+                ha="left",
+                arrowprops=dict(arrowstyle="->", color="black", lw=1, shrinkB=10),
+            )
+        if y_opt_first is not None:
+            ax.annotate(
+                "optimal design",
+                xy=(NTU_OPT, y_opt_first),
+                xytext=(1.1, 0.035),
+                fontsize=font_size,
+                ha="left",
+                arrowprops=arrow_kw,
+            )
 
     plt.tight_layout(pad=0.5)
 
@@ -212,7 +248,7 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig3b",
+        base_name="fig5b",
         plot_triple_g2=PLOT_TRIPLE_G2,
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,

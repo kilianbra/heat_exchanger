@@ -155,9 +155,11 @@ def save_figures(
                     ax.scatter(
                         x_opt,
                         y_opt,
-                        color="black",
+                        color="white",
                         marker="o",
                         zorder=5,
+                        s = 50,
+                        facecolor="black",
                     )
         # Two arrows from one label "optimal designs" at y=0.15 to the two optimum points
         if len(opt_xy) >= 2:

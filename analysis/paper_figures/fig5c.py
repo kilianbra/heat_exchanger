@@ -42,7 +42,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig3a",
+    base_name="fig5c",
     t=DEFAULT_T,
     t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
     p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
@@ -53,8 +53,8 @@ def save_figures(
     a_r=DEFAULT_A_R,
 ):
     """
-    Save figures as SVG, TIFF, and HD PNG for conventional framework (left subplot from newfig4).
-    Shows epsilon and pressure drops.
+    Save figures as SVG, TIFF, and HD PNG for practical framework (right subplot from newfig4).
+    Shows HEx ΔQ_0^M/Q_max.
     """
     # Set font sizes to match Word (10pt = 10 points)
     font_size = 8
@@ -83,12 +83,11 @@ def save_figures(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
-    # Create figure with single subplot
-    fig, ax = plt.subplots(1, 1, figsize=(9 / 2.54, 7 / 2.54))
-    ax_twin = ax.twinx()  # Will be used but both pressure drops go on left axis
+    # Create figure with single subplot (match fig2c: triple column 6 cm width)
+    fig, ax = plt.subplots(1, 1, figsize=(6 / 2.54, 7 / 2.54))
+    ax_twin = ax.twinx()  # Created but will be hidden
 
-    # Plot epsilon and both pressure drops
-    create_plot(
+    _, line_list, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -99,7 +98,7 @@ def save_figures(
         ax=ax,
         ax_twin=ax_twin,
         plot_triple_g2=PLOT_TRIPLE_G2,
-        framework="conventional",
+        framework="practical",
         t=t,
         t_dead_over_t_cold_in=t_dead_over_t_cold_in,
         p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
@@ -107,63 +106,43 @@ def save_figures(
         gamma=gamma,
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
-    # Remove title if present
+
     ax.set_title("")
+    legend = ax.get_legend()
+    if legend is not None:
+        legend.remove()
 
-    # Remove twin axis visibility and move pressure drops to main axis
-    # Get the pressure drop lines from twin axis and replot on main axis
-    handles1, labels1 = ax.get_legend_handles_labels()
-    handles2, labels2 = ax_twin.get_legend_handles_labels()
+    # Remove grey vertical line at NTU_MATCH (drawn by xflow when SHOW_CUBIC is True)
+    for line in list(ax.get_lines()):
+        x_data = line.get_xdata()
+        if len(x_data) >= 2 and np.allclose(x_data, x_data[0]):
+            line.remove()
+            break
 
-    # Remove existing legends
-    legend1 = ax.get_legend()
-    if legend1:
-        legend1.remove()
-    legend1_twin = ax_twin.get_legend()
-    if legend1_twin:
-        legend1_twin.remove()
-
-    # Replot pressure drops on main axis (if they exist)
-    # We need to get the data from the lines
-    for handle in handles2:
-        x_data = handle.get_xdata()
-        y_data = handle.get_ydata()
-        valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
-        if np.any(valid_mask):
-            label = handle.get_label()
-            color = handle.get_color()
-            linestyle = handle.get_linestyle()
-            ax.plot(x_data[valid_mask], y_data[valid_mask], color=color, linestyle=linestyle, label=label, zorder=1)
-
-    # Hide twin axis
-    ax_twin.set_visible(False)
-
-    # Set x-axis limits to 0-2
+    # Keep y-axis on the left like fig2c (do not move to right)
     ax.set_xlim(0, 2)
-    ax.set_ylim(0, 0.7)
+    ax.set_ylim(-0.25, 0)
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
+    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
 
-    # NTU reference and optimum values
+    # NTU reference and optimum values; add markers only on the actual curve(s), not axvline
     NTU_REF = 1.48
-    NTU_OPT = 1.18
-
-    # Get all lines from both axes and add markers
-    all_lines = ax.get_lines()
-
-    # Add grey crosses at NTU_REF and black filled circles at NTU_OPT on all lines
-    for line in all_lines:
-        x_data = np.array(line.get_xdata())
-        y_data = np.array(line.get_ydata())
-
-        idx_ref = (np.abs(x_data - NTU_REF)).argmin()
-        y_ref = y_data[idx_ref]
-        ax.scatter(NTU_REF, y_ref, marker="x", color="grey", zorder=10, s=60)
-
-        # Find y-value at NTU_OPT
-        idx_opt = (np.abs(x_data - NTU_OPT)).argmin()
-        y_opt = y_data[idx_opt]
-        ax.scatter(NTU_OPT, y_opt, marker="o", color="black", zorder=10, s=60, facecolor="black")
+    NTU_OPT = 1.20
+    if line_list:
+        for line in line_list:
+            x_data = np.array(line.get_xdata())
+            y_data = np.array(line.get_ydata())
+            valid = np.isfinite(x_data) & np.isfinite(y_data)
+            if not np.any(valid):
+                continue
+            x_plot = x_data[valid]
+            y_plot = y_data[valid]
+            idx_ref = (np.abs(x_plot - NTU_REF)).argmin()
+            y_ref = y_plot[idx_ref]
+            ax.scatter(NTU_REF, y_ref, marker="D", color="white", zorder=10, s=50, facecolor="black")
+            idx_opt = (np.abs(x_plot - NTU_OPT)).argmin()
+            y_opt = y_plot[idx_opt]
+            ax.scatter(NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=50, facecolor="black")
 
     plt.tight_layout(pad=0.5)
 
@@ -197,8 +176,18 @@ def save_figures(
         pad_inches=0,
     )
 
+    # Save as HD PDF
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.pdf"),
+        dpi=300,
+        facecolor="white",
+        format="pdf",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png")
+    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
 
 
 if __name__ == "__main__":
@@ -210,7 +199,7 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig3a",
+        base_name="fig5c",
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
