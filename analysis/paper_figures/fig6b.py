@@ -1,6 +1,5 @@
 import os
 
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import xflow
@@ -8,7 +7,7 @@ from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdo
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Helicopter defaults (hardcoded from xflow.py) - same as newfig4
+# Helicopter defaults (hardcoded from xflow.py) - same as fig5c
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 0.95  # C_cold / C_hot
 DEFAULT_D_R = 0.44
@@ -40,7 +39,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="newfig5_new_b",
+    base_name="fig6b",
     t=DEFAULT_T,
     t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
     p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
@@ -52,35 +51,36 @@ def save_figures(
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
+    Matches fig5c style (labels, markers, legend box, no title).
     """
-    # Set font sizes to match Word (10pt = 10 points)
+    font_size = 8
     plt.rcParams.update(
         {
-            "font.size": 10,
-            "axes.titlesize": 10,
-            "axes.labelsize": 10,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 10,
-            "figure.titlesize": 10,
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "font.size": font_size,
+            "mathtext.fontset": "stix",
+            "axes.titlesize": font_size,
+            "axes.labelsize": font_size,
+            "xtick.labelsize": font_size,
+            "ytick.labelsize": font_size,
+            "legend.fontsize": font_size,
+            "figure.titlesize": font_size,
         }
     )
 
-    # Set SHOW_CUBIC and NTU_MATCH in xflow module
     xflow.SHOW_CUBIC = SHOW_CUBIC
     xflow.NTU_MATCH = NTU_MATCH
 
-    # Calculate pressure drop ratio based on assumption
     sigma_r = d_r * a_r if a_r is not None else None
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
-    # Create figure
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
+    # Match fig5c figure size (triple column 6 cm)
+    fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
 
-    # Plot unavailable energy breakdown for practical framework
     line_no_dp, line_with_dp, ax = plot_unavailable_energy_breakdown(
         c_cold_over_c_hot,
         st_over_f,
@@ -99,51 +99,35 @@ def save_figures(
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
 
-    # Get data from the lines
     ntu_no_dp = line_no_dp.get_xdata()
     y_no_dp = line_no_dp.get_ydata()
     ntu_with_dp = line_with_dp.get_xdata()
     y_with_dp = line_with_dp.get_ydata()
 
-    # Mask thermal creation line to only show where pressure drop line exists
-    # Find the valid range from the pressure drop line
     ntu_min_valid = ntu_with_dp.min()
     ntu_max_valid = ntu_with_dp.max()
 
-    # Create mask for thermal creation line
     mask_thermal = (ntu_no_dp >= ntu_min_valid) & (ntu_no_dp <= ntu_max_valid)
     ntu_no_dp_masked = ntu_no_dp[mask_thermal]
     y_no_dp_masked = y_no_dp[mask_thermal]
 
-    # Remove the original line and replot with masked data (keep it dashed)
     line_no_dp.remove()
     line_no_dp = ax.plot(
         ntu_no_dp_masked,
         y_no_dp_masked,
         "k-",
-        label="_nolegend_",  # Hide from legend, we'll add custom handles
+        label="_nolegend_",
         zorder=2,
     )[0]
 
-    # Hide the "With pressure drop" line from legend
     line_with_dp.set_label("_nolegend_")
 
-    # Shade area between x-axis (y=0) and thermal creation line (using masked data)
-    # For practical framework, values are negative, so shade from line to 0
-    # Grey fill for thermal creation (practical)
     ax.fill_between(ntu_no_dp_masked, y_no_dp_masked, 0, alpha=0.3, color="gray", zorder=1)
 
-    # Find overlapping x-range for shading between the two lines
-    # Use the masked range
     ntu_common = np.linspace(ntu_min_valid, ntu_max_valid, 200)
-
-    # Interpolate both curves to common x values
     y_no_dp_interp = np.interp(ntu_common, ntu_no_dp_masked, y_no_dp_masked)
     y_with_dp_interp = np.interp(ntu_common, ntu_with_dp, y_with_dp)
 
-    # Shade area between the two lines with hatching (viscous dissipation)
-    # For practical framework, y_with_dp < y_no_dp (more negative), so fill from y_with_dp to y_no_dp
-    # Transparent background with black hatching
     ax.fill_between(
         ntu_common,
         y_with_dp_interp,
@@ -153,96 +137,50 @@ def save_figures(
         linewidth=1.5,
         hatch="///",
         zorder=1,
-        label="_nolegend_",  # Hide from legend, we'll add custom handles
+        label="_nolegend_",
     )
 
-    # Find optimum point on pressure drop line (minimum value for practical framework)
+    # Optimal marker: circle, black, s=50, no double edge (match fig5c)
     idx_optimum = np.argmin(y_with_dp)
     x_optimum = ntu_with_dp[idx_optimum]
     y_optimum = y_with_dp[idx_optimum]
-    ax.scatter(x_optimum, y_optimum, marker="o", color="black", s=60, zorder=5)
+    ax.scatter(x_optimum, y_optimum, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
 
-    # Print optimum NTU value
     print(f"Optimum NTU: {x_optimum:.4f}")
 
-    # Add grey 'x' marker at NTU_MATCH on pressure drop line (total)
-    # Find closest point to NTU_MATCH on pressure drop line
+    # Reference marker: diamond (D), black face, white edge, s=50 (match fig5c)
     idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
     x_pressure = ntu_with_dp[idx_pressure]
     y_pressure = y_with_dp[idx_pressure]
-    ax.scatter(x_pressure, y_pressure, marker="x", color="grey", s=60, zorder=5)
+    ax.scatter(x_pressure, y_pressure, marker="D", facecolor="black", edgecolor="white", zorder=5, s=50)
 
-    # Remove title if present
-    ax.set_title("Practical Availability")
-
-    # Set x-axis limits to 0-2 (matching newfig4 scaling)
+    ax.set_title("")
     ax.set_xlim(0, 2)
-    ax.set_xlabel("NTU [-]")
+    ax.set_ylim(-0.3, 0)
+    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
 
-    # Format y-axis to show 2 decimal places
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.2f}"))
 
-    # Create custom legend with boxes instead of lines
-    # Solid grey box for thermal creation
-    patch_thermal = mpatches.Patch(facecolor="gray", alpha=0.3, edgecolor="black", label="Thermal creation")
-    # Transparent box with black hatching for viscous dissipation
-    patch_viscous = mpatches.Patch(
-        facecolor="none", edgecolor="black", hatch="///", linewidth=1.5, label="Viscous dissipation"
-    )
-
-    # Update legend with custom patches
-    ax.legend(
-        handles=[patch_thermal, patch_viscous],
-        loc="upper right",
-        labelspacing=0.05,
-        edgecolor="black",
-        frameon=True,
-        facecolor="white",
-        framealpha=1.0,
-        fancybox=True,
-    )
+    # No legend
+    legend = ax.get_legend()
+    if legend is not None:
+        legend.remove()
 
     plt.tight_layout(pad=0.5)
 
-    # Save as SVG
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.svg"),
-        dpi=300,
-        facecolor="white",
-        format="svg",
-        bbox_inches=None,
-        pad_inches=0,
-    )
-
-    # Save as TIFF
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.tiff"),
-        dpi=300,
-        facecolor="white",
-        format="tiff",
-        bbox_inches=None,
-        pad_inches=0,
-    )
-
-    # Save as HD PNG
-    fig.savefig(
-        os.path.join(save_dir, f"{base_name}.png"),
-        dpi=300,
-        facecolor="white",
-        format="png",
-        bbox_inches=None,
-        pad_inches=0,
-    )
+    fig.savefig(os.path.join(save_dir, f"{base_name}.svg"), dpi=300, facecolor="white", format="svg", bbox_inches=None, pad_inches=0)
+    fig.savefig(os.path.join(save_dir, f"{base_name}.tiff"), dpi=300, facecolor="white", format="tiff", bbox_inches=None, pad_inches=0)
+    fig.savefig(os.path.join(save_dir, f"{base_name}.png"), dpi=300, facecolor="white", format="png", bbox_inches=None, pad_inches=0)
+    fig.savefig(os.path.join(save_dir, f"{base_name}.pdf"), dpi=300, facecolor="white", format="pdf", bbox_inches=None, pad_inches=0)
 
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png")
+    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
 
-    # Return optimum NTU value
     return x_optimum
 
 
 if __name__ == "__main__":
-    # Save figures with Helicopter defaults
     optimum_ntu = save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -250,7 +188,7 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="newfig5_new_b",
+        base_name="fig6b",
         t=DEFAULT_T,
         t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
@@ -260,4 +198,4 @@ if __name__ == "__main__":
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
     )
-    print(f"\nUse this NTU_OPTIMUM value in newfig5_new_a: {optimum_ntu:.4f}")
+    print(f"\nUse this NTU_OPTIMUM value in fig6a: {optimum_ntu:.4f}")
