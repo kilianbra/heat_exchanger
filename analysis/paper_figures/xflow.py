@@ -50,7 +50,7 @@ SHOW_CUBIC = False
 NTU_MATCH = None  # Will be set in match case if SHOW_CUBIC is True
 
 
-defaults = "Helicopter"
+defaults = "g2lim"
 match defaults:
     case "Brewer":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
@@ -91,6 +91,17 @@ match defaults:
         NTU_MATCH = 1.479
         DEFAULT_NTU_MAX = 5.0
         SHOW_CUBIC = True
+    case "g2lim":
+        DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"
+        DEFAULT_C_COLD_OVER_C_HOT = 1.0
+        DEFAULT_ST_OVER_F = 0.4
+        DEFAULT_F_C_OVER_F_H = 1.0
+        DEFAULT_D_R = 1.0
+        DEFAULT_G2_H = 1e-2
+        DEFAULT_T = 2.0
+        DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0
+        DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1
 
 # NTU sweep range
 NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
@@ -881,7 +892,7 @@ def create_plot(
                     opt_eps = epsilon[arg_y_min]
                     opt_dp_hot = dp_over_p_in_hot[arg_y_min]
                     opt_dp_cold = dp_over_p_in_cold[arg_y_min]
-                    opt_g2 = DEFAULT_G2_H * (NTU_MATCH / optimum_ntu) ** (3.407)
+                    opt_g2 = DEFAULT_G2_H * (optimum_ntu / NTU_MATCH) ** (3.407)
 
         # Add title with optimum point values if found
         if optimum_found:

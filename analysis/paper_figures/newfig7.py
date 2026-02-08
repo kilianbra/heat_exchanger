@@ -134,11 +134,15 @@ def run_plot(
     # Plot
     plt.rcParams.update(
         {
-            "font.size": 10,
-            "axes.titlesize": 10,
-            "axes.labelsize": 10,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "font.size": 8,
+            "axes.titlesize": 8,
+            "axes.labelsize": 8,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 8,
+            "mathtext.fontset": "stix",
         }
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
@@ -171,15 +175,16 @@ def run_plot(
     ax.scatter(
         m_hex[id_min],
         dm_fuel_and_hex[id_min],
-        color="k",
-        s=80,
+        color="white",
+        s=50,
         zorder=5,
         marker="o",
+        facecolor="black",
     )
 
     id_ref = np.argmin(np.abs(a_over_a_ref_opt_line - 1))
 
-    ax.scatter(m_hex[id_ref], dm_fuel_and_hex[id_ref], color="grey", s=80, zorder=5, marker="x")
+    ax.scatter(m_hex[id_ref], dm_fuel_and_hex[id_ref], color="white", s=50, zorder=5, marker="D", facecolor="black")
 
     ax.plot(
         m_hex,
@@ -193,16 +198,16 @@ def run_plot(
     # ax.set_ylabel(r"$\Delta Q_0^M / Q_{\mathrm{max}}$")
     ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
     # ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$ vs $A/A_{\mathrm{ref}}$")
-    ax.set_title(r"Practical Design Example")
-    ax.legend(loc="best", fontsize=9)
+    # ax.set_title(r"Practical Design Example")
+    ax.legend(loc="best", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
     ax.grid(True, alpha=0.3)
 
-    ax.set_xlim(0, 125)
+    ax.set_xlim(0, 120)
     ax.set_ylim(-250, 0)
 
     plt.tight_layout(pad=0.5)
 
-    for ext in ["svg", "tiff", "png"]:
+    for ext in ["svg", "tiff", "png", "pdf"]:
         path = os.path.join(save_dir, f"{base_name}.{ext}")
         fig.savefig(path, dpi=300, facecolor="white", bbox_inches=None, pad_inches=0)
         print(f"Saved {path}")
