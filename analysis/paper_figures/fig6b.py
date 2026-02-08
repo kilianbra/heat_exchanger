@@ -1,5 +1,6 @@
 import os
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import xflow
@@ -162,10 +163,21 @@ def save_figures(
 
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.2f}"))
 
-    # No legend
-    legend = ax.get_legend()
-    if legend is not None:
-        legend.remove()
+    # Legend: thermal creation and viscous dissipation (match fig5c box style)
+    patch_thermal = mpatches.Patch(facecolor="gray", alpha=0.3, edgecolor="black", label="Thermal creation")
+    patch_viscous = mpatches.Patch(
+        facecolor="none", edgecolor="black", hatch="///", linewidth=1.5, label="Viscous dissipation"
+    )
+    ax.legend(
+        handles=[patch_thermal, patch_viscous],
+        loc="upper right",
+        labelspacing=0.05,
+        edgecolor="black",
+        frameon=True,
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=False,
+    )
 
     plt.tight_layout(pad=0.5)
 
