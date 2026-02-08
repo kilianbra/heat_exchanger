@@ -157,7 +157,7 @@ def save_figures(
 
     # Independent control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta Q_0^\mathrm{M}/Q_{\mathrm{max}}$)")
+    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
 
     # Save as SVG
     fig.savefig(

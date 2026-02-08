@@ -164,26 +164,27 @@ def save_figures(
             x_text = np.mean([p[0] for p in opt_xy]) + 3.5
             x_text = 5
             y_text = 0.12
+            arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=12)
             ax.annotate(
                 "optimal designs",
                 xy=opt_xy[0],
                 xytext=(x_text, y_text),
                 fontsize=font_size,
                 ha="left",
-                arrowprops=dict(arrowstyle="->", color="black", lw=1),
+                arrowprops=arrow_kw,
             )
             ax.annotate(
                 "",
                 xy=opt_xy[1],
                 xytext=(8.8, y_text-0.005),
-                arrowprops=dict(arrowstyle="->", color="black", lw=1),
+                arrowprops=arrow_kw,
             )
 
     plt.tight_layout(pad=0.5)
 
     # Independent control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta Q_0/Q_{\mathrm{max}}$)")
+    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0/\dot{Q}_{\mathrm{max}}$)")
 
     # Save as SVG
     fig.savefig(
