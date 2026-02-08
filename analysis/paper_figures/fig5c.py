@@ -127,7 +127,7 @@ def save_figures(
 
     # NTU reference and optimum values; add markers only on the actual curve(s), not axvline
     NTU_REF = 1.48
-    NTU_OPT = 1.20
+    NTU_OPT = 1.21
     if line_list:
         for line in line_list:
             x_data = np.array(line.get_xdata())

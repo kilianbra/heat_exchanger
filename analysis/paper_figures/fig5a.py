@@ -135,7 +135,7 @@ def save_figures(
     lines_dp = ax_twin.get_lines()
     if len(lines_dp) >= 2:
         lines_dp[0].set_color("k")
-        lines_dp[0].set_linestyle("-")
+        lines_dp[0].set_linestyle(":")
         lines_dp[1].set_color("k")
         lines_dp[1].set_linestyle("--")
         ax.legend(
