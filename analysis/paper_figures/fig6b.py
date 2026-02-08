@@ -170,7 +170,7 @@ def save_figures(
     )
     ax.legend(
         handles=[patch_thermal, patch_viscous],
-        loc="upper right",
+        loc="lower left",
         labelspacing=0.05,
         edgecolor="black",
         frameon=True,
@@ -181,10 +181,38 @@ def save_figures(
 
     plt.tight_layout(pad=0.5)
 
-    fig.savefig(os.path.join(save_dir, f"{base_name}.svg"), dpi=300, facecolor="white", format="svg", bbox_inches=None, pad_inches=0)
-    fig.savefig(os.path.join(save_dir, f"{base_name}.tiff"), dpi=300, facecolor="white", format="tiff", bbox_inches=None, pad_inches=0)
-    fig.savefig(os.path.join(save_dir, f"{base_name}.png"), dpi=300, facecolor="white", format="png", bbox_inches=None, pad_inches=0)
-    fig.savefig(os.path.join(save_dir, f"{base_name}.pdf"), dpi=300, facecolor="white", format="pdf", bbox_inches=None, pad_inches=0)
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.svg"),
+        dpi=300,
+        facecolor="white",
+        format="svg",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.tiff"),
+        dpi=300,
+        facecolor="white",
+        format="tiff",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.png"),
+        dpi=300,
+        facecolor="white",
+        format="png",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(save_dir, f"{base_name}.pdf"),
+        dpi=300,
+        facecolor="white",
+        format="pdf",
+        bbox_inches=None,
+        pad_inches=0,
+    )
 
     plt.close(fig)
     print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
