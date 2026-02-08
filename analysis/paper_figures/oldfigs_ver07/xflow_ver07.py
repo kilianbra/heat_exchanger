@@ -881,7 +881,6 @@ def create_plot(
                     opt_eps = epsilon[arg_y_min]
                     opt_dp_hot = dp_over_p_in_hot[arg_y_min]
                     opt_dp_cold = dp_over_p_in_cold[arg_y_min]
-                    opt_g2 = DEFAULT_G2_H * (NTU_MATCH / optimum_ntu) ** (3.407)
 
         # Add title with optimum point values if found
         if optimum_found:
@@ -891,8 +890,7 @@ def create_plot(
                 rf"$\varepsilon$ = {opt_eps:.3f},"
                 rf"$\Delta p/p_{{in}}$ = {opt_dp_hot * 100:.1f}% (hot) + "
                 rf"{opt_dp_cold * 100:.1f}% (cold) = "
-                rf"{(opt_dp_hot + opt_dp_cold) * 100:.1f}% (total), "
-                rf"$g^2$ = {opt_g2:.2e}",
+                rf"{(opt_dp_hot + opt_dp_cold) * 100:.1f}% (total)",
                 fontsize=10,
             )
 

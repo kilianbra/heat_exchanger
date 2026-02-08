@@ -9,9 +9,9 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import numpy as np
-import xflow
+import xflow_ver07
 from scipy.interpolate import griddata
-from xflow import (
+from xflow_ver07 import (
     calculate_epsilon_ntu_curve,
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
@@ -70,8 +70,8 @@ def _compute_reference_dp_curve(
     Use a much higher dp_max for the reference curve so it covers full NTU range;
     actual dp_max check happens after scaling by d**1.407.
     """
-    xflow.SHOW_CUBIC = True
-    xflow.NTU_MATCH = NTU_MATCH
+    xflow_ver07.SHOW_CUBIC = True
+    xflow_ver07.NTU_MATCH = NTU_MATCH
     ntu_max_ref = _ntu_max_for_d(D_OVER_D_REF_VALUES.min())
     # Add safety margin (1.2x) to ensure we cover all NTU values needed
     ntu_max_ref = ntu_max_ref * 1.2

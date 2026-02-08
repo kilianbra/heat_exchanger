@@ -1,8 +1,8 @@
 import os
 
 import matplotlib.pyplot as plt
-import xflow
-from xflow import create_plot
+import xflow_ver07
+from xflow_ver07 import create_plot
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -52,7 +52,7 @@ def save_figures(
     )
 
     # Ensure SHOW_CUBIC is False for this figure
-    xflow.SHOW_CUBIC = False
+    xflow_ver07.SHOW_CUBIC = False
 
     fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)

@@ -2,8 +2,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import xflow
-from xflow import calculate_pressure_drop_ratio, create_plot
+import xflow_ver07
+from xflow_ver07 import calculate_pressure_drop_ratio, create_plot
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -70,8 +70,8 @@ def save_figures(
     )
 
     # Set SHOW_CUBIC and NTU_MATCH in xflow module before calling create_plot
-    xflow.SHOW_CUBIC = SHOW_CUBIC
-    xflow.NTU_MATCH = NTU_MATCH
+    xflow_ver07.SHOW_CUBIC = SHOW_CUBIC
+    xflow_ver07.NTU_MATCH = NTU_MATCH
 
     # Calculate pressure drop ratio based on assumption
     sigma_r = d_r * a_r if a_r is not None else None
