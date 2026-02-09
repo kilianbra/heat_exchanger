@@ -91,7 +91,7 @@ DEFAULT_DP_MAX = 0.3
 DP_REF = 0.115
 
 # Sweep: d_over_d_ref from 0.5 to 1.2, 8 values step 0.1
-D_OVER_D_REF_VALUES = np.linspace(0.5, 2.5, 100)  # 0.5, 0.6, ..., 1.2
+D_OVER_D_REF_VALUES = np.linspace(0.5, 2.5, 200)  # 0.5, 0.6, ..., 1.2
 NTU_MAX_AT_D_REF = 4.0  # NTU max at d/d_ref = 1; for smaller d, NTU max increases (2/d)
 NTU_NUM = 100  # number of NTU points per d (sweep resolution)
 CONTOUR_GRID_N = 200  # grid size for interpolation; contour smoothness is set by this, not NTU_NUM
