@@ -15,6 +15,7 @@ from newfig6 import (
     DEFAULT_D_R,
     DEFAULT_DP_MAX,
     DEFAULT_F_C_OVER_F_H,
+    DEFAULT_G2_H,
     DEFAULT_GAMMA,
     DEFAULT_MOLAR_MASS_RATIO,
     DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
@@ -22,13 +23,18 @@ from newfig6 import (
     DEFAULT_PRESSURE_DROP_ASSUMPTION,
     DEFAULT_ST_OVER_F,
     DEFAULT_T,
+    NTU_MATCH,
     NTU_MAX,
     _a_over_a_ref,
     _practical_at_ao_ntu,
 )
 from xflow import (
+    calculate_capacity_ratios,
     calculate_pressure_drop_ratio,
+    practical_unavailable_creation_hex,
 )
+from heat_exchanger.epsilon_ntu import epsilon_ntu
+import xflow
 
 AO_OVER_AO_REF_VALUES = np.linspace(0.4, 2.5, 800)
 save_dir = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +90,126 @@ def _optimal_ntu_line_ao(
             dq_o_m_over_qmax_vals.append(dq_o_m_over_qmax_opt)
 
     return np.array(ao_vals), np.array(ntu_opt_vals), np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
+
+
+def _practical_at_ao_ntu_constant_g2h(
+    ao_over_ao_ref,
+    ntu,
+    c_cold_over_c_hot,
+    st_over_f,
+    f_c_over_f_h,
+    d_r,
+    pressure_drop_ratio,
+    t,
+    p_cold_in_over_p_hot_in,
+    p_dead_over_p_hot_in,
+    gamma,
+    dp_max,
+    g2_h_ref,
+):
+    """Practical unavailable creation at single (Ao, NTU) using constant reference g2_h and linear relations.
+    This uses g2_h = g2_h_ref (constant) instead of g2_h = DEFAULT_G2_H / (Ao/Ao_ref)**2.
+    """
+    # Use constant reference g2_h
+    g2_h = g2_h_ref
+
+    # Calculate capacity ratios
+    C_min_over_C_hot, C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
+
+    # C_ratio for epsilon-NTU calculation
+    if c_cold_over_c_hot <= 1.0:
+        C_ratio = c_cold_over_c_hot
+    else:
+        C_ratio = 1.0 / c_cold_over_c_hot
+
+    # Calculate effectiveness
+    eps = epsilon_ntu(
+        np.array([ntu]),
+        C_ratio,
+        exchanger_type="aligned_flow",
+        flow_type="counterflow",
+        n_passes=1,
+    )[0]
+
+    # Calculate pressure drop using normal linear formula (not cubic)
+    st_over_f_h = st_over_f
+    st_over_f_c = st_over_f
+    dp_coeff_normal = g2_h * (
+        1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
+    )
+    dp_hot = dp_coeff_normal * ntu
+    dp_cold = pressure_drop_ratio * dp_hot
+
+    validity = (dp_hot < dp_max) & (dp_cold < dp_max)
+    if not validity:
+        return np.nan
+
+    out = practical_unavailable_creation_hex(
+        np.array([eps]),
+        t,
+        np.array([dp_hot]),
+        np.array([dp_cold]),
+        np.array([True]),
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+        gamma=gamma,
+    )
+    return float(out[0]) if len(out) > 0 else np.nan
+
+
+def _optimal_ntu_line_constant_g2h(
+    c_cold_over_c_hot,
+    st_over_f,
+    f_c_over_f_h,
+    d_r,
+    pressure_drop_ratio,
+    t,
+    p_cold_in_over_p_hot_in,
+    p_dead_over_p_hot_in,
+    gamma,
+    dp_max,
+    g2_h_ref,
+):
+    """Calculate dQ_o^M/Qmax for constant g2_h case by sweeping NTU.
+    For constant g2_h, A/A_ref = NTU/NTU_MATCH (with ao = 1.0 at reference).
+    Returns (a_over_a_ref_values, dq_o_m_over_qmax_values) for the constant g2_h case.
+    """
+    # Ensure SHOW_CUBIC is False for linear relations
+    xflow.SHOW_CUBIC = False
+
+    a_over_a_ref_vals = []
+    dq_o_m_over_qmax_vals = []
+
+    # Sweep NTU from NTU_MATCH up to NTU_MAX
+    ntu_sweep = np.linspace(NTU_MATCH / 10, NTU_MAX, 200)
+    ao_ref = 1.0  # Use reference ao value when g2_h is constant
+
+    for ntu in ntu_sweep:
+        # For constant g2_h, A/A_ref = NTU/NTU_MATCH directly
+        a_over_a_ref = ntu / NTU_MATCH
+
+        # Calculate dQ_o^M/Qmax for this NTU with constant g2_h
+        z = _practical_at_ao_ntu_constant_g2h(
+            ao_ref,
+            ntu,
+            c_cold_over_c_hot,
+            st_over_f,
+            f_c_over_f_h,
+            d_r,
+            pressure_drop_ratio,
+            t,
+            p_cold_in_over_p_hot_in,
+            p_dead_over_p_hot_in,
+            gamma,
+            dp_max,
+            g2_h_ref,
+        )
+
+        if np.isfinite(z):
+            a_over_a_ref_vals.append(a_over_a_ref)
+            dq_o_m_over_qmax_vals.append(z)
+
+    return np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
 
 
 def run_plot(
@@ -193,6 +319,47 @@ def run_plot(
         linewidth=1.5,
         label="fuel",
     )
+
+    # Add red lines for constant reference g2^h case (using linear relations)
+    # Calculate dQ_o^M/Qmax for constant g2_h = DEFAULT_G2_H
+    a_over_a_ref_constant_g2h, dq_o_m_over_qmax_constant_g2h = _optimal_ntu_line_constant_g2h(
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r,
+        pressure_drop_ratio,
+        t,
+        p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in,
+        gamma,
+        dp_max,
+        DEFAULT_G2_H,
+    )
+
+    if len(a_over_a_ref_constant_g2h) > 0:
+        # HEx mass scales linearly with A/A_ref when g2_h is constant
+        m_hex_constant_g2h = a_over_a_ref_constant_g2h * m_hex_ref
+
+        # Red dashed: fuel component only (matching pattern of black dashed line)
+        ax.plot(
+            m_hex_constant_g2h,
+            dq_o_m_over_qmax_constant_g2h * factor_fuel,
+            "r--",
+            linewidth=1.5,
+            label="fuel (const. $g^2_h$)",
+        )
+
+        # Red solid: fuel + HEx (using constant g2_h calculations, matching pattern)
+        dm_fuel_and_hex_constant_g2h = (
+            dq_o_m_over_qmax_constant_g2h * factor_fuel + m_hex_ref * a_over_a_ref_constant_g2h
+        )
+        ax.plot(
+            m_hex_constant_g2h,
+            dm_fuel_and_hex_constant_g2h,
+            "r-",
+            linewidth=1.5,
+            label="fuel + HEx (const. $g^2_h$)",
+        )
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
     # ax.set_ylabel(r"$\Delta Q_0^M / Q_{\mathrm{max}}$")

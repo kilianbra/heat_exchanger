@@ -1,11 +1,9 @@
 """
-2D contour plot of practical availability vs d_over_d_ref and scaled NTU.
-Uses same inputs as newfig4 (Helicopter defaults). Pressure drop includes
+2D contour plot of classical unavailable energy vs d_over_d_ref and scaled NTU.
+Uses same inputs as newfig5_practical (Helicopter defaults). Pressure drop includes
 multiplier d_over_d_ref**1.407. Y-axis: (NTU/NTU_match)**(-1.704) * (d_over_d_ref)**(-0.704).
 """
 
-import hashlib
-import json
 import os
 from pathlib import Path
 
@@ -13,159 +11,102 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import numpy as np
 import pandas as pd
-import xflow
 from scipy.interpolate import griddata
-from xflow import (
-    calculate_epsilon_ntu_curve,
-    calculate_pressure_drop_ratio,
-    practical_unavailable_creation_hex,
-)
 
-from heat_exchanger.epsilon_ntu import epsilon_ntu
+try:
+    from tqdm import tqdm
+except ImportError:
+    # Fallback if tqdm is not available
+    class _TqdmFallback:
+        def __init__(self, iterable=None, desc=None, total=None, unit=None, **kwargs):
+            self.iterable = iterable
+            self.desc = desc or ""
+            self.total = total
+            self.unit = unit or "it"
+            self.n = 0
+            if iterable is not None:
+                self._iter = iter(iterable)
+            else:
+                self._iter = None
+
+        def __iter__(self):
+            if self._iter is None:
+                return self
+            return self._iter
+
+        def __next__(self):
+            if self._iter is None:
+                raise StopIteration
+            self.n += 1
+            if self.total and self.n <= self.total:
+                print(f"\r{self.desc}: {self.n}/{self.total} {self.unit}", end="", flush=True)
+            return next(self._iter)
+
+        def update(self, n=1):
+            self.n += n
+            if self.total:
+                print(f"\r{self.desc}: {self.n}/{self.total} {self.unit}", end="", flush=True)
+            if self.total and self.n >= self.total:
+                print()  # New line when complete
+
+        def close(self):
+            if self.total and self.n < self.total:
+                print()  # New line if not already printed
+
+    def tqdm(iterable=None, desc=None, total=None, unit=None, **kwargs):
+        return _TqdmFallback(iterable, desc, total, unit, **kwargs)
+
+
+# Import shared constants and functions from practical version
+try:
+    import newfig5_practical as nf5p
+except ImportError:
+    # If running as a script, try relative import
+    from . import newfig5_practical as nf5p
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = Path(save_dir) / "newfig5_data.parquet"
+DATA_FILE = Path(save_dir) / "newfig5_classical_data.parquet"
 
-# Helicopter defaults (same as newfig4)
-DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
-DEFAULT_C_COLD_OVER_C_HOT = 0.95
-DEFAULT_D_R = 0.44
-DEFAULT_G2_H = 2e-2
-DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_T = 1.7
-DEFAULT_T_DEAD_OVER_T_COLD_IN = 0.52
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
-DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
-DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
-DEFAULT_GAMMA = 1.4
-NTU_REF = 1.479
-DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
-DEFAULT_DP_MAX = 0.3
-DP_REF = 0.115
-
-# Sweep: d_over_d_ref from 0.5 to 1.2, 8 values step 0.1
-D_OVER_D_REF_VALUES = np.linspace(1.0, 3, 1000)  # 0.5, 0.6, ..., 1.2
-NTU_MAX_AT_D_REF = 4.0  # NTU max at d/d_ref = 1; for smaller d, NTU max increases (2/d)
-NTU_NUM = 1000  # number of NTU points per d (sweep resolution)
-CONTOUR_GRID_N = 2000  # grid size for interpolation; contour smoothness is set by this, not NTU_NUM
-NTU_MIN = 0.4
-AO_MAX = 4
+# Import constants
+AO_MAX = nf5p.AO_MAX  # 4
+CONTOUR_GRID_N = nf5p.CONTOUR_GRID_N
+D_OVER_D_REF_VALUES = nf5p.D_OVER_D_REF_VALUES
+DEFAULT_A_R = nf5p.DEFAULT_A_R
+DEFAULT_C_COLD_OVER_C_HOT = nf5p.DEFAULT_C_COLD_OVER_C_HOT
+DEFAULT_DP_MAX = nf5p.DEFAULT_DP_MAX
+DEFAULT_D_R = nf5p.DEFAULT_D_R
+DEFAULT_F_C_OVER_F_H = nf5p.DEFAULT_F_C_OVER_F_H
+DEFAULT_G2_H = nf5p.DEFAULT_G2_H
+DEFAULT_GAMMA = nf5p.DEFAULT_GAMMA
+DEFAULT_MOLAR_MASS_RATIO = nf5p.DEFAULT_MOLAR_MASS_RATIO
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = nf5p.DEFAULT_P_COLD_IN_OVER_P_HOT_IN
+DEFAULT_P_DEAD_OVER_P_HOT_IN = nf5p.DEFAULT_P_DEAD_OVER_P_HOT_IN
+DEFAULT_PRESSURE_DROP_ASSUMPTION = nf5p.DEFAULT_PRESSURE_DROP_ASSUMPTION
+DEFAULT_ST_OVER_F = nf5p.DEFAULT_ST_OVER_F
+DEFAULT_T = nf5p.DEFAULT_T
+DEFAULT_T_DEAD_OVER_T_COLD_IN = nf5p.DEFAULT_T_DEAD_OVER_T_COLD_IN
+DP_REF = nf5p.DP_REF
+NTU_MAX_AT_D_REF = nf5p.NTU_MAX_AT_D_REF
+NTU_MIN = nf5p.NTU_MIN  # 0.4
+NTU_NUM = nf5p.NTU_NUM
+NTU_REF = nf5p.NTU_REF
 
 
-def _ntu_max_for_d(d_over_d_ref, dp_max, dp_ref=DP_REF):
-    """NTU max for a given d/d_ref and dp_max.
-
-    Formula: NTU_max = NTU_max_at_d_ref * (DP_max/DP_ref)^(1/4.407) * (d/d_ref)^{-1.407/4.407}
-    """
-    return NTU_MAX_AT_D_REF * (dp_max / dp_ref) ** (1 / 4.407) * (d_over_d_ref) ** (-1.407 / 4.407)
-
-
-def _y_axis(d_over_d_ref, ntu):
-    """Y-axis coordinate: (NTU/NTU_match)**(-1.704) * (d_over_d_ref)**(-0.704)."""
-    return (ntu / NTU_REF) ** (-1.704) * (d_over_d_ref) ** (-0.704)
-
-
-def _compute_reference_dp_curve(
-    c_cold_over_c_hot,
-    st_over_f,
-    f_c_over_f_h,
-    d_r,
-    g2_h,
-    pressure_drop_ratio,
-    dp_max,
-):
-    """Reference hot pressure drop vs NTU at d_over_d_ref=1 (same formula as xflow 4.407).
-    ntu_max set so the curve covers the full NTU range needed for all d (max at smallest d).
-    Use a much higher dp_max for the reference curve so it covers full NTU range;
-    actual dp_max check happens after scaling by d**1.407.
-    """
-    xflow.SHOW_CUBIC = True
-    xflow.NTU_REF = NTU_REF
-    ntu_max_ref = _ntu_max_for_d(D_OVER_D_REF_VALUES.min(), dp_max)
-    # Add safety margin (1.2x) to ensure we cover all NTU values needed
-    ntu_max_ref = ntu_max_ref * 1.2
-    # Use much higher dp_max for reference curve so it covers full NTU range
-    # The actual dp_max limit is applied after scaling by d**1.407
-    dp_max_ref = dp_max * 3.0  # Allow reference curve to go much higher
-    ntu_arr, _, dp_hot_ref, _, _ = calculate_epsilon_ntu_curve(
-        c_cold_over_c_hot,
-        st_over_f,
-        f_c_over_f_h,
-        d_r,
-        g2_h,
-        ntu_max=ntu_max_ref,
-        dp_max=dp_max_ref,
-        pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
-    )
-    return ntu_arr, dp_hot_ref
-
-
-def _practical_at_d_ntu(
-    d_over_d_ref,
-    ntu,
+def _classical_fig4_optimum_ntu(
     ntu_ref,
     dp_hot_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
-    p_cold_in_over_p_hot_in,
-    p_dead_over_p_hot_in,
+    t_dead_over_t_cold_in,
     gamma,
     dp_max,
 ):
-    """Practical unavailable creation at single (d, NTU). Pressure drop = ref_dp(NTU) * d**1.407."""
-    # Interpolate reference dp at this NTU, then scale by d**1.407
-    # np.interp will extrapolate if needed, but we'll check validity after
-    dp_hot = np.interp(ntu, ntu_ref, dp_hot_ref) * (d_over_d_ref**1.407)
-    dp_cold = pressure_drop_ratio * dp_hot
-
-    if c_cold_over_c_hot <= 1.0:
-        C_ratio = c_cold_over_c_hot
-    else:
-        C_ratio = 1.0 / c_cold_over_c_hot
-    eps = epsilon_ntu(
-        np.array([ntu]),
-        C_ratio,
-        exchanger_type="aligned_flow",
-        flow_type="counterflow",
-        n_passes=1,
-    )[0]
-
-    validity = (dp_hot < dp_max) & (dp_cold < dp_max)
-    if not validity:
-        return np.nan
-
-    out = practical_unavailable_creation_hex(
-        np.array([eps]),
-        t,
-        np.array([dp_hot]),
-        np.array([dp_cold]),
-        np.array([True]),
-        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
-        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
-        gamma=gamma,
-    )
-    return float(out[0]) if len(out) > 0 else np.nan
-
-
-def _fig4_optimum_ntu(
-    ntu_ref,
-    dp_hot_ref,
-    c_cold_over_c_hot,
-    pressure_drop_ratio,
-    t,
-    p_cold_in_over_p_hot_in,
-    p_dead_over_p_hot_in,
-    gamma,
-    dp_max,
-):
-    """At d_over_d_ref=1, find NTU that minimizes practical_unavailable_creation (fig4 optimum)."""
-    ntu_fine = np.linspace(0.35, NTU_MAX_AT_D_REF, 150)
+    """At d_over_d_ref=1, find NTU that minimizes classical_unavailable_creation."""
+    ntu_fine = np.linspace(NTU_MIN, NTU_MAX_AT_D_REF, 150)
     vals = []
     for ntu in ntu_fine:
-        z = _practical_at_d_ntu(
+        z = nf5p._classical_at_d_ntu(
             1.0,
             ntu,
             ntu_ref,
@@ -173,8 +114,7 @@ def _fig4_optimum_ntu(
             c_cold_over_c_hot,
             pressure_drop_ratio,
             t,
-            p_cold_in_over_p_hot_in,
-            p_dead_over_p_hot_in,
+            t_dead_over_t_cold_in,
             gamma,
             dp_max,
         )
@@ -187,86 +127,6 @@ def _fig4_optimum_ntu(
     return float(ntu_fine[idx])
 
 
-def _optimal_ntu_line(
-    ntu_ref,
-    dp_hot_ref,
-    c_cold_over_c_hot,
-    pressure_drop_ratio,
-    t,
-    p_cold_in_over_p_hot_in,
-    p_dead_over_p_hot_in,
-    gamma,
-    dp_max,
-):
-    """Find optimal NTU for each d/d_ref, return (d_values, ntu_opt_values, y_opt_values, z_opt_values)."""
-    d_vals = []
-    ntu_opt_vals = []
-    y_opt_vals = []
-    z_opt_vals = []
-
-    for d in D_OVER_D_REF_VALUES:
-        ntu_max_d = _ntu_max_for_d(d, dp_max)
-        ntu_fine = np.linspace(NTU_MIN, ntu_max_d, NTU_NUM)
-        vals = []
-        for ntu in ntu_fine:
-            z = _practical_at_d_ntu(
-                d,
-                ntu,
-                ntu_ref,
-                dp_hot_ref,
-                c_cold_over_c_hot,
-                pressure_drop_ratio,
-                t,
-                p_cold_in_over_p_hot_in,
-                p_dead_over_p_hot_in,
-                gamma,
-                dp_max,
-            )
-            vals.append(z)
-        vals = np.array(vals)
-        valid = np.isfinite(vals)
-        if np.any(valid):
-            idx = np.nanargmin(vals)
-            ntu_opt = float(ntu_fine[idx])
-            y_opt = _y_axis(d, ntu_opt)
-            z_opt = float(vals[idx])
-            d_vals.append(d)
-            ntu_opt_vals.append(ntu_opt)
-            y_opt_vals.append(y_opt)
-            z_opt_vals.append(z_opt)
-
-    return np.array(d_vals), np.array(ntu_opt_vals), np.array(y_opt_vals), np.array(z_opt_vals)
-
-
-def _compute_input_hash(**kwargs):
-    """Compute hash of input parameters to check if cache is valid."""
-    # Create a dictionary of all relevant inputs
-    inputs = {
-        "c_cold_over_c_hot": kwargs.get("c_cold_over_c_hot"),
-        "st_over_f": kwargs.get("st_over_f"),
-        "f_c_over_f_h": kwargs.get("f_c_over_f_h"),
-        "d_r": kwargs.get("d_r"),
-        "g2_h": kwargs.get("g2_h"),
-        "t": kwargs.get("t"),
-        "p_cold_in_over_p_hot_in": kwargs.get("p_cold_in_over_p_hot_in"),
-        "p_dead_over_p_hot_in": kwargs.get("p_dead_over_p_hot_in"),
-        "gamma": kwargs.get("gamma"),
-        "pressure_drop_assumption": kwargs.get("pressure_drop_assumption"),
-        "molar_mass_ratio": kwargs.get("molar_mass_ratio"),
-        "a_r": kwargs.get("a_r"),
-        "dp_max": kwargs.get("dp_max"),
-        "d_over_d_ref_values": D_OVER_D_REF_VALUES.tolist(),
-        "ntu_max_at_d_ref": NTU_MAX_AT_D_REF,
-        "ntu_num": NTU_NUM,
-        "ntu_min": NTU_MIN,
-        "ntu_ref": NTU_REF,
-        "dp_ref": DP_REF,
-    }
-    # Convert to JSON string and hash
-    input_str = json.dumps(inputs, sort_keys=True)
-    return hashlib.md5(input_str.encode()).hexdigest()
-
-
 def run_sweep_and_plot(
     c_cold_over_c_hot=DEFAULT_C_COLD_OVER_C_HOT,
     st_over_f=DEFAULT_ST_OVER_F,
@@ -276,16 +136,17 @@ def run_sweep_and_plot(
     t=DEFAULT_T,
     p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
     p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+    t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
     gamma=DEFAULT_GAMMA,
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
     dp_max=DEFAULT_DP_MAX,
-    base_name="newfig5",
+    base_name="newfig5_classical",
 ):
-    """Build 2D sweep (d_over_d_ref, NTU) and plot contour of practical availability."""
+    """Build 2D sweep (d_over_d_ref, NTU) and plot contour of classical unavailable energy."""
     # Check if we can load from cache
-    input_hash = _compute_input_hash(
+    input_hash = nf5p._compute_input_hash(
         c_cold_over_c_hot=c_cold_over_c_hot,
         st_over_f=st_over_f,
         f_c_over_f_h=f_c_over_f_h,
@@ -320,12 +181,22 @@ def run_sweep_and_plot(
         sweep_mask = df["d_over_d_ref"].notna()
         xx = df[sweep_mask]["d_over_d_ref"].values
         yy = df[sweep_mask]["ao_over_ao_ref"].values
-        zz = df[sweep_mask]["dqom_over_qmax"].values
+        zz = df[sweep_mask]["dqom_classical_over_qmax"].values
         # Extract optimal line data
         opt_mask = df["d_opt"].notna()
         d_opt_line = df[opt_mask]["d_opt"].values
         y_opt_line = df[opt_mask]["ao_opt"].values
-        z_opt_line = df[opt_mask]["dqom_opt"].values
+        z_practical_opt_line = df[opt_mask]["dqom_practical_opt"].values
+        z_classical_opt_line = df[opt_mask]["dqom_classical_opt"].values
+        # Load thermal_only values if they exist, otherwise create NaN arrays
+        if "dqom_practical_thermal_only_opt" in df.columns:
+            z_practical_thermal_only_opt_line = df[opt_mask]["dqom_practical_thermal_only_opt"].values
+        else:
+            z_practical_thermal_only_opt_line = np.full(len(d_opt_line), np.nan)
+        if "dqom_classical_thermal_only_opt" in df.columns:
+            z_classical_thermal_only_opt_line = df[opt_mask]["dqom_classical_thermal_only_opt"].values
+        else:
+            z_classical_thermal_only_opt_line = np.full(len(d_opt_line), np.nan)
         # Get fig4 optimum
         fig4_row = df[df["is_fig4_opt"]]
         if len(fig4_row) > 0:
@@ -336,7 +207,7 @@ def run_sweep_and_plot(
         # Calculate data
         print("Computing sweep data...")
         sigma_r = d_r * a_r if a_r is not None else None
-        pressure_drop_ratio = calculate_pressure_drop_ratio(
+        pressure_drop_ratio = nf5p.calculate_pressure_drop_ratio(
             pressure_drop_assumption,
             c_cold_over_c_hot,
             t,
@@ -347,7 +218,7 @@ def run_sweep_and_plot(
         )
 
         # Reference dp curve at d=1 (used for all d via multiplier d**1.407)
-        ntu_ref, dp_hot_ref = _compute_reference_dp_curve(
+        ntu_ref, dp_hot_ref = nf5p._compute_reference_dp_curve(
             c_cold_over_c_hot,
             st_over_f,
             f_c_over_f_h,
@@ -357,25 +228,34 @@ def run_sweep_and_plot(
             dp_max,
         )
 
-        # Fig4 optimum: at d=1, NTU that minimizes practical
-        ntu_opt = _fig4_optimum_ntu(
+        # Fig4 optimum: at d=1, NTU that minimizes classical
+        ntu_opt = _classical_fig4_optimum_ntu(
             ntu_ref,
             dp_hot_ref,
             c_cold_over_c_hot,
             pressure_drop_ratio,
             t,
-            p_cold_in_over_p_hot_in,
-            p_dead_over_p_hot_in,
+            t_dead_over_t_cold_in,
             gamma,
             dp_max,
         )
         if ntu_opt is not None:
-            y_opt = _y_axis(1.0, ntu_opt)
+            y_opt = nf5p._y_axis(1.0, ntu_opt)
         else:
             y_opt = None
 
-        # Optimal NTU line: for each d, find optimal NTU
-        d_opt_line, ntu_opt_line, y_opt_line, z_opt_line = _optimal_ntu_line(
+        # Optimal NTU line: for each d, find optimal NTU (minimizing classical, also calculate practical)
+        # NOTE: Classical unavailable energy may not have a true optimum - it might always increase with NTU
+        # If so, the "optimum" will always be at NTU_MIN (the lowest NTU value)
+        (
+            d_opt_line,
+            ntu_opt_line,
+            y_opt_line,
+            z_practical_opt_line,
+            z_classical_opt_line,
+            z_practical_thermal_only_opt_line,
+            z_classical_thermal_only_opt_line,
+        ) = nf5p._optimal_ntu_line(
             ntu_ref,
             dp_hot_ref,
             c_cold_over_c_hot,
@@ -383,18 +263,36 @@ def run_sweep_and_plot(
             t,
             p_cold_in_over_p_hot_in,
             p_dead_over_p_hot_in,
+            t_dead_over_t_cold_in,
             gamma,
             dp_max,
+            optimize_practical=False,  # Minimize classical instead
+            ntu_min=NTU_MIN,
         )
+
+        # Debug: Check if optimum is always at minimum NTU (indicating no true optimum)
+        if len(ntu_opt_line) > 0:
+            min_ntu_ratio = np.min(ntu_opt_line) / NTU_MIN
+            max_ntu_ratio = np.max(ntu_opt_line) / NTU_MIN
+            print(f"Classical optimum NTU range: {np.min(ntu_opt_line):.3f} to {np.max(ntu_opt_line):.3f}")
+            print(f"NTU_MIN = {NTU_MIN:.3f}")
+            print(f"Optimum NTU is {min_ntu_ratio:.2f}x to {max_ntu_ratio:.2f}x the minimum NTU")
+            if max_ntu_ratio < 1.1:  # If all optima are very close to NTU_MIN
+                print(
+                    "WARNING: Classical optimum appears to always be at minimum NTU - classical unavailable energy may be monotonic!"
+                )
 
         # 2D sweep: for each d, sweep NTU (NTU max increases for smaller d)
         # For smaller d/d_ref, pressure drop is lower (scaled by d**1.407), so we can go to higher NTU
         xx, yy, zz = [], [], []
+        total_d_values = len(D_OVER_D_REF_VALUES)
+        total_points = total_d_values * NTU_NUM
+        pbar = tqdm(total=total_points, desc="Computing sweep", unit="points")
         for d in D_OVER_D_REF_VALUES:
-            ntu_max_d = _ntu_max_for_d(d, dp_max)  # NTU max depends on d and dp_max
+            ntu_max_d = nf5p._ntu_max_for_d(d, dp_max)  # NTU max depends on d and dp_max
             ntu_sweep = np.linspace(NTU_MIN, ntu_max_d, NTU_NUM)
             for ntu in ntu_sweep:
-                z = _practical_at_d_ntu(
+                z = nf5p._classical_at_d_ntu(
                     d,
                     ntu,
                     ntu_ref,
@@ -402,22 +300,23 @@ def run_sweep_and_plot(
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
-                    p_cold_in_over_p_hot_in,
-                    p_dead_over_p_hot_in,
+                    t_dead_over_t_cold_in,
                     gamma,
                     dp_max,
                 )
-                y = _y_axis(d, ntu)
+                y = nf5p._y_axis(d, ntu)
                 xx.append(d)
                 yy.append(y)
                 zz.append(z)
+                pbar.update(1)
+        pbar.close()
 
         xx = np.array(xx)
         yy = np.array(yy)
         zz = np.array(zz)
         valid = np.isfinite(zz)
         if not np.any(valid):
-            print("No valid practical values in sweep.")
+            print("No valid classical values in sweep.")
             print(f"Total points: {len(zz)}, Valid points: {np.sum(valid)}")
             return
 
@@ -433,10 +332,14 @@ def run_sweep_and_plot(
                 "input_hash": [input_hash] * len(xx),
                 "d_over_d_ref": xx,
                 "ao_over_ao_ref": yy,
-                "dqom_over_qmax": zz,
+                "dqom_practical_over_qmax": [np.nan] * len(xx),  # Not calculated for sweep
+                "dqom_classical_over_qmax": zz,
                 "d_opt": [np.nan] * len(xx),
                 "ao_opt": [np.nan] * len(xx),
-                "dqom_opt": [np.nan] * len(xx),
+                "dqom_practical_opt": [np.nan] * len(xx),
+                "dqom_classical_opt": [np.nan] * len(xx),
+                "dqom_practical_thermal_only_opt": [np.nan] * len(xx),
+                "dqom_classical_thermal_only_opt": [np.nan] * len(xx),
                 "is_fig4_opt": [False] * len(xx),
             }
         )
@@ -446,10 +349,14 @@ def run_sweep_and_plot(
                 "input_hash": [input_hash] * len(d_opt_line),
                 "d_over_d_ref": [np.nan] * len(d_opt_line),
                 "ao_over_ao_ref": [np.nan] * len(d_opt_line),
-                "dqom_over_qmax": [np.nan] * len(d_opt_line),
+                "dqom_practical_over_qmax": [np.nan] * len(d_opt_line),
+                "dqom_classical_over_qmax": [np.nan] * len(d_opt_line),
                 "d_opt": d_opt_line,
                 "ao_opt": y_opt_line,
-                "dqom_opt": z_opt_line,
+                "dqom_practical_opt": z_practical_opt_line,
+                "dqom_classical_opt": z_classical_opt_line,
+                "dqom_practical_thermal_only_opt": z_practical_thermal_only_opt_line,
+                "dqom_classical_thermal_only_opt": z_classical_thermal_only_opt_line,
                 "is_fig4_opt": [False] * len(d_opt_line),
             }
         )
@@ -458,8 +365,8 @@ def run_sweep_and_plot(
 
         # Add fig4 optimum point if available
         if y_opt is not None:
-            # Calculate dQo^M/Qmax for fig4 optimum
-            z_fig4 = _practical_at_d_ntu(
+            # Calculate dQo^M/Qmax (practical) and dQ0/Qmax (classical) for fig4 optimum
+            z_fig4_practical = nf5p._practical_at_d_ntu(
                 1.0,
                 ntu_opt,
                 ntu_ref,
@@ -472,15 +379,57 @@ def run_sweep_and_plot(
                 gamma,
                 dp_max,
             )
+            z_fig4_classical = nf5p._classical_at_d_ntu(
+                1.0,
+                ntu_opt,
+                ntu_ref,
+                dp_hot_ref,
+                c_cold_over_c_hot,
+                pressure_drop_ratio,
+                t,
+                t_dead_over_t_cold_in,
+                gamma,
+                dp_max,
+            )
+            z_fig4_practical_thermal_only = nf5p._practical_at_d_ntu_thermal_only(
+                1.0,
+                ntu_opt,
+                ntu_ref,
+                dp_hot_ref,
+                c_cold_over_c_hot,
+                pressure_drop_ratio,
+                t,
+                p_cold_in_over_p_hot_in,
+                p_dead_over_p_hot_in,
+                gamma,
+                dp_max,
+            )
+            z_fig4_classical_thermal_only = nf5p._classical_at_d_ntu(
+                1.0,
+                ntu_opt,
+                ntu_ref,
+                dp_hot_ref,
+                c_cold_over_c_hot,
+                pressure_drop_ratio,
+                t,
+                t_dead_over_t_cold_in,
+                gamma,
+                dp_max,
+                thermal_only=True,
+            )
             fig4_df = pd.DataFrame(
                 {
                     "input_hash": [input_hash],
                     "d_over_d_ref": [1.0],
                     "ao_over_ao_ref": [y_opt],
-                    "dqom_over_qmax": [z_fig4],
+                    "dqom_practical_over_qmax": [z_fig4_practical],
+                    "dqom_classical_over_qmax": [z_fig4_classical],
                     "d_opt": [np.nan],
                     "ao_opt": [np.nan],
-                    "dqom_opt": [np.nan],
+                    "dqom_practical_opt": [np.nan],
+                    "dqom_classical_opt": [np.nan],
+                    "dqom_practical_thermal_only_opt": [z_fig4_practical_thermal_only],
+                    "dqom_classical_thermal_only_opt": [z_fig4_classical_thermal_only],
                     "is_fig4_opt": [True],
                 }
             )
@@ -491,8 +440,7 @@ def run_sweep_and_plot(
         print(f"Data saved to {DATA_FILE}")
 
     # Interpolate onto regular grid for contour (smoothness = CONTOUR_GRID_N, not NTU_NUM)
-    # The irregular (x, y, z) points from the sweep are interpolated onto a regular grid
-    # for smooth contour plotting. CONTOUR_GRID_N controls smoothness, not NTU_NUM.
+    print("Interpolating onto regular grid...")
     valid = np.isfinite(zz)
     x_min, x_max = D_OVER_D_REF_VALUES.min(), D_OVER_D_REF_VALUES.max()
     y_min, y_max = yy[valid].min(), yy[valid].max()
@@ -511,7 +459,6 @@ def run_sweep_and_plot(
     )
 
     # Debug: check interpolation result
-    # If cubic interpolation fails (e.g., insufficient points), fall back to linear
     z_valid_count = np.sum(np.isfinite(Z))
     print(f"Interpolated Z: {z_valid_count}/{Z.size} valid values")
     if z_valid_count == 0:
@@ -541,17 +488,19 @@ def run_sweep_and_plot(
     ax.set_xlabel(r"$d / d_{\mathrm{ref}}$")
     ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
 
-    # Contour plot (practical availability)
-    # Check for valid Z values before creating levels
+    # Contour plot (classical unavailable energy)
     z_min = np.nanmin(Z)
     z_max = np.nanmax(Z)
     if not (np.isfinite(z_min) and np.isfinite(z_max)):
         print("Warning: No valid Z values for contour plot.")
         return
 
-    levels = np.linspace(z_min, min(0, z_max), 15)
-    # Ensure levels don't contain NaN or inf
+    # Classical unavailable energy is always positive, so use full range
+    levels = np.linspace(min(0, z_min), z_max, 15)
     levels = levels[np.isfinite(levels)]
+    # Ensure levels are sorted and increasing
+    levels = np.sort(levels)
+    levels = np.unique(levels)  # Remove duplicates
     if len(levels) < 2:
         print("Warning: Not enough valid levels for contour plot.")
         return
@@ -570,7 +519,7 @@ def run_sweep_and_plot(
                 "k-",
                 linewidth=1.5,
                 zorder=6,
-                label="optimal NTU",
+                label="optimal NTU (classical)",
             )
 
     # Ref at (1, 1): grey cross
@@ -587,8 +536,8 @@ def run_sweep_and_plot(
             zorder=5,
             label="fig4 opt",
         )
-    ax.legend(loc="upper left", fontsize=9)
-    ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.set_title(r"HEx $\Delta Q_0 / Q_{\mathrm{max}}$")
     plt.colorbar(cs, ax=ax, format=mtick.FormatStrFormatter("%.2f"))
     plt.tight_layout(pad=0.5)
 
@@ -609,10 +558,11 @@ if __name__ == "__main__":
         t=DEFAULT_T,
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
         p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+        t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
         gamma=DEFAULT_GAMMA,
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
         dp_max=DEFAULT_DP_MAX,
-        base_name="newfig5",
+        base_name="newfig5_classical",
     )
