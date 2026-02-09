@@ -11,12 +11,210 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xflow
+from xflow import calculate_pressure_drop_ratio, practical_unavailable_creation_hex
+from xflow import calculate_capacity_ratios
+from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = Path(save_dir) / "newfig5_practical_data.parquet"
 
 # Reference design point (d/d_ref = 1)
 D_REF = 1.0
+
+# Helicopter defaults (for calculations)
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
+DEFAULT_C_COLD_OVER_C_HOT = 0.95
+DEFAULT_D_R = 0.44
+DEFAULT_G2_H = 2e-2
+DEFAULT_ST_OVER_F = 0.4
+DEFAULT_F_C_OVER_F_H = 1.0
+DEFAULT_T = 1.7
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
+DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
+DEFAULT_GAMMA = 1.4
+NTU_REF = 1.479
+DEFAULT_MOLAR_MASS_RATIO = 1.0
+DEFAULT_A_R = 1.0
+DEFAULT_DP_MAX = 0.3
+DP_REF = 0.106
+NTU_MIN = 0.4
+NTU_NUM = 100
+
+
+def _compute_dp_at_ntu_ref(
+    c_cold_over_c_hot,
+    st_over_f,
+    f_c_over_f_h,
+    d_r,
+    g2_h,
+    pressure_drop_ratio,
+):
+    """Compute dp/p_in_hot at NTU=NTU_REF and d=d_ref using xflow."""
+    xflow.SHOW_CUBIC = True
+    xflow.NTU_MATCH = NTU_REF
+    ntu_max = 5.0
+
+    C_min_over_C_hot, C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
+    st_over_f_h = st_over_f
+    st_over_f_c = st_over_f
+    dp_coeff_normal = g2_h * (
+        1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
+    )
+
+    ntu_arr = np.linspace(0.1, ntu_max, 200)
+    closest_idx = np.argmin(np.abs(ntu_arr - NTU_REF))
+    ntu_at_anchor = ntu_arr[closest_idx]
+
+    dp_linear_at_anchor = dp_coeff_normal * ntu_at_anchor
+    dp_at_ntu_ref = dp_linear_at_anchor * (NTU_REF / ntu_at_anchor) ** 4.407
+    return float(dp_at_ntu_ref)
+
+
+def _get_eps_dp_at_d_ntu(
+    d_over_d_ref,
+    ntu,
+    dp_at_ntu_ref,
+    c_cold_over_c_hot,
+    pressure_drop_ratio,
+    dp_max,
+):
+    """Get epsilon and pressure drops at single (d, NTU). Returns (eps, dp_hot, dp_cold, validity)."""
+    dp_hot = dp_at_ntu_ref * (ntu / NTU_REF) ** 4.407 * (d_over_d_ref ** (-1.407))
+    dp_cold = pressure_drop_ratio * dp_hot
+
+    if c_cold_over_c_hot <= 1.0:
+        C_ratio = c_cold_over_c_hot
+    else:
+        C_ratio = 1.0 / c_cold_over_c_hot
+    eps = epsilon_ntu(
+        np.array([ntu]),
+        C_ratio,
+        exchanger_type="aligned_flow",
+        flow_type="counterflow",
+        n_passes=1,
+    )[0]
+
+    validity = (dp_hot < dp_max) & (dp_cold < dp_max)
+    return eps, dp_hot, dp_cold, validity
+
+
+def _practical_thermal_at_d_ntu(
+    d_over_d_ref,
+    ntu,
+    dp_at_ntu_ref,
+    c_cold_over_c_hot,
+    pressure_drop_ratio,
+    t,
+    p_cold_in_over_p_hot_in,
+    p_dead_over_p_hot_in,
+    gamma,
+    dp_max,
+):
+    """Thermal creation term only (no pressure drop) at single (d, NTU)."""
+    eps, dp_hot, dp_cold, validity = _get_eps_dp_at_d_ntu(
+        d_over_d_ref, ntu, dp_at_ntu_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
+    )
+
+    if not validity:
+        return np.nan
+
+    # Set pressure drop to zero for thermal-only calculation
+    dp_hot = 0.0
+    dp_cold = 0.0
+
+    out = practical_unavailable_creation_hex(
+        np.array([eps]),
+        t,
+        np.array([dp_hot]),
+        np.array([dp_cold]),
+        np.array([True]),
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+        gamma=gamma,
+    )
+    return float(out[0]) if len(out) > 0 else np.nan
+
+
+def _practical_at_d_ntu(
+    d_over_d_ref,
+    ntu,
+    dp_at_ntu_ref,
+    c_cold_over_c_hot,
+    pressure_drop_ratio,
+    t,
+    p_cold_in_over_p_hot_in,
+    p_dead_over_p_hot_in,
+    gamma,
+    dp_max,
+):
+    """Practical unavailable creation at single (d, NTU)."""
+    eps, dp_hot, dp_cold, validity = _get_eps_dp_at_d_ntu(
+        d_over_d_ref, ntu, dp_at_ntu_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
+    )
+
+    if not validity:
+        return np.nan
+
+    out = practical_unavailable_creation_hex(
+        np.array([eps]),
+        t,
+        np.array([dp_hot]),
+        np.array([dp_cold]),
+        np.array([True]),
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+        gamma=gamma,
+    )
+    return float(out[0]) if len(out) > 0 else np.nan
+
+
+def _ntu_max_for_d(d_over_d_ref, dp_max, dp_ref=DP_REF, ntu_max_at_d_ref=4.0):
+    """NTU max for a given d/d_ref and dp_max."""
+    return ntu_max_at_d_ref * (dp_max / dp_ref) ** (1 / 4.407) * (d_over_d_ref) ** (-1.407 / 4.407)
+
+
+def _optimal_ntu_for_d(
+    d_over_d_ref,
+    dp_at_ntu_ref,
+    c_cold_over_c_hot,
+    pressure_drop_ratio,
+    t,
+    p_cold_in_over_p_hot_in,
+    p_dead_over_p_hot_in,
+    gamma,
+    dp_max,
+    ntu_max_global,
+):
+    """Find optimal NTU for a given d/d_ref that minimizes practical unavailable energy."""
+    ntu_fine = np.linspace(NTU_MIN, ntu_max_global, NTU_NUM)
+    practical_vals = []
+
+    for ntu in ntu_fine:
+        z_practical = _practical_at_d_ntu(
+            d_over_d_ref,
+            ntu,
+            dp_at_ntu_ref,
+            c_cold_over_c_hot,
+            pressure_drop_ratio,
+            t,
+            p_cold_in_over_p_hot_in,
+            p_dead_over_p_hot_in,
+            gamma,
+            dp_max,
+        )
+        practical_vals.append(z_practical)
+
+    practical_vals = np.array(practical_vals)
+    valid = np.isfinite(practical_vals)
+
+    if np.any(valid):
+        idx = np.nanargmin(practical_vals[valid])
+        idx_original = np.where(valid)[0][idx]
+        ntu_opt = float(ntu_fine[idx_original])
+        return ntu_opt
+    return None
 
 
 def save_figures(base_name="fig7b"):
@@ -51,8 +249,110 @@ def save_figures(base_name="fig7b"):
     # Extract optimal line data (along practical optimum)
     opt_mask = df["d_opt"].notna()
     d_opt = df[opt_mask]["d_opt"].values
-    z_practical_thermal_only = df[opt_mask]["dqom_practical_thermal_only_opt"].values
-    z_practical_combined = df[opt_mask]["dqom_practical_opt"].values
+    
+    # Try to get ntu_opt from parquet, otherwise compute optimal NTU
+    if "ntu_opt" in df.columns and df[opt_mask]["ntu_opt"].notna().any():
+        ntu_opt = df[opt_mask]["ntu_opt"].values
+    else:
+        # Compute optimal NTU for each d/d_ref
+        print("Computing optimal NTU for each d/d_ref...")
+        sigma_r = DEFAULT_D_R * DEFAULT_A_R if DEFAULT_A_R is not None else None
+        pressure_drop_ratio = calculate_pressure_drop_ratio(
+            DEFAULT_PRESSURE_DROP_ASSUMPTION,
+            DEFAULT_C_COLD_OVER_C_HOT,
+            DEFAULT_T,
+            DEFAULT_D_R,
+            DEFAULT_MOLAR_MASS_RATIO,
+            sigma_r,
+            DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        )
+        dp_at_ntu_ref = _compute_dp_at_ntu_ref(
+            DEFAULT_C_COLD_OVER_C_HOT,
+            DEFAULT_ST_OVER_F,
+            DEFAULT_F_C_OVER_F_H,
+            DEFAULT_D_R,
+            DEFAULT_G2_H,
+            pressure_drop_ratio,
+        )
+        
+        # Find max NTU needed
+        ntu_max_global = max([_ntu_max_for_d(d, DEFAULT_DP_MAX, DP_REF, 4.0) for d in d_opt]) if len(d_opt) > 0 else 4.0
+        
+        ntu_opt = []
+        for d in d_opt:
+            ntu = _optimal_ntu_for_d(
+                d,
+                dp_at_ntu_ref,
+                DEFAULT_C_COLD_OVER_C_HOT,
+                pressure_drop_ratio,
+                DEFAULT_T,
+                DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+                DEFAULT_P_DEAD_OVER_P_HOT_IN,
+                DEFAULT_GAMMA,
+                DEFAULT_DP_MAX,
+                ntu_max_global,
+            )
+            ntu_opt.append(ntu if ntu is not None else np.nan)
+        ntu_opt = np.array(ntu_opt)
+    
+    # Compute thermal and viscous terms along optimal line
+    print("Computing thermal and viscous terms along optimal line...")
+    sigma_r = DEFAULT_D_R * DEFAULT_A_R if DEFAULT_A_R is not None else None
+    pressure_drop_ratio = calculate_pressure_drop_ratio(
+        DEFAULT_PRESSURE_DROP_ASSUMPTION,
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_T,
+        DEFAULT_D_R,
+        DEFAULT_MOLAR_MASS_RATIO,
+        sigma_r,
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    )
+    dp_at_ntu_ref = _compute_dp_at_ntu_ref(
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_ST_OVER_F,
+        DEFAULT_F_C_OVER_F_H,
+        DEFAULT_D_R,
+        DEFAULT_G2_H,
+        pressure_drop_ratio,
+    )
+    
+    z_practical_thermal_only = []
+    z_practical_combined = []
+    
+    for d, ntu in zip(d_opt, ntu_opt):
+        if np.isnan(ntu):
+            z_practical_thermal_only.append(np.nan)
+            z_practical_combined.append(np.nan)
+        else:
+            thermal = _practical_thermal_at_d_ntu(
+                d,
+                ntu,
+                dp_at_ntu_ref,
+                DEFAULT_C_COLD_OVER_C_HOT,
+                pressure_drop_ratio,
+                DEFAULT_T,
+                DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+                DEFAULT_P_DEAD_OVER_P_HOT_IN,
+                DEFAULT_GAMMA,
+                DEFAULT_DP_MAX,
+            )
+            total = _practical_at_d_ntu(
+                d,
+                ntu,
+                dp_at_ntu_ref,
+                DEFAULT_C_COLD_OVER_C_HOT,
+                pressure_drop_ratio,
+                DEFAULT_T,
+                DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+                DEFAULT_P_DEAD_OVER_P_HOT_IN,
+                DEFAULT_GAMMA,
+                DEFAULT_DP_MAX,
+            )
+            z_practical_thermal_only.append(thermal)
+            z_practical_combined.append(total)
+    
+    z_practical_thermal_only = np.array(z_practical_thermal_only)
+    z_practical_combined = np.array(z_practical_combined)
 
     if len(d_opt) == 0:
         raise ValueError("No optimal line data found in parquet file.")

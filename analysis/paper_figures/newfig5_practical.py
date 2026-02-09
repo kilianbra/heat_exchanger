@@ -84,11 +84,15 @@ DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 DEFAULT_GAMMA = 1.4
-NTU_REF = 1.18  # 1.479
+NTU_REF = 1.479
 DEFAULT_MOLAR_MASS_RATIO = 1.0
 DEFAULT_A_R = 1.0
 DEFAULT_DP_MAX = 0.3
 DP_REF = 0.115
+
+# Y-axis type: "ao_over_ao_ref", "dp_over_p_in", "g2h", or "ntu"
+Y_AXIS_TYPE = "g2h"  # Options: "ao_over_ao_ref", "dp_over_p_in", "g2h", "ntu"
+UNNORMALISED_Y_AXIS_IF_POSS = True  # If True, plot unnormalized values (multiply by reference)
 
 # Sweep: d_over_d_ref from 0.5 to 1.2, 8 values step 0.1
 D_OVER_D_REF_VALUES = np.linspace(0.5, 4, 100)  # 0.5, 0.6, ..., 1.2
@@ -96,7 +100,7 @@ NTU_MAX_AT_D_REF = 4.0  # NTU max at d/d_ref = 1; for smaller d, NTU max increas
 NTU_NUM = 100  # number of NTU points per d (sweep resolution)
 CONTOUR_GRID_N = 200  # grid size for interpolation; contour smoothness is set by this, not NTU_NUM
 NTU_MIN = 0.4
-AO_MAX = 3
+Y_MAX = 0.03
 
 
 def _ntu_max_for_d(d_over_d_ref, dp_max, dp_ref=DP_REF):
@@ -107,60 +111,132 @@ def _ntu_max_for_d(d_over_d_ref, dp_max, dp_ref=DP_REF):
     return NTU_MAX_AT_D_REF * (dp_max / dp_ref) ** (1 / 4.407) * (d_over_d_ref) ** (-1.407 / 4.407)
 
 
-def _y_axis(d_over_d_ref, ntu):
-    """Y-axis coordinate: (NTU/NTU_match)**(-1.704) * (d_over_d_ref)**(-0.704)."""
-    # Ao/Aoref = return (ntu / NTU_REF) ** (-1.704) * (d_over_d_ref) ** (-0.704)
-    # dp/p_in hot = dp_ref * (d_over_d_ref)**1.407 * (ntu / NTU_REF)**(4.407)
-    return DP_REF * (d_over_d_ref) ** 1.407 * (ntu / NTU_REF) ** (4.407)
+def _y_axis(d_over_d_ref, ntu, unnormalised=False):
+    """Y-axis coordinate based on Y_AXIS_TYPE global variable.
+
+    Options:
+    - "ao_over_ao_ref": Ao/Ao_ref = (ntu/NTU_REF)^(-1.704) * (d/d_ref)^(-0.704)
+    - "dp_over_p_in": dp/p_in = dp_ref * (d/d_ref)^1.407 * (ntu/NTU_REF)^4.407
+    - "g2h": g2h = g2h_ref * ((ntu/NTU_REF)^(-1.704) * (d/d_ref)^(-0.704))^(-2)
+    - "ntu": NTU (normalized or unnormalized)
+
+    If unnormalised=True, multiply by reference value to get absolute units.
+    """
+    match Y_AXIS_TYPE:
+        case "ao_over_ao_ref":
+            y_norm = (ntu / NTU_REF) ** (-1.704) * (d_over_d_ref) ** (-0.704)
+            if unnormalised:
+                # Ao_ref is not directly available, but we can compute from g2h_ref
+                # Actually, Ao/Ao_ref is dimensionless, so unnormalized doesn't make sense
+                # Return as-is (it's already a ratio)
+                return y_norm
+            return y_norm
+        case "dp_over_p_in":
+            # Formula: dp/p_in = dp_ref * (d/d_ref)^1.407 * (NTU/NTU_REF)^4.407
+            y_norm = (d_over_d_ref) ** 1.407 * (ntu / NTU_REF) ** (4.407)
+            if unnormalised:
+                # Unnormalized: absolute dp/p_in value
+                return y_norm * DP_REF
+            # Normalized: dp/dp_ref (DP_REF cancels out)
+            return y_norm
+        case "g2h":
+            ao_over_ao_ref = (ntu / NTU_REF) ** (-1.704) * (d_over_d_ref) ** (-0.704)
+            g2h_abs = DEFAULT_G2_H * (ao_over_ao_ref) ** (-2)
+            if unnormalised:
+                return g2h_abs  # Absolute units
+            return g2h_abs / DEFAULT_G2_H  # Normalized
+        case "ntu":
+            if unnormalised:
+                return ntu  # Absolute NTU
+            return ntu / NTU_REF  # Normalized NTU
+        case _:
+            raise ValueError(f"Unknown Y_AXIS_TYPE: {Y_AXIS_TYPE}")
 
 
-def _compute_reference_dp_curve(
+def _get_y_axis_label():
+    """Get the y-axis label based on Y_AXIS_TYPE and UNNORMALISED_Y_AXIS_IF_POSS."""
+    match Y_AXIS_TYPE:
+        case "ao_over_ao_ref":
+            if UNNORMALISED_Y_AXIS_IF_POSS:
+                return r"$A_o$"  # Unnormalized doesn't really make sense for ratios
+            return r"$A_o/A_{o,\mathrm{ref}}$"
+        case "dp_over_p_in":
+            if UNNORMALISED_Y_AXIS_IF_POSS:
+                return r"$\Delta p / p_{\mathrm{in}}$"  # Already dimensionless
+            return r"$\Delta p / p_{\mathrm{in}} / (\Delta p / p_{\mathrm{in}})_{\mathrm{ref}}$"
+        case "g2h":
+            if UNNORMALISED_Y_AXIS_IF_POSS:
+                return r"$g_2$"
+            return r"$g_2 / g_{2,\mathrm{ref}}$"
+        case "ntu":
+            if UNNORMALISED_Y_AXIS_IF_POSS:
+                return r"$\mathrm{NTU}$"
+            return r"$\mathrm{NTU} / \mathrm{NTU}_{\mathrm{ref}}$"
+        case _:
+            raise ValueError(f"Unknown Y_AXIS_TYPE: {Y_AXIS_TYPE}")
+
+
+def _get_reference_y_value():
+    """Get the y-axis value at the reference point (d=1, NTU=NTU_REF).
+
+    At the reference point:
+    - ao_over_ao_ref = 1.0
+    - dp_over_p_in = DP_REF (or actual computed value)
+    - g2h = DEFAULT_G2_H (normalized: 1.0)
+    - ntu = NTU_REF (normalized: 1.0)
+    """
+    return _y_axis(1.0, NTU_REF, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
+
+
+def _compute_dp_at_ntu_ref(
     c_cold_over_c_hot,
     st_over_f,
     f_c_over_f_h,
     d_r,
     g2_h,
     pressure_drop_ratio,
-    dp_max,
 ):
-    """Reference hot pressure drop vs NTU at d_over_d_ref=1 (same formula as xflow 4.407).
-    ntu_max set so the curve covers the full NTU range needed for all d (max at smallest d).
-    Use a much higher dp_max for the reference curve so it covers full NTU range;
-    actual dp_max check happens after scaling by d**1.407.
+    """Compute dp/p_in_hot at NTU=NTU_REF and d=d_ref using xflow.
+
+    Returns the scalar dp_hot value at the reference point. All other dp values
+    can be computed analytically:
+        dp(NTU, d) = dp_at_ntu_ref * (NTU / NTU_REF)^4.407 * (d / d_ref)^1.407
+
+    This avoids interpolating a discretized reference curve, eliminating numerical
+    artifacts (zigzags) in the optimum line.
     """
     xflow.SHOW_CUBIC = True
-    xflow.NTU_REF = NTU_REF
-    ntu_max_ref = _ntu_max_for_d(D_OVER_D_REF_VALUES.min(), dp_max)
-    # Add safety margin (1.2x) to ensure we cover all NTU values needed
-    ntu_max_ref = ntu_max_ref * 1.2
-    # Use much higher dp_max for reference curve so it covers full NTU range
-    # The actual dp_max limit is applied after scaling by d**1.407
-    dp_max_ref = dp_max * 3.0  # Allow reference curve to go much higher
-    ntu_arr, _, dp_hot_ref, _, _ = calculate_epsilon_ntu_curve(
+    xflow.NTU_MATCH = NTU_REF
+    # Generate a small curve around NTU_REF to extract dp at the reference point
+    # The cubic formula in xflow anchors at NTU_MATCH, so dp at NTU_MATCH is exact
+    ntu_arr, _, dp_hot_arr, _, _ = calculate_epsilon_ntu_curve(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
         d_r,
         g2_h,
-        ntu_max=ntu_max_ref,
-        dp_max=dp_max_ref,
+        ntu_max=NTU_REF * 1.5,
+        dp_max=1.0,  # Large enough to not clip at NTU_REF
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
-    return ntu_arr, dp_hot_ref
+    dp_at_ntu_ref = float(np.interp(NTU_REF, ntu_arr, dp_hot_arr))
+    return dp_at_ntu_ref
 
 
 def _get_eps_dp_at_d_ntu(
     d_over_d_ref,
     ntu,
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     dp_max,
 ):
-    """Get epsilon and pressure drops at single (d, NTU). Returns (eps, dp_hot, dp_cold, validity)."""
-    # Interpolate reference dp at this NTU, then scale by d**1.407
-    dp_hot = np.interp(ntu, ntu_ref, dp_hot_ref) * (d_over_d_ref**1.407)
+    """Get epsilon and pressure drops at single (d, NTU). Returns (eps, dp_hot, dp_cold, validity).
+
+    Uses the analytical formula:
+        dp_hot = dp_at_ntu_ref * (NTU / NTU_REF)^4.407 * (d / d_ref)^1.407
+    """
+    dp_hot = dp_at_ntu_ref * (ntu / NTU_REF) ** 4.407 * (d_over_d_ref**1.407)
     dp_cold = pressure_drop_ratio * dp_hot
 
     if c_cold_over_c_hot <= 1.0:
@@ -182,8 +258,7 @@ def _get_eps_dp_at_d_ntu(
 def _practical_at_d_ntu(
     d_over_d_ref,
     ntu,
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
@@ -192,9 +267,9 @@ def _practical_at_d_ntu(
     gamma,
     dp_max,
 ):
-    """Practical unavailable creation at single (d, NTU). Pressure drop = ref_dp(NTU) * d**1.407."""
+    """Practical unavailable creation at single (d, NTU). Pressure drop = analytical formula."""
     eps, dp_hot, dp_cold, validity = _get_eps_dp_at_d_ntu(
-        d_over_d_ref, ntu, ntu_ref, dp_hot_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
+        d_over_d_ref, ntu, dp_at_ntu_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
     )
 
     if not validity:
@@ -216,8 +291,7 @@ def _practical_at_d_ntu(
 def _classical_at_d_ntu(
     d_over_d_ref,
     ntu,
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
@@ -226,7 +300,7 @@ def _classical_at_d_ntu(
     dp_max,
     thermal_only=False,
 ):
-    """Classical unavailable creation at single (d, NTU). Pressure drop = ref_dp(NTU) * d**1.407.
+    """Classical unavailable creation at single (d, NTU). Pressure drop = analytical formula.
 
     Parameters:
     -----------
@@ -234,7 +308,7 @@ def _classical_at_d_ntu(
         If True, calculate with no pressure drop (dp=0). If False, use actual pressure drop.
     """
     eps, dp_hot, dp_cold, validity = _get_eps_dp_at_d_ntu(
-        d_over_d_ref, ntu, ntu_ref, dp_hot_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
+        d_over_d_ref, ntu, dp_at_ntu_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
     )
 
     if not validity:
@@ -260,8 +334,7 @@ def _classical_at_d_ntu(
 def _practical_at_d_ntu_thermal_only(
     d_over_d_ref,
     ntu,
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
@@ -272,7 +345,7 @@ def _practical_at_d_ntu_thermal_only(
 ):
     """Practical unavailable creation at single (d, NTU) with no pressure drop (thermal only)."""
     eps, dp_hot, dp_cold, validity = _get_eps_dp_at_d_ntu(
-        d_over_d_ref, ntu, ntu_ref, dp_hot_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
+        d_over_d_ref, ntu, dp_at_ntu_ref, c_cold_over_c_hot, pressure_drop_ratio, dp_max
     )
 
     if not validity:
@@ -296,8 +369,7 @@ def _practical_at_d_ntu_thermal_only(
 
 
 def _fig4_optimum_ntu(
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
@@ -307,14 +379,13 @@ def _fig4_optimum_ntu(
     dp_max,
 ):
     """At d_over_d_ref=1, find NTU that minimizes practical_unavailable_creation (fig4 optimum)."""
-    ntu_fine = np.linspace(0.35, NTU_MAX_AT_D_REF, 150)
+    ntu_fine = np.linspace(0.35, NTU_MAX_AT_D_REF, 500)
     vals = []
     for ntu in ntu_fine:
         z = _practical_at_d_ntu(
             1.0,
             ntu,
-            ntu_ref,
-            dp_hot_ref,
+            dp_at_ntu_ref,
             c_cold_over_c_hot,
             pressure_drop_ratio,
             t,
@@ -333,8 +404,7 @@ def _fig4_optimum_ntu(
 
 
 def _optimal_ntu_line(
-    ntu_ref,
-    dp_hot_ref,
+    dp_at_ntu_ref,
     c_cold_over_c_hot,
     pressure_drop_ratio,
     t,
@@ -367,10 +437,14 @@ def _optimal_ntu_line(
     z_practical_thermal_only_opt_vals = []
     z_classical_thermal_only_opt_vals = []
 
+    # Use a FIXED NTU grid to prevent zigzag artifacts from shifting grid points.
+    # Covers the largest range needed (smallest d has highest NTU_max).
+    # Invalid points (dp > dp_max) are automatically excluded by validity check.
+    ntu_max_global = _ntu_max_for_d(D_OVER_D_REF_VALUES.min(), dp_max)
+    ntu_fine = np.linspace(ntu_min, ntu_max_global, NTU_NUM)
+
     total_d_values = len(D_OVER_D_REF_VALUES)
     for d in tqdm(D_OVER_D_REF_VALUES, desc="Finding optimal NTU", total=total_d_values):
-        ntu_max_d = _ntu_max_for_d(d, dp_max)
-        ntu_fine = np.linspace(ntu_min, ntu_max_d, NTU_NUM)
         practical_vals = []
         classical_vals = []
 
@@ -378,8 +452,7 @@ def _optimal_ntu_line(
             z_practical = _practical_at_d_ntu(
                 d,
                 ntu,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -391,8 +464,7 @@ def _optimal_ntu_line(
             z_classical = _classical_at_d_ntu(
                 d,
                 ntu,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -412,15 +484,14 @@ def _optimal_ntu_line(
                 idx = np.nanargmin(practical_vals[valid])
                 idx_original = np.where(valid)[0][idx]
                 ntu_opt = float(ntu_fine[idx_original])
-                y_opt = _y_axis(d, ntu_opt)
+                y_opt = _y_axis(d, ntu_opt, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
                 z_practical_opt = float(practical_vals[idx_original])
                 z_classical_opt = float(classical_vals[idx_original])
                 # Calculate thermal_only values at the optimum point
                 z_practical_thermal_only = _practical_at_d_ntu_thermal_only(
                     d,
                     ntu_opt,
-                    ntu_ref,
-                    dp_hot_ref,
+                    dp_at_ntu_ref,
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
@@ -432,8 +503,7 @@ def _optimal_ntu_line(
                 z_classical_thermal_only = _classical_at_d_ntu(
                     d,
                     ntu_opt,
-                    ntu_ref,
-                    dp_hot_ref,
+                    dp_at_ntu_ref,
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
@@ -448,15 +518,14 @@ def _optimal_ntu_line(
                 idx = np.nanargmin(classical_vals[valid])
                 idx_original = np.where(valid)[0][idx]
                 ntu_opt = float(ntu_fine[idx_original])
-                y_opt = _y_axis(d, ntu_opt)
+                y_opt = _y_axis(d, ntu_opt, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
                 z_practical_opt = float(practical_vals[idx_original])
                 z_classical_opt = float(classical_vals[idx_original])
                 # Calculate thermal_only values at the optimum point
                 z_practical_thermal_only = _practical_at_d_ntu_thermal_only(
                     d,
                     ntu_opt,
-                    ntu_ref,
-                    dp_hot_ref,
+                    dp_at_ntu_ref,
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
@@ -468,8 +537,7 @@ def _optimal_ntu_line(
                 z_classical_thermal_only = _classical_at_d_ntu(
                     d,
                     ntu_opt,
-                    ntu_ref,
-                    dp_hot_ref,
+                    dp_at_ntu_ref,
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
@@ -522,6 +590,8 @@ def _compute_input_hash(**kwargs):
         "ntu_min": NTU_MIN,
         "ntu_ref": NTU_REF,
         "dp_ref": DP_REF,
+        "y_axis_type": Y_AXIS_TYPE,
+        "unnormalised_y_axis_if_poss": UNNORMALISED_Y_AXIS_IF_POSS,
     }
     # Convert to JSON string and hash
     input_str = json.dumps(inputs, sort_keys=True)
@@ -618,21 +688,20 @@ def run_sweep_and_plot(
             p_cold_in_over_p_hot_in,
         )
 
-        # Reference dp curve at d=1 (used for all d via multiplier d**1.407)
-        ntu_ref, dp_hot_ref = _compute_reference_dp_curve(
+        # Compute dp/p_in at NTU_REF (reference point); all other dp values are analytical
+        dp_at_ntu_ref = _compute_dp_at_ntu_ref(
             c_cold_over_c_hot,
             st_over_f,
             f_c_over_f_h,
             d_r,
             g2_h,
             pressure_drop_ratio,
-            dp_max,
         )
+        print(f"  dp/p_in at NTU_REF (from xflow): {dp_at_ntu_ref:.6f} ({dp_at_ntu_ref * 100:.2f}%)")
 
         # Fig4 optimum: at d=1, NTU that minimizes practical
         ntu_opt = _fig4_optimum_ntu(
-            ntu_ref,
-            dp_hot_ref,
+            dp_at_ntu_ref,
             c_cold_over_c_hot,
             pressure_drop_ratio,
             t,
@@ -641,10 +710,37 @@ def run_sweep_and_plot(
             gamma,
             dp_max,
         )
-        print(f" Optimum NTU and dp/p_in hot at d=1: {ntu_opt}, {_y_axis(1.0, ntu_opt)}")
+        # Compute all derived values at the optimum (d=1)
         if ntu_opt is not None:
-            y_opt = _y_axis(1.0, ntu_opt)
+            # Compute dp analytically at the optimum
+            dp_hot_at_opt = dp_at_ntu_ref * (ntu_opt / NTU_REF) ** 4.407
+            dp_hot_at_ref = dp_at_ntu_ref  # By definition
+
+            # Compute all y-axis quantities at optimum
+            ao_over_ao_ref_opt = (ntu_opt / NTU_REF) ** (-1.704) * (1.0) ** (-0.704)
+            g2h_opt = DEFAULT_G2_H * (ao_over_ao_ref_opt) ** (-2)
+            dp_over_p_in_opt = DP_REF * (1.0) ** 1.407 * (ntu_opt / NTU_REF) ** (4.407)
+            ntu_norm_opt = ntu_opt / NTU_REF
+
+            print("\n  === Optimum at d/d_ref = 1.0 ===")
+            print(f"  NTU: {ntu_opt:.4f} (normalized: {ntu_norm_opt:.4f})")
+            print(f"  dp/p_in hot: {dp_hot_at_opt:.6f} ({dp_hot_at_opt * 100:.2f}%)")
+            print(f"  dp_opt / dp_ref ratio: {dp_hot_at_opt / dp_hot_at_ref:.4f}")
+            print("\n  === All derived values at optimum ===")
+            print(f"  Ao/Ao_ref: {ao_over_ao_ref_opt:.6f}")
+            print(f"  g2h: {g2h_opt:.6f}")
+            print(f"  dp/p_in (from formula): {dp_over_p_in_opt:.6f} ({dp_over_p_in_opt * 100:.2f}%)")
+            print(f"  _y_axis(1, ntu_opt) = {_y_axis(1.0, ntu_opt, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS):.6f}")
+            print("\n  === Reference point (d=1, NTU=NTU_REF) ===")
+            print(f"  NTU: {NTU_REF:.4f}")
+            print(f"  dp/p_in hot: {dp_hot_at_ref:.6f} ({dp_hot_at_ref * 100:.2f}%)")
+            print("  Ao/Ao_ref: 1.0")
+            print(f"  g2h: {DEFAULT_G2_H:.6f}")
+            print(f"  _y_axis(1, NTU_REF) = {_get_reference_y_value():.6f}")
+
+            y_opt = _y_axis(1.0, ntu_opt, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
         else:
+            print("\n  === No optimum found at d/d_ref = 1.0 ===")
             y_opt = None
 
         # Optimal NTU line: for each d, find optimal NTU (minimizing practical, also calculate classical)
@@ -657,8 +753,7 @@ def run_sweep_and_plot(
             z_practical_thermal_only_opt_line,
             z_classical_thermal_only_opt_line,
         ) = _optimal_ntu_line(
-            ntu_ref,
-            dp_hot_ref,
+            dp_at_ntu_ref,
             c_cold_over_c_hot,
             pressure_drop_ratio,
             t,
@@ -684,8 +779,7 @@ def run_sweep_and_plot(
                 z = _practical_at_d_ntu(
                     d,
                     ntu,
-                    ntu_ref,
-                    dp_hot_ref,
+                    dp_at_ntu_ref,
                     c_cold_over_c_hot,
                     pressure_drop_ratio,
                     t,
@@ -694,7 +788,7 @@ def run_sweep_and_plot(
                     gamma,
                     dp_max,
                 )
-                y = _y_axis(d, ntu)
+                y = _y_axis(d, ntu, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
                 xx.append(d)
                 yy.append(y)
                 zz.append(z)
@@ -759,8 +853,7 @@ def run_sweep_and_plot(
             z_fig4_practical = _practical_at_d_ntu(
                 1.0,
                 ntu_opt,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -772,8 +865,7 @@ def run_sweep_and_plot(
             z_fig4_classical = _classical_at_d_ntu(
                 1.0,
                 ntu_opt,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -784,8 +876,7 @@ def run_sweep_and_plot(
             z_fig4_practical_thermal_only = _practical_at_d_ntu_thermal_only(
                 1.0,
                 ntu_opt,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -797,8 +888,7 @@ def run_sweep_and_plot(
             z_fig4_classical_thermal_only = _classical_at_d_ntu(
                 1.0,
                 ntu_opt,
-                ntu_ref,
-                dp_hot_ref,
+                dp_at_ntu_ref,
                 c_cold_over_c_hot,
                 pressure_drop_ratio,
                 t,
@@ -838,7 +928,7 @@ def run_sweep_and_plot(
     y_min, y_max = yy[valid].min(), yy[valid].max()
     # Slightly extend for nicer contours
     y_min = max(y_min * 0.95, 1e-5)
-    y_max = min(y_max * 1.05, AO_MAX)
+    y_max = min(y_max * 1.05, Y_MAX)
     grid_x = np.linspace(x_min, x_max, CONTOUR_GRID_N)
     grid_y = np.linspace(y_min, y_max, CONTOUR_GRID_N)
     X, Y = np.meshgrid(grid_x, grid_y)
@@ -880,7 +970,7 @@ def run_sweep_and_plot(
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
     ax.set_xlabel(r"$d / d_{\mathrm{ref}}$")
-    ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
+    ax.set_ylabel(_get_y_axis_label())
 
     # Contour plot (practical availability)
     # Check for valid Z values before creating levels
@@ -914,8 +1004,9 @@ def run_sweep_and_plot(
                 label="optimal NTU (practical)",
             )
 
-    # Ref at (1, 1): grey cross
-    ax.scatter([1.0], [1.0], marker="x", s=80, color="grey", linewidths=2, zorder=5, label="ref")
+    # Ref at (1, y_ref): grey cross (y_ref depends on Y_AXIS_TYPE)
+    y_ref = _get_reference_y_value()
+    ax.scatter([1.0], [y_ref], marker="x", s=80, color="grey", linewidths=2, zorder=5, label="ref")
     # Fig4 optimum: black circle (at d=1, y = y_opt)
     if y_opt is not None and y_min <= y_opt <= y_max:
         ax.scatter(

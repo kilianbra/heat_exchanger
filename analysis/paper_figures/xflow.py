@@ -50,7 +50,7 @@ SHOW_CUBIC = False
 NTU_MATCH = None  # Will be set in match case if SHOW_CUBIC is True
 
 
-defaults = "g2lim"
+defaults = "Helicopter"
 match defaults:
     case "Brewer":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"

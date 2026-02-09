@@ -36,11 +36,12 @@ from xflow import (
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 import xflow
 
-AO_OVER_AO_REF_VALUES = np.linspace(0.4, 2.5, 800)
+AO_SWEEP = np.linspace(0.4, 2.5, 400)
+A_OVER_A_REF_VALUES = np.linspace(0.3, 5.0, 800)
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-def _optimal_ntu_line_ao(
+def _optimal_ao_for_each_a_over_a_ref(
     c_cold_over_c_hot,
     st_over_f,
     f_c_over_f_h,
@@ -52,16 +53,32 @@ def _optimal_ntu_line_ao(
     gamma,
     dp_max,
 ):
-    """Find optimal NTU for each Ao/Ao_ref, return (ao_values, ntu_opt_values, a_over_a_ref_values, dq_o_m_over_qmax_values)."""
-    ao_vals = []
-    ntu_opt_vals = []
-    a_over_a_ref_vals = []
-    dq_o_m_over_qmax_vals = []
+    """Vertical-slice optimization: for each target A/A_ref, find the best ao (and NTU).
 
-    for ao in AO_OVER_AO_REF_VALUES:
-        ntu_fine = np.linspace(0.15, NTU_MAX, 200)
-        vals = []
-        for ntu in ntu_fine:
+    For a given A/A_ref, the constraint is:
+        NTU = A/A_ref * NTU_MATCH / ao^0.587
+    We sweep ao to find the one that minimizes dQ_o^M at the constrained NTU.
+
+    Returns (a_over_a_ref_values, ao_opt_values, ntu_opt_values, dq_o_m_over_qmax_values).
+    """
+    a_over_a_ref_out = []
+    ao_opt_out = []
+    ntu_opt_out = []
+    dq_out = []
+
+    for a_target in A_OVER_A_REF_VALUES:
+        best_z = np.inf
+        best_ao = None
+        best_ntu = None
+
+        for ao in AO_SWEEP:
+            # Constraint: A/A_ref = (NTU / NTU_MATCH) * ao^0.587
+            ntu = a_target * NTU_MATCH / (ao**0.587)
+
+            # Skip if NTU is out of physical range
+            if ntu < 0.1 or ntu > NTU_MAX:
+                continue
+
             z = _practical_at_ao_ntu(
                 ao,
                 ntu,
@@ -76,20 +93,19 @@ def _optimal_ntu_line_ao(
                 gamma,
                 dp_max,
             )
-            vals.append(z)
-        vals = np.array(vals)
-        valid = np.isfinite(vals)
-        if np.any(valid):
-            idx = np.nanargmin(vals)
-            ntu_opt = float(ntu_fine[idx])
-            a_over_a_ref_opt = _a_over_a_ref(ao, ntu_opt)
-            dq_o_m_over_qmax_opt = float(vals[idx])
-            ao_vals.append(ao)
-            ntu_opt_vals.append(ntu_opt)
-            a_over_a_ref_vals.append(a_over_a_ref_opt)
-            dq_o_m_over_qmax_vals.append(dq_o_m_over_qmax_opt)
 
-    return np.array(ao_vals), np.array(ntu_opt_vals), np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
+            if np.isfinite(z) and z < best_z:
+                best_z = z
+                best_ao = ao
+                best_ntu = ntu
+
+        if best_ao is not None:
+            a_over_a_ref_out.append(a_target)
+            ao_opt_out.append(best_ao)
+            ntu_opt_out.append(best_ntu)
+            dq_out.append(best_z)
+
+    return np.array(a_over_a_ref_out), np.array(ao_opt_out), np.array(ntu_opt_out), np.array(dq_out)
 
 
 def _practical_at_ao_ntu_constant_g2h(
@@ -181,7 +197,7 @@ def _optimal_ntu_line_constant_g2h(
     dq_o_m_over_qmax_vals = []
 
     # Sweep NTU from NTU_MATCH up to NTU_MAX
-    ntu_sweep = np.linspace(NTU_MATCH / 10, NTU_MAX, 200)
+    ntu_sweep = np.linspace(0.1, NTU_MAX, 200)
     ao_ref = 1.0  # Use reference ao value when g2_h is constant
 
     for ntu in ntu_sweep:
@@ -239,8 +255,10 @@ def run_plot(
         p_cold_in_over_p_hot_in,
     )
 
-    # Get optimum NTU line from newfig6 (includes dQ_o^M/Qmax values)
-    ao_opt_line, ntu_opt_line, a_over_a_ref_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ntu_line_ao(
+    # Vertical-slice optimization: for each A/A_ref, find the best ao (and NTU).
+    # This ensures the black line shows the best possible dQ_o^M for each metal volume,
+    # and must pass through (or below) the reference point at A/A_ref=1.
+    a_over_a_ref_opt_line, ao_opt_line, ntu_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ao_for_each_a_over_a_ref(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -310,21 +328,8 @@ def run_plot(
         edgecolor="white",
     )
 
+    # Fixed mass optimal: circle marker at A/A_ref = 1
     id_ref = np.argmin(np.abs(a_over_a_ref_opt_line - 1))
-
-    # Reference design (fig5 style): diamond at NTU = NTU_MATCH
-    id_ref_design = np.argmin(np.abs(ntu_opt_line - NTU_MATCH))
-    ax.scatter(
-        m_hex[id_ref], # fudging this atm
-        dm_fuel_and_hex[id_ref_design]+10, # fudging this atm
-        facecolor="black",
-        edgecolor="white",
-        s=50,
-        zorder=5,
-        marker="D",
-    )
-
-    # Fixed mass optimal: circle marker (was diamond)
     ax.scatter(
         m_hex[id_ref],
         dm_fuel_and_hex[id_ref],
@@ -333,6 +338,35 @@ def run_plot(
         s=50,
         zorder=5,
         marker="o",
+    )
+
+    # Reference design: diamond at (ao=1, NTU=NTU_MATCH)
+    # Compute the TRUE reference value at (ao=1, NTU=NTU_MATCH)
+    dq_ref = _practical_at_ao_ntu(
+        1.0,
+        NTU_MATCH,
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r,
+        pressure_drop_ratio,
+        t,
+        p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in,
+        gamma,
+        dp_max,
+    )
+    a_over_a_ref_ref = _a_over_a_ref(1.0, NTU_MATCH)
+    m_hex_ref_design = a_over_a_ref_ref * m_hex_ref
+    dm_ref_design = dq_ref * factor_fuel + m_hex_ref * a_over_a_ref_ref
+    ax.scatter(
+        m_hex_ref_design,
+        dm_ref_design,
+        facecolor="black",
+        edgecolor="white",
+        s=50,
+        zorder=5,
+        marker="D",
     )
 
     ax.plot(
@@ -389,7 +423,7 @@ def run_plot(
     arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=12)
     ax.annotate(
         "reference design",
-        xy=(m_hex[id_ref_design], dm_fuel_and_hex[id_ref_design]),
+        xy=(m_hex_ref_design, dm_ref_design),
         xytext=(20, -40),
         fontsize=font_size,
         ha="left",
@@ -420,8 +454,8 @@ def run_plot(
     ax.legend(loc="lower left", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
     ax.grid(True, alpha=0.3)
 
-    ax.set_xlim(0, 120)
-    ax.set_ylim(-250, 0)
+    ax.set_xlim(0, 60)
+    ax.set_ylim(-200, 0)
 
     plt.tight_layout(pad=0.5)
 
