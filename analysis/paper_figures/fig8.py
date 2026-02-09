@@ -424,7 +424,7 @@ def run_plot(
     ax.annotate(
         "reference design",
         xy=(m_hex_ref_design, dm_ref_design),
-        xytext=(20, -40),
+        xytext=(15, -50),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
@@ -432,7 +432,7 @@ def run_plot(
     ax.annotate(
         "fixed mass optimal design",
         xy=(m_hex[id_ref], dm_fuel_and_hex[id_ref]),
-        xytext=(30, -70),
+        xytext=(25, -70),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
@@ -440,7 +440,7 @@ def run_plot(
     ax.annotate(
         "global optimal design",
         xy=(m_hex[id_min], dm_fuel_and_hex[id_min]),
-        xytext=(50, -95),
+        xytext=(35, -95),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
@@ -451,7 +451,7 @@ def run_plot(
     ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
     # ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$ vs $A/A_{\mathrm{ref}}$")
     # ax.set_title(r"Practical Design Example")
-    ax.legend(loc="lower left", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
+    ax.legend(loc="upper right", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
     ax.grid(True, alpha=0.3)
 
     ax.set_xlim(0, 60)

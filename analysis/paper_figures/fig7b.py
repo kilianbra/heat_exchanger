@@ -9,6 +9,7 @@ from pathlib import Path
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import numpy as np
 import pandas as pd
 import xflow
@@ -455,7 +456,7 @@ def save_figures(base_name="fig7b"):
 
     ax.set_ylim(-0.4,0)
     ax.set_xlim(0.5,2.5)
-
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
 
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.2f}"))
 

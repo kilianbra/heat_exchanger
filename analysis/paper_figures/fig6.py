@@ -172,6 +172,7 @@ def _get_y_axis_label():
             if UNNORMALISED_Y_AXIS_IF_POSS:
                 return r"$g_2$"
             return r"$g_2 / g_{2,\mathrm{ref}}$"
+            # return r"Dimensionless Mass Velocity ($(\dot{m}/A_o)^2 / (2p_{\mathrm{in}} \rho)$ [-])"
         case "ntu":
             if UNNORMALISED_Y_AXIS_IF_POSS:
                 return r"$\mathrm{NTU}$"
@@ -965,9 +966,11 @@ def run_sweep_and_plot(
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
     ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
+    ax.set_ylim(0, 0.03)
+    # ax.set_ylim(y_min, y_max)
     ax.set_xlabel(r"Core Volume Ratio ($V_\mathrm{core}/V_\mathrm{ref}$ [-])")
-    ax.set_ylabel(_get_y_axis_label())
+    # ax.set_ylabel(_get_y_axis_label())
+    ax.set_ylabel(r"Dimensionless Mass Velocity ($(\dot{m}/A_o)^2 / (2p_{\mathrm{in}} \rho)$ [-])")
 
     # Contour plot
     z_min = np.nanmin(Z)
