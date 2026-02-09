@@ -87,8 +87,8 @@ def save_figures(
 
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54)) # IF DOUBLE COLUMN FIGURE, USE THIS
-    fig = plt.figure(figsize=((6) / 2.54, 7 / 2.54)) # IF TRIPPLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))  # IF DOUBLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=((6) / 2.54, 7 / 2.54))  # IF TRIPPLE COLUMN FIGURE, USE THIS
     ax = plt.subplot(111)
     ax_twin = ax.twinx()  # Created but will be hidden for classical framework
 
@@ -158,7 +158,7 @@ def save_figures(
                         color="white",
                         marker="o",
                         zorder=5,
-                        s = 50,
+                        s=50,
                         facecolor="black",
                     )
         # Two arrows from one label "optimal designs" at y=0.15 to the two optimum points
@@ -178,7 +178,7 @@ def save_figures(
             ax.annotate(
                 "",
                 xy=opt_xy[1],
-                xytext=(8.8, y_text-0.005),
+                xytext=(8.8, y_text - 0.005),
                 arrowprops=arrow_kw,
             )
 
