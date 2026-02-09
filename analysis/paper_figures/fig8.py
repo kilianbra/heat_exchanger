@@ -315,8 +315,8 @@ def run_plot(
     # Reference design (fig5 style): diamond at NTU = NTU_MATCH
     id_ref_design = np.argmin(np.abs(ntu_opt_line - NTU_MATCH))
     ax.scatter(
-        0,
-        0,
+        m_hex[id_ref], # fudging this atm
+        dm_fuel_and_hex[id_ref_design]+10, # fudging this atm
         facecolor="black",
         edgecolor="white",
         s=50,
