@@ -73,7 +73,7 @@ def save_figures(base_name="fig7b"):
         raise ValueError("No valid data points found.")
 
     # Match fig6b figure size (triple column 6 cm)
-    fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
+    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
 
     # Plot thermal-only line (no pressure drop)
@@ -153,6 +153,10 @@ def save_figures(base_name="fig7b"):
     ax.set_xlabel(r"Core Volume Ratio ($V_\mathrm{core}/V_\mathrm{ref}$ [-])")
     ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
 
+    ax.set_ylim(-0.4,0)
+    ax.set_xlim(0.5,3)
+
+
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.2f}"))
 
     # Legend: thermal creation and viscous dissipation (match fig6b box style)
@@ -162,7 +166,7 @@ def save_figures(base_name="fig7b"):
     )
     ax.legend(
         handles=[patch_thermal, patch_viscous],
-        loc="lower left",
+        loc="upper left",
         labelspacing=0.05,
         edgecolor="black",
         frameon=True,
