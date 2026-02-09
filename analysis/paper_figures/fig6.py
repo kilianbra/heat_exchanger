@@ -883,7 +883,8 @@ def run_sweep_and_plot(
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
-    ax.set_xlabel(r"$d / d_{\mathrm{ref}}$")
+    # ax.set_xlabel(r"$d / d_{\mathrm{ref}}$")
+    ax.set_xlabel(r"Core Volume Ratio ($V_\mathrm{core}/V_\mathrm{ref}$ [-])")
     ax.set_ylabel(r"$A_o/A_{o,\mathrm{ref}}$")
 
     # Contour plot (practical availability)

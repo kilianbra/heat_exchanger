@@ -151,10 +151,10 @@ def save_figures(base_name="fig7b"):
     y_max = max(np.nanmax(z_practical_combined), np.nanmax(z_practical_thermal_only))
     ax.set_ylim(y_min * 1.1, max(0, y_max * 1.1))
     ax.set_xlabel(r"Core Volume Ratio ($V_\mathrm{core}/V_\mathrm{ref}$ [-])")
-    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$)")
+    ax.set_ylabel(r"Change in Unavailable Energy ($\Delta \dot{Q}_0^\mathrm{M}/\dot{Q}_{\mathrm{max}}$ [-])")
 
     ax.set_ylim(-0.4,0)
-    ax.set_xlim(0.5,3)
+    ax.set_xlim(0.5,2.5)
 
 
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.2f}"))
