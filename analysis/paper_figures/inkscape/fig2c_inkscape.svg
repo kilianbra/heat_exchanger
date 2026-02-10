@@ -27,9 +27,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="2.7590854"
-     inkscape:cx="-1.8121947"
-     inkscape:cy="114.71193"
+     inkscape:zoom="2.8284271"
+     inkscape:cx="88.565124"
+     inkscape:cy="85.029591"
      inkscape:window-width="2560"
      inkscape:window-height="1351"
      inkscape:window-x="1431"
@@ -964,7 +964,8 @@
        id="image1-0"
        x="43.076759"
        y="10.583474"
-       style="stroke-width:20.1936" /><image
+       style="stroke-width:20.1936"
+       inkscape:label="270deg-0.478_0.3-10mm" /><image
        width="10.979795"
        height="11.307354"
        preserveAspectRatio="none"
@@ -972,7 +973,8 @@
        id="image1-5"
        x="24.566284"
        y="10.531064"
-       style="stroke-width:20.1936" /><path
+       style="stroke-width:20.1936"
+       inkscape:label="180deg-0.478_0.4-10mm" /><path
        style="fill:#ffffff;stroke:#000000;stroke-width:0.264999;stroke-dasharray:none;marker-end:url(#DartArrow)"
        d="m 36.168562,16.16704 h 5.90832"
        id="path7-8"
