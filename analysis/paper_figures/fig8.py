@@ -9,6 +9,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+from heat_exchanger.epsilon_ntu import epsilon_ntu
 from newfig6 import (
     DEFAULT_A_R,
     DEFAULT_C_COLD_OVER_C_HOT,
@@ -33,12 +35,36 @@ from xflow import (
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
-from heat_exchanger.epsilon_ntu import epsilon_ntu
 import xflow
 
 AO_SWEEP = np.linspace(0.4, 2.5, 400)
 A_OVER_A_REF_VALUES = np.linspace(0.3, 5.0, 800)
 save_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def _get_eps_dp_at_ao_ntu(ao_over_ao_ref, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio):
+    """Return (eps, dp_hot_pct, dp_cold_pct) for a given (ao, NTU). dp values as % of inlet pressure."""
+    g2_h = DEFAULT_G2_H / (ao_over_ao_ref**2)
+    C_min_over_C_hot, C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
+    if c_cold_over_c_hot <= 1.0:
+        C_ratio = c_cold_over_c_hot
+    else:
+        C_ratio = 1.0 / c_cold_over_c_hot
+    eps = epsilon_ntu(
+        np.array([ntu]),
+        C_ratio,
+        exchanger_type="aligned_flow",
+        flow_type="counterflow",
+        n_passes=1,
+    )[0]
+    st_over_f_h = st_over_f
+    st_over_f_c = st_over_f
+    dp_coeff = g2_h * (
+        1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
+    )
+    dp_hot = dp_coeff * ntu  # fraction of inlet pressure
+    dp_cold = pressure_drop_ratio * dp_hot
+    return eps, dp_hot * 100, dp_cold * 100
 
 
 def _optimal_ao_for_each_a_over_a_ref(
@@ -293,7 +319,7 @@ def run_plot(
     mission_hours = 2
     lhv_kwh_per_kg = 43.2 / 3.6
     eta_turb = 0.8
-    eta_ov = 0.2
+    eta_ov = 0.28
     mdot_hot = 1.91  # kg/s
     cp_hot = 1.17  # kJ/(kg*K)
     Th_in = 980.0  # K
@@ -317,6 +343,8 @@ def run_plot(
     )
 
     # Global optimum: star marker (was circle)
+    ao_min = ao_opt_line[id_min]
+    ntu_min = ntu_opt_line[id_min]
     ax.scatter(
         m_hex[id_min],
         dm_fuel_and_hex[id_min],
@@ -367,6 +395,35 @@ def run_plot(
         s=50,
         zorder=5,
         marker="D",
+    )
+
+    # One-liner summaries for each design point
+    eps_ref, dp_h_ref, dp_c_ref = _get_eps_dp_at_ao_ntu(
+        1.0, NTU_MATCH, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio
+    )
+    eps_fixed, dp_h_fixed, dp_c_fixed = _get_eps_dp_at_ao_ntu(
+        ao_opt_line[id_ref], ntu_opt_line[id_ref], c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio
+    )
+    eps_global, dp_h_global, dp_c_global = _get_eps_dp_at_ao_ntu(
+        ao_min, ntu_min, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio
+    )
+    dq_ref_over_qmax = dq_ref  # dQ_o^M / Q_max for reference
+    dq_fixed_over_qmax = dq_o_m_over_qmax_opt_line[id_ref]
+    dq_global_over_qmax = dq_o_m_over_qmax_opt_line[id_min]
+    print(
+        f"Reference (diamond): NTU={NTU_MATCH:.3f}, m_HEx={m_hex_ref_design:.2f} kg, eps={eps_ref:.4f}, "
+        f"Q={eps_ref * Q_max:.1f} kW, dQ_o^M={dq_ref_over_qmax * Q_max:.1f} kW, "
+        f"dp/p_in hot={dp_h_ref:.2f}%, cold={dp_c_ref:.2f}%"
+    )
+    print(
+        f"Fixed mass optimal (circle): NTU={ntu_opt_line[id_ref]:.3f}, m_HEx={m_hex[id_ref]:.2f} kg, eps={eps_fixed:.4f}, "
+        f"Q={eps_fixed * Q_max:.1f} kW, dQ_o^M={dq_fixed_over_qmax * Q_max:.1f} kW, "
+        f"dp/p_in hot={dp_h_fixed:.2f}%, cold={dp_c_fixed:.2f}%"
+    )
+    print(
+        f"Global mass optimal (star): NTU={ntu_min:.3f}, m_HEx={m_hex[id_min]:.2f} kg, eps={eps_global:.4f}, "
+        f"Q={eps_global * Q_max:.1f} kW, dQ_o^M={dq_global_over_qmax * Q_max:.1f} kW, "
+        f"dp/p_in hot={dp_h_global:.2f}%, cold={dp_c_global:.2f}%"
     )
 
     ax.plot(
@@ -424,7 +481,7 @@ def run_plot(
     ax.annotate(
         "reference design",
         xy=(m_hex_ref_design, dm_ref_design),
-        xytext=(15, -50),
+        xytext=(6, -32),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
@@ -432,7 +489,7 @@ def run_plot(
     ax.annotate(
         "fixed mass optimal design",
         xy=(m_hex[id_ref], dm_fuel_and_hex[id_ref]),
-        xytext=(25, -70),
+        xytext=(15, -55),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
@@ -440,7 +497,7 @@ def run_plot(
     ax.annotate(
         "global optimal design",
         xy=(m_hex[id_min], dm_fuel_and_hex[id_min]),
-        xytext=(35, -95),
+        xytext=(35, -70),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,

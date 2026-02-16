@@ -43,10 +43,10 @@ Y_AXIS_TYPE = "dp_over_p_in"  # Options: "ao_over_ao_ref", "dp_over_p_in", "g2h"
 UNNORMALISED_Y_AXIS_IF_POSS = True  # If True, plot unnormalized values
 
 # Sweep parameters
-D_OVER_D_REF_VALUES = np.linspace(0.5, 4, 100)  # d/d_ref values
+D_OVER_D_REF_VALUES = np.linspace(0.5, 4, 500)  # d/d_ref values
 NTU_MAX_AT_D_REF = 4.0  # NTU max at d/d_ref = 1
-NTU_NUM = 100  # number of NTU points per d
-CONTOUR_GRID_N = 200  # grid size for interpolation
+NTU_NUM = 500  # number of NTU points per d
+CONTOUR_GRID_N = 500  # grid size for interpolation
 NTU_MIN = 0.4
 
 match Y_AXIS_TYPE:
@@ -251,7 +251,7 @@ def _practical_thermal_at_d_ntu(
     dp_max,
 ):
     """Thermal creation term only (no pressure drop) at single (d, NTU).
-    
+
     This calculates the practical unavailable creation with dp_hot=0 and dp_cold=0,
     which represents the thermal creation term only.
     """
@@ -292,7 +292,7 @@ def _practical_viscous_at_d_ntu(
     dp_max,
 ):
     """Viscous dissipation term at single (d, NTU).
-    
+
     This is the difference between total practical unavailable creation and thermal creation.
     """
     total = _practical_at_d_ntu(
@@ -319,10 +319,10 @@ def _practical_viscous_at_d_ntu(
         gamma,
         dp_max,
     )
-    
+
     if np.isnan(total) or np.isnan(thermal):
         return np.nan
-    
+
     return total - thermal
 
 
@@ -593,6 +593,15 @@ def run_sweep_and_plot(
         print(f"Saved {path}")
     plt.close(fig)
 
+    # Print 10 evenly spaced d/d_ref and dQ0^M at optimum
+    if len(d_opt_line) > 0:
+        d_sample = np.linspace(d_opt_line.min(), d_opt_line.max(), 8)
+        z_sample = np.interp(d_sample, d_opt_line, z_practical_opt_line)
+        print("\n10 evenly spaced d/d_ref and ΔQ₀^M/Q_max at optimum:")
+        print(f"   {'d/d_ref':>10} {'ΔQ₀^M/Q_max':>12}")
+        for d, z in zip(d_sample, z_sample, strict=True):
+            print(f"   {d:10.4f} {z:12.6f}")
+
 
 def plot_thermal_viscous_vs_core_volume_ratio(
     c_cold_over_c_hot=DEFAULT_C_COLD_OVER_C_HOT,
@@ -613,7 +622,7 @@ def plot_thermal_viscous_vs_core_volume_ratio(
     fixed_ntu=None,
 ):
     """Plot thermal creation and viscous dissipation terms vs core volume ratio (d/d_ref).
-    
+
     Parameters:
     -----------
     use_optimal_ntu : bool
@@ -654,13 +663,13 @@ def plot_thermal_viscous_vs_core_volume_ratio(
     thermal_vals = []
     viscous_vals = []
     ntu_vals = []
-    
+
     if use_optimal_ntu:
         # Find optimal NTU for each d/d_ref
         print("Finding optimal NTU for each d/d_ref...")
         ntu_max_global = _ntu_max_for_d(D_OVER_D_REF_VALUES.min(), dp_max)
         ntu_fine = np.linspace(NTU_MIN, ntu_max_global, NTU_NUM)
-        
+
         for d in D_OVER_D_REF_VALUES:
             practical_vals = []
             for ntu in ntu_fine:
@@ -677,15 +686,15 @@ def plot_thermal_viscous_vs_core_volume_ratio(
                     dp_max,
                 )
                 practical_vals.append(z_practical)
-            
+
             practical_vals = np.array(practical_vals)
             valid = np.isfinite(practical_vals)
-            
+
             if np.any(valid):
                 idx = np.nanargmin(practical_vals[valid])
                 idx_original = np.where(valid)[0][idx]
                 ntu_opt = float(ntu_fine[idx_original])
-                
+
                 # Calculate thermal and viscous at optimal NTU
                 thermal = _practical_thermal_at_d_ntu(
                     d,
@@ -711,7 +720,7 @@ def plot_thermal_viscous_vs_core_volume_ratio(
                     gamma,
                     dp_max,
                 )
-                
+
                 if not (np.isnan(thermal) or np.isnan(viscous)):
                     d_vals.append(d)
                     thermal_vals.append(thermal)
@@ -721,7 +730,7 @@ def plot_thermal_viscous_vs_core_volume_ratio(
         # Use fixed NTU
         ntu_to_use = fixed_ntu if fixed_ntu is not None else NTU_REF
         print(f"Using fixed NTU = {ntu_to_use}")
-        
+
         for d in D_OVER_D_REF_VALUES:
             thermal = _practical_thermal_at_d_ntu(
                 d,
@@ -747,25 +756,25 @@ def plot_thermal_viscous_vs_core_volume_ratio(
                 gamma,
                 dp_max,
             )
-            
+
             if not (np.isnan(thermal) or np.isnan(viscous)):
                 d_vals.append(d)
                 thermal_vals.append(thermal)
                 viscous_vals.append(viscous)
                 ntu_vals.append(ntu_to_use)
-    
+
     d_vals = np.array(d_vals)
     thermal_vals = np.array(thermal_vals)
     viscous_vals = np.array(viscous_vals)
-    
+
     if len(d_vals) == 0:
         print("No valid points found.")
         return
-    
+
     print(f"Valid points: {len(d_vals)}")
     print(f"Thermal range: [{thermal_vals.min():.4f}, {thermal_vals.max():.4f}]")
     print(f"Viscous range: [{viscous_vals.min():.4f}, {viscous_vals.max():.4f}]")
-    
+
     # Plot
     plt.rcParams.update(
         {
@@ -777,18 +786,18 @@ def plot_thermal_viscous_vs_core_volume_ratio(
         }
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
-    
+
     ax.plot(d_vals, thermal_vals, "k-", linewidth=1.5, label="Thermal creation")
     ax.plot(d_vals, viscous_vals, "k--", linewidth=1.5, label="Viscous dissipation")
-    
+
     ax.set_xlabel(r"$d / d_{\mathrm{ref}}$")
     ax.set_ylabel(r"$\Delta \dot{Q}_0^\mathrm{M} / \dot{Q}_{\mathrm{max}}$")
     ax.set_title("Thermal creation and viscous dissipation vs core volume ratio")
     ax.legend()
     ax.grid(True, alpha=0.3)
-    
+
     plt.tight_layout(pad=0.5)
-    
+
     for ext in ["svg", "tiff", "png"]:
         path = os.path.join(save_dir, f"{base_name}.{ext}")
         fig.savefig(path, dpi=300, facecolor="white", bbox_inches=None, pad_inches=0)
