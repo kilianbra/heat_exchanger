@@ -519,7 +519,7 @@ def create_plot(
     )
 
     if ax is None:
-        fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))
+        _ = plt.figure(figsize=(9 / 2.54, 7 / 2.54))  # fig (unused; change back if needed)
         ax = plt.subplot(111)
         ax_twin = ax.twinx()
 

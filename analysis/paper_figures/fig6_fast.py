@@ -820,5 +820,5 @@ if __name__ == "__main__":
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig9",
+        base_name="fast_fig6",
     )

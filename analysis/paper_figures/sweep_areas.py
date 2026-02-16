@@ -265,7 +265,7 @@ def plot_figure_6(df: pd.DataFrame, case: str = "Heli", use_euergy: bool = True)
     Zi = Zi_euergy if use_euergy else Zi_exergy
 
     # Convert y-axis to g² (dimensionless mass flux squared)
-    yi_g2 = (f_in.m_dot_hot / yi) ** 2 / f_in.Ph_in / derived["rho_in_hot"]
+    _ = (f_in.m_dot_hot / yi) ** 2 / f_in.Ph_in / derived["rho_in_hot"]  # yi_g2 (unused; change back if needed)
     Yi_g2 = (f_in.m_dot_hot / Yi) ** 2 / f_in.Ph_in / derived["rho_in_hot"]
 
     # Find optimal g² for each A_q (euergy-based)
@@ -291,7 +291,7 @@ def plot_figure_6(df: pd.DataFrame, case: str = "Heli", use_euergy: bool = True)
     plt.plot(xi * dim_x, y_at_max_g2, "r--", lw=2, label="Optimal g² for a given m_hex")
     plt.plot(x_at_max_for_afr * dim_x, y_i_nd, "b-", lw=2, label="Optimal m_hex for a given g²")
 
-    cbar = plt.colorbar(cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=0))
+    _ = plt.colorbar(cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=0))  # cbar (unused; change back if needed)
     plt.xlabel(x_label)
     plt.ylabel("g²_in (-)")
 

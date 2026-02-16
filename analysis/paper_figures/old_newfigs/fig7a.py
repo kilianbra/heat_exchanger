@@ -77,7 +77,7 @@ def save_figures(base_name="fig7a"):
     ax = plt.subplot(111)
 
     # Plot thermal-only line (no pressure drop)
-    line_thermal = ax.plot(
+    _ = ax.plot(  # line_thermal (unused; change back if needed for legend etc.)
         d_opt,
         z_classical_thermal_only,
         "k-",
@@ -86,7 +86,7 @@ def save_figures(base_name="fig7a"):
     )[0]
 
     # Plot combined line (with pressure drop)
-    line_combined = ax.plot(
+    _ = ax.plot(  # line_combined (unused; change back if needed for legend etc.)
         d_opt,
         z_classical_combined,
         "k-",

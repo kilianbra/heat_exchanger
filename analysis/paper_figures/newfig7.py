@@ -329,7 +329,7 @@ def run_plot(
         facecolor="black",
     )
 
-    id_ref = np.argmin(np.abs(a_over_a_ref_opt_line - 1))
+    _ = np.argmin(np.abs(a_over_a_ref_opt_line - 1))  # id_ref (unused; change back if needed)
 
     # Compute the TRUE reference value at (ao=1, NTU=NTU_MATCH) — this lies on the red line at A/A_ref=1.
     # Note: on the black (optimal) line, A/A_ref=1 corresponds to ao~0.83 (not ao=1) because

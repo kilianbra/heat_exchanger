@@ -326,7 +326,7 @@ if validity_mask.any():
     print("Top 20 points by NTU (highest first):")
     print()
     high_ntu_table = []
-    for i, d in valid_data_sorted:
+    for _i, d in valid_data_sorted:
         high_ntu_table.append(
             [
                 d["index"],
