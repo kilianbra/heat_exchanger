@@ -608,7 +608,7 @@ def run_sweep_and_plot(
             # Remove old optimal line data from cache
             df = pd.read_parquet(DATA_FILE)
             # Keep only sweep data (d_opt is NaN) and grid data, remove old optimal line
-            df = df[(df["d_opt"].isna()) | (df.get("is_interpolation_grid", pd.Series([False] * len(df))) == True)]
+            df = df[(df["d_opt"].isna()) | (df.get("is_interpolation_grid", pd.Series([False] * len(df))))]
 
             # Add new optimal line data
             opt_df = pd.DataFrame(

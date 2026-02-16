@@ -6,9 +6,9 @@ from matplotlib.ticker import PercentFormatter
 from scipy.signal import find_peaks
 from wp_sliders import calculate_plot
 
-save_dir = os.path.dirname(os.path.abspath(__file__))
-
 from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+
+save_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Set font sizes to match Word (10pt = 10 points)
 plt.rcParams.update({

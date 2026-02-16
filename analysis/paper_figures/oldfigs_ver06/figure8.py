@@ -5,6 +5,10 @@ import numpy as np
 from matplotlib.ticker import PercentFormatter
 from scipy.interpolate import griddata
 
+from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
+from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
+from heat_exchanger.geometries.general_counterflow import rate_hex_simple
+
 plt.rcParams.update(
     {
         "font.size": 10,
@@ -16,10 +20,6 @@ plt.rcParams.update(
         "figure.titlesize": 10,
     }
 )
-
-from heat_exchanger.correlations import general_hex_friction_factor, general_hex_j_factor
-from heat_exchanger.fluids.protocols import FluidInputs, PerfectGasFluid
-from heat_exchanger.geometries.general_counterflow import rate_hex_simple
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
 
