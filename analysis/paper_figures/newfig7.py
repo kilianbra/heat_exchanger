@@ -9,6 +9,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import xflow
 from newfig6 import (
     DEFAULT_A_R,
     DEFAULT_C_COLD_OVER_C_HOT,
@@ -25,7 +26,6 @@ from newfig6 import (
     DEFAULT_T,
     NTU_MATCH,
     NTU_MAX,
-    _a_over_a_ref,
     _practical_at_ao_ntu,
 )
 from xflow import (
@@ -33,8 +33,8 @@ from xflow import (
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
+
 from heat_exchanger.epsilon_ntu import epsilon_ntu
-import xflow
 
 AO_SWEEP = np.linspace(0.4, 2.5, 400)
 A_OVER_A_REF_VALUES = np.linspace(0.3, 5.0, 800)

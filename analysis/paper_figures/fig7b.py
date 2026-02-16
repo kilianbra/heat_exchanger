@@ -9,12 +9,12 @@ from pathlib import Path
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import numpy as np
 import pandas as pd
 import xflow
-from xflow import calculate_pressure_drop_ratio, practical_unavailable_creation_hex
-from xflow import calculate_capacity_ratios
+from matplotlib.ticker import MultipleLocator
+from xflow import calculate_capacity_ratios, calculate_pressure_drop_ratio, practical_unavailable_creation_hex
+
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 save_dir = os.path.dirname(os.path.abspath(__file__))
@@ -320,7 +320,7 @@ def save_figures(base_name="fig7b"):
     z_practical_thermal_only = []
     z_practical_combined = []
     
-    for d, ntu in zip(d_opt, ntu_opt):
+    for d, ntu in zip(d_opt, ntu_opt, strict=False):
         if np.isnan(ntu):
             z_practical_thermal_only.append(np.nan)
             z_practical_combined.append(np.nan)

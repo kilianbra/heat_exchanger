@@ -4,17 +4,17 @@ Focuses on the y-axis function (scaling laws) and practical unavailable creation
 """
 
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-from scipy.interpolate import griddata
-
+import numpy as np
 import xflow
+from scipy.interpolate import griddata
 from xflow import (
-    calculate_epsilon_ntu_curve,
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
+
 from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 save_dir = os.path.dirname(os.path.abspath(__file__))

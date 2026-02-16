@@ -3,7 +3,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import xflow
-from scipy.signal import find_peaks
 from xflow import calculate_pressure_drop_ratio, create_plot
 
 save_dir = os.path.dirname(os.path.abspath(__file__))

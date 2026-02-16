@@ -9,8 +9,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from heat_exchanger.epsilon_ntu import epsilon_ntu
+import xflow
 from newfig6 import (
     DEFAULT_A_R,
     DEFAULT_C_COLD_OVER_C_HOT,
@@ -35,7 +34,8 @@ from xflow import (
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
-import xflow
+
+from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 AO_SWEEP = np.linspace(0.4, 2.5, 400)
 A_OVER_A_REF_VALUES = np.linspace(0.3, 5.0, 800)

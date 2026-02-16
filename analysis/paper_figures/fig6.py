@@ -16,7 +16,6 @@ import pandas as pd
 import xflow
 from scipy.interpolate import griddata
 from xflow import (
-    calculate_epsilon_ntu_curve,
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
@@ -491,7 +490,7 @@ def run_sweep_and_plot(
                 y_opt_line = np.array(
                     [
                         _y_axis(d, ntu, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
-                        for d, ntu in zip(d_opt_line, ntu_opt_line)
+                        for d, ntu in zip(d_opt_line, ntu_opt_line, strict=False)
                     ]
                 )
             else:
@@ -948,7 +947,7 @@ def run_sweep_and_plot(
             )
             df = pd.concat([df, grid_df], ignore_index=True)
             df.to_parquet(DATA_FILE)
-            print(f"Saved interpolated grid to cache")
+            print("Saved interpolated grid to cache")
 
     # Plot with fig6.py formatting
     plt.rcParams.update(
