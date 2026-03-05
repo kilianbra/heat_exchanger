@@ -39,7 +39,7 @@ DEFAULT_DP_MAX = 0.3
 DP_REF = 0.106
 
 # Y-axis type: "ao_over_ao_ref", "dp_over_p_in", "g2h", or "ntu"
-Y_AXIS_TYPE = "dp_over_p_in"  # Options: "ao_over_ao_ref", "dp_over_p_in", "g2h", "ntu"
+Y_AXIS_TYPE = "g2h"  # Options: "ao_over_ao_ref", "dp_over_p_in", "g2h", "ntu"
 UNNORMALISED_Y_AXIS_IF_POSS = True  # If True, plot unnormalized values
 
 # Sweep parameters
@@ -553,12 +553,13 @@ def run_sweep_and_plot(
         # Filter points within plot bounds
         mask = (d_opt_line >= x_min) & (d_opt_line <= x_max) & (y_opt_line >= y_min) & (y_opt_line <= y_max)
         if np.any(mask):
+            # Plot the optimal NTU line with increased zorder and a white edge to help both lines be seen
             ax.plot(
                 d_opt_line[mask],
                 y_opt_line[mask],
                 "k-",
-                linewidth=1.5,
-                zorder=6,
+                linewidth=0.5,
+                zorder=11,
                 label="optimal NTU (practical)",
             )
 
@@ -566,7 +567,57 @@ def run_sweep_and_plot(
             idx_d1 = np.argmin(np.abs(d_opt_line - 1.0))
             if idx_d1 < len(d_opt_line):
                 d_d1 = d_opt_line[idx_d1]
+                ntu_d1 = ntu_opt_line[idx_d1]
                 y_d1 = y_opt_line[idx_d1]
+
+                # Get dp_hot at optimum point for constant-dp line
+                _, dp_hot_opt, _, _ = _get_eps_dp_at_d_ntu(
+                    d_d1,
+                    ntu_d1,
+                    dp_at_ntu_ref,
+                    c_cold_over_c_hot,
+                    pressure_drop_ratio,
+                    dp_max,
+                )
+
+                # Dashed: constant NTU = ntu at optimum (d/d_ref=1)
+                d_sweep = D_OVER_D_REF_VALUES
+                y_const_ntu = _y_axis(d_sweep, ntu_d1, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
+                mask_ntu = (d_sweep >= x_min) & (d_sweep <= x_max) & (y_const_ntu >= y_min) & (y_const_ntu <= y_max)
+                if np.any(mask_ntu):
+                    ax.plot(
+                        d_sweep[mask_ntu],
+                        y_const_ntu[mask_ntu],
+                        "k--",
+                        linewidth=1.0,
+                        zorder=6,
+                        label=r"NTU$\,=\,$" + f"{ntu_d1:.2f}",
+                    )
+                    pass
+
+                # Dotted: constant dp/p_in hot = dp at optimum (d/d_ref=1)
+                # ntu from: dp_hot = dp_at_ntu_ref * (ntu/NTU_REF)^4.407 * d^(-1.407)
+                # => ntu = NTU_REF * (dp_hot / (dp_at_ntu_ref * d^(-1.407)))^(1/4.407)
+                ntu_const_dp = NTU_REF * (dp_hot_opt / (dp_at_ntu_ref * d_sweep ** (-1.407))) ** (1 / 4.407)
+                y_const_dp = _y_axis(d_sweep, ntu_const_dp, unnormalised=UNNORMALISED_Y_AXIS_IF_POSS)
+                # Clip to valid region (ntu within bounds, dp < dp_max)
+                mask_dp = (
+                    (d_sweep >= x_min)
+                    & (d_sweep <= x_max)
+                    & (y_const_dp >= y_min)
+                    & (y_const_dp <= y_max)
+                    & np.isfinite(y_const_dp)
+                )
+                if np.any(mask_dp):
+                    ax.plot(
+                        d_sweep[mask_dp],
+                        y_const_dp[mask_dp],
+                        "k:",
+                        linewidth=1.0,
+                        zorder=6,
+                        label=r"$\Delta p/p_{\mathrm{in}}\!=\,$" + f"{dp_hot_opt:.3f}",
+                    )
+
                 if x_min <= d_d1 <= x_max and y_min <= y_d1 <= y_max:
                     ax.scatter(
                         [d_d1],
