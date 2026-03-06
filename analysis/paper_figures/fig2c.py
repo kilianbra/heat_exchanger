@@ -28,7 +28,7 @@ DEFAULT_GAMMA = 1.4
 
 # Pressure drop assumption: "dp_c=dp_h", "dp_c<<dp_h", or "inlet_density"
 # For inlet_density, also need:
-DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"  # Essential input for accurate cold pressure drop
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Essential input for accurate cold pressure drop
 if DEFAULT_PRESSURE_DROP_ASSUMPTION == "inlet_density":
     DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
     DEFAULT_A_R = 0.1  # A_r (cold/hot) - sigma_r is calculated as d_r * A_r
@@ -87,8 +87,8 @@ def save_figures(
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
 
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54)) # IF DOUBLE COLUMN FIGURE, USE THIS
-    fig = plt.figure(figsize=((6) / 2.54, 7 / 2.54)) # IF TRIPPLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))  # IF DOUBLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=((6) / 2.54, 7 / 2.54))  # IF TRIPPLE COLUMN FIGURE, USE THIS
     ax = plt.subplot(111)
     ax_twin = ax.twinx()  # Created but will be hidden for practical framework
 
@@ -152,7 +152,7 @@ def save_figures(
                     marker="o",
                     zorder=5,
                     facecolor="black",
-                    s = 50,
+                    s=50,
                 )
 
     plt.tight_layout(pad=0.5)

@@ -15,7 +15,11 @@ DEFAULT_G2_H = 1e-5  # g2_h
 
 DEFAULT_DP_MAX = 0.2
 
-PLOT_TRIPLE_G2 = [1e-3, 5e-3, 20e-3]  # or None for single g2_h
+PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
+
+# PLOT_TRIPLE_G2 = [1e-3, 5e-3, 20e-3]  # or None for single g2_h
+ga = 1.4
+PLOT_TRIPLE_G2 = [0.5 * ga * m**2 for m in PLOT_TRIPLE_MACH]
 
 
 def save_figures(
@@ -53,8 +57,8 @@ def save_figures(
 
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
-    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54)) # IF DOUBLE COLUMN FIGURE, USE THIS
-    fig = plt.figure(figsize=((7.1) / 2.54, 7 / 2.54)) # IF TRIPPLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))  # IF DOUBLE COLUMN FIGURE, USE THIS
+    fig = plt.figure(figsize=((7.1) / 2.54, 7 / 2.54))  # IF TRIPPLE COLUMN FIGURE, USE THIS
     ax = plt.subplot(111)
     ax_twin = ax.twinx()
 
@@ -94,20 +98,32 @@ def save_figures(
     # independet control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
-    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
+    ax_twin.set_ylabel(r"Hot Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
     h_right, _ = ax_twin.get_legend_handles_labels()
+    # legend = ax.legend(
+    #     h_right,
+    #     [r"$20\times10^{-3}$", r"$5\times10^{-3}$", r"$1\times10^{-3}$"],
+    #     loc="center right",
+    #     bbox_to_anchor=(1, 0.62),
+    #     frameon=True, edgecolor="black",
+    #     facecolor="white", framealpha=1.0,
+    #     fancybox=False,
+    #     title=(
+    #         "Dimensionless \nMass Velocity\n"
+    #         + r"($\dot{m}/A_o)^2 / (2p_{\mathrm{in}} \rho$)"
+    #     )
+    # )
     legend = ax.legend(
         h_right,
-        [r"$20\times10^{-3}$", r"$5\times10^{-3}$", r"$1\times10^{-3}$"], 
-        loc="center right", 
-        bbox_to_anchor=(1, 0.62), 
-        frameon=True, edgecolor="black", 
-        facecolor="white", framealpha=1.0, 
+        [r"$0.17$", r"$0.08$", r"$0.04$"],
+        loc="center right",
+        bbox_to_anchor=(1, 0.62),
+        frameon=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1.0,
         fancybox=False,
-        title=(
-            "Dimensionless \nMass Velocity\n" 
-            + r"($\dot{m}/A_o)^2 / (2p_{\mathrm{in}} \rho$)"
-        )
+        title=("Inlet Mach \n" + "Number (hot)"),
     )
     legend.get_title().set_ha("center")
     legend._legend_box.align = "center"
