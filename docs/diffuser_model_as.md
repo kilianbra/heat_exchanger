@@ -19,7 +19,7 @@ This is written to match the intent captured in the KB comments around `Hex_mode
   - `exhaust_model.py`: creates a `HEX` dict from cycle state, calls `hex_diff(HEX)`, then applies `dPo_tot` to reduce `P04ho` which reduces nozzle performance.
   - `kb_exhaust_model.py`: same concept, plus alternative HEX solvers; `hex_mod == 1` uses `hex_diff`.
 - **Design tools / plotting**:
-  - `Hex_app.py` and `Hex_design_plots.py`: compute `a_hex` from an _area ratio target_ (`AR_hex`) and sweep diffuser parameters to visualize loss split.
+  - `Hex_app.py` and `Hex_design_plots.py`: compute `a_hex` from an *area ratio target* (`AR_hex`) and sweep diffuser parameters to visualize loss split.
 
 ---
 
@@ -55,13 +55,13 @@ h_{\mathrm{diff}} = h_{\mathrm{in}} + 2 L_{\mathrm{diff}}\tan(\theta)
 $$
 
 $$
-A_{\mathrm{fr},\mathrm{diff}} = 2\pi r\, h_{\mathrm{diff}}
+A_{\mathrm{fr},\mathrm{diff}} = 2\pi r h_{\mathrm{diff}}
 $$
 
 So the diffuser area ratio is:
 
 $$
-\mathrm{AR}_{\mathrm{diff}} = \frac{A_{\mathrm{fr},\mathrm{diff}}}{A_{\mathrm{fr},\mathrm{in}}}
+\mathrm{AR}*{\mathrm{diff}} = \frac{A*{\mathrm{fr},\mathrm{diff}}}{A_{\mathrm{fr},\mathrm{in}}}
 $$
 
 This is the “do as much diffusion as you can” part. In the KB comments, the implied practical constraint is:
@@ -83,7 +83,7 @@ The intent (per KB comments) is:
 - Diffuse “as much as practical” to `a_diff`
 - Then take the remaining expansion as a **dump loss** (called “incidence” in the code)
 
-This loss is intentionally the _dominant_ diffuser-related term in this simplified model.
+This loss is intentionally the *dominant* diffuser-related term in this simplified model.
 
 ---
 
@@ -120,7 +120,7 @@ Real diffusers do not achieve the ideal recovery, especially at larger diffuser 
 Despite the variable name `cpi`, these values behave like a **diffuser effectiveness** $\eta_{\mathrm{diff}}$ such that:
 
 $$
-C_p \approx \eta_{\mathrm{diff}}(\theta)\,C_{p,\mathrm{i}}
+C_p \approx \eta_{\mathrm{diff}}(\theta)C_{p,\mathrm{i}}
 $$
 
 Interpretation:
@@ -180,14 +180,14 @@ This is the “important term” in the KB comments. As implemented:
 
 $$
 \Delta P_{0,\mathrm{inc}}
-= f_{\mathrm{loss}}\left(1-\left(\frac{A_{\mathrm{fr},\mathrm{diff}}}{A_{\mathrm{fr},\mathrm{hex}}}\right)^2\right)\,
-\frac12\,\rho_{\mathrm{in}}\,V_{\mathrm{diff}}^2
+= f_{\mathrm{loss}}\left(1-\left(\frac{A_{\mathrm{fr},\mathrm{diff}}}{A_{\mathrm{fr},\mathrm{hex}}}\right)^2\right)
+\frac12\rho_{\mathrm{in}}V_{\mathrm{diff}}^2
 $$
 
 where $V_{\mathrm{diff}}$ is the velocity at diffuser exit based on `a_diff`:
 
 $$
-V_{\mathrm{diff}} = \frac{\dot m}{\rho_{\mathrm{in}}\,A_{\mathrm{fr},\mathrm{diff}}}
+V_{\mathrm{diff}} = \frac{\dot m}{\rho_{\mathrm{in}}A_{\mathrm{fr},\mathrm{diff}}}
 $$
 
 In code:
@@ -223,7 +223,7 @@ Two common patterns in this repo:
 They treat `AR_hex` as a design variable and set:
 
 $$
-A_{\mathrm{fr},\mathrm{hex}} = \mathrm{AR}_{\mathrm{hex}}\,A_{\mathrm{fr},\mathrm{in}}
+A_{\mathrm{fr},\mathrm{hex}} = \mathrm{AR}*{\mathrm{hex}}A*{\mathrm{fr},\mathrm{in}}
 $$
 
 So `a_hex` is directly coupled to inlet flow conditions through $A_{\mathrm{fr},\mathrm{in}}$.
@@ -276,3 +276,4 @@ If you read the diffuser section as a design heuristic:
 Important implementation detail:
 
 - The **recovery coefficient `cp` is mostly diagnostic right now** (used to compute `AR_diff_eff` and stored for plots), while `dPo_inc` is the term that actually enforces the “dump diffuser penalty”.
+
