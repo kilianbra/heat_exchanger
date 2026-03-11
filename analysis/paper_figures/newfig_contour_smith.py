@@ -13,17 +13,17 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from heat_exchanger.epsilon_ntu import epsilon_ntu
-from scipy.interpolate import griddata
 
+# Ensure xflow doesn't use cubic formula
+import xflow
+from scipy.interpolate import griddata
 from xflow import (
     calculate_capacity_ratios,
     calculate_pressure_drop_ratio,
     practical_unavailable_creation_hex,
 )
 
-# Ensure xflow doesn't use cubic formula
-import xflow
+from heat_exchanger.epsilon_ntu import epsilon_ntu
 
 xflow.SHOW_CUBIC = False
 
