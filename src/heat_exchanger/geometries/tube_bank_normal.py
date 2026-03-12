@@ -439,11 +439,7 @@ def tube_bank_normal_0d_solver(
 
     mass_velocity_cold = f_in.m_dot_cold / area_free_flow_cold
     dp_cold = (
-        f_cold
-        * (area_heat_transfer_cold / area_free_flow_cold)
-        * (mass_velocity_cold**2)
-        / 2
-        * one_over_rho_mean_cold
+        f_cold * (area_heat_transfer_cold / area_free_flow_cold) * (mass_velocity_cold**2) / 2 * one_over_rho_mean_cold
     )
 
     Pc_out = f_in.Pc_in - dp_cold  # Cold side pressure decreases
@@ -493,7 +489,7 @@ def tube_bank_normal_0d_solver(
     # MTO conditions and thermal expansion/thickness calculations
     if p_cold_max is not None:
         # Use MTO conditions if provided, otherwise default to cruise conditions
-        T_base = 290.0 #K Hardcoded for now
+        T_base = 290.0  # K Hardcoded for now
 
         # Thermal expansion calculation
         delta_T_takeoff = T_hot_max - T_base
@@ -553,7 +549,9 @@ def tube_bank_normal_0d_solver(
         diagnostics["delta_length_tube_takeoff"] = float(delta_length_tube_takeoff)
         diagnostics["t_required_hoop"] = float(t_required_hoop)
         diagnostics["t_actual"] = float(geom.tube_thick)
-        diagnostics["hoop_stress_margin_pct"] = float((geom.tube_thick / t_required_hoop - 1) * 100) if t_required_hoop > 0 else float("nan")
+        diagnostics["hoop_stress_margin_pct"] = (
+            float((geom.tube_thick / t_required_hoop - 1) * 100) if t_required_hoop > 0 else float("nan")
+        )
 
     return {
         "Th_out": float(temp_hot_out),
@@ -578,4 +576,3 @@ __all__ = [
     "TubeBankNormalSpec",
     "tube_bank_normal_0d_solver",
 ]
-

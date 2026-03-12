@@ -291,7 +291,9 @@ def plot_figure_6(df: pd.DataFrame, case: str = "Heli", use_euergy: bool = True)
     plt.plot(xi * dim_x, y_at_max_g2, "r--", lw=2, label="Optimal g² for a given m_hex")
     plt.plot(x_at_max_for_afr * dim_x, y_i_nd, "b-", lw=2, label="Optimal m_hex for a given g²")
 
-    _ = plt.colorbar(cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=0))  # cbar (unused; change back if needed)
+    _ = plt.colorbar(
+        cp, label="Work Potential creation / Q_max", format=PercentFormatter(xmax=1.0, decimals=0)
+    )  # cbar (unused; change back if needed)
     plt.xlabel(x_label)
     plt.ylabel("g²_in (-)")
 

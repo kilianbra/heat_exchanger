@@ -103,9 +103,7 @@ def solve_ahje_recuperator(
             cold_hydrogen = PerfectGasFluid.from_name("para_h2")
 
     # Calculate number of tubes per row
-    n_tubes_per_row = round(
-        np.pi * total_diameter_inner**2 / (spacing_trans * tube_diameter_outer)
-    )
+    n_tubes_per_row = round(np.pi * total_diameter_inner**2 / (spacing_trans * tube_diameter_outer))
 
     n_rows_per_pass = int(n_rows / n_passes_cold)
 
@@ -124,8 +122,8 @@ def solve_ahje_recuperator(
         n_tubes_per_row=n_tubes_per_row,
         frontal_area_outer=area_frontal,
         annular_not_box=True,
-        #total_diameter_inner=total_diameter_inner,
-        #total_diameter_outer=total_diameter_outer,
+        # total_diameter_inner=total_diameter_inner,
+        # total_diameter_outer=total_diameter_outer,
     )
 
     # logger.info(
@@ -167,9 +165,7 @@ def solve_ahje_recuperator(
     )
 
     # Calculate recirculation fraction
-    recirc_fraction = calculate_recirc_fraction_coolprop(
-        40, temp_cold_in, result["Tc_out"], p_cold_in / 1e5
-    )
+    recirc_fraction = calculate_recirc_fraction_coolprop(40, temp_cold_in, result["Tc_out"], p_cold_in / 1e5)
     result["recirc_fraction"] = recirc_fraction[0]
 
     # logger.info("Recirculation fraction: %.2f", recirc_fraction[0])
@@ -188,5 +184,5 @@ if __name__ == "__main__":
         result = output["result"]
         geom = output["geometry"]
         print(
-            f"{n_rows:6d} | {result['epsilon'] * 100:15.2f} | {result['dP_hot_pct']:11.2f} | {geom.axial_length*100:15.2f} | {geom.area_heat_transfer_outer_total:12.2f}"
+            f"{n_rows:6d} | {result['epsilon'] * 100:15.2f} | {result['dP_hot_pct']:11.2f} | {geom.axial_length * 100:15.2f} | {geom.area_heat_transfer_outer_total:12.2f}"
         )

@@ -4,7 +4,7 @@ import logging
 
 import numpy as np
 
-from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid  #, RefPropFluid
+from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid  # , RefPropFluid
 from heat_exchanger.geometries.tube_bank_normal import TubeBankNormalSpec, tube_bank_normal_0d_solver
 from heat_exchanger.logging_utils import configure_logging
 
@@ -13,7 +13,7 @@ configure_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Mass flow rates
-mdot_hot = 1144 / 60  # 19.07 kg/s 
+mdot_hot = 1144 / 60  # 19.07 kg/s
 mdot_cold = 9.95 / 60  # 0.166 kg/s
 
 # Fluid model selection
@@ -22,8 +22,8 @@ model = "PG"  # "CP", "PG", or "RP"
 match model:
     case "RP":
         raise NotImplementedError("RP model not yet implemented")
-        #hot_air = CombustionProductsProperties(fuel_type="H2", FAR_mass=9.95 / (1144 - 9.95), prefer_refprop=True)
-        #cold_hydrogen = RefPropProperties(fluid_name="PARAHYDROGEN")
+        # hot_air = CombustionProductsProperties(fuel_type="H2", FAR_mass=9.95 / (1144 - 9.95), prefer_refprop=True)
+        # cold_hydrogen = RefPropProperties(fluid_name="PARAHYDROGEN")
     case "CP":
         hot_air = CoolPropFluid("Air")
         cold_hydrogen = CoolPropFluid("Hydrogen")
@@ -69,8 +69,8 @@ geom = TubeBankNormalSpec(
     n_tubes_per_row=n_tubes_per_row,
     frontal_area_outer=area_frontal,
     annular_not_box=True,
-    #total_diameter_inner=total_diameter_inner,  # Use actual inner diameter for accurate tube length
-    #total_diameter_outer=total_diameter_outer,  # Use actual outer diameter for accurate tube length
+    # total_diameter_inner=total_diameter_inner,  # Use actual inner diameter for accurate tube length
+    # total_diameter_outer=total_diameter_outer,  # Use actual outer diameter for accurate tube length
 )
 
 logger.info(

@@ -36,7 +36,7 @@ DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
 # Default values for inlet density assumption (option 3)
 DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
 DEFAULT_A_R = 1.0  # A_r (cold/hot) - sigma_r is calculated as d_r * A_r
-DEFAULT_A_R_MIN = 0.1
+DEFAULT_A_R_MIN = 0.5
 
 # Default parameters for framework calculations
 DEFAULT_T = 2.0  # T_hot_in / T_cold_in
@@ -79,16 +79,16 @@ match defaults:
         NTU_MATCH = 1.747
     case "Helicopter":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
-        DEFAULT_C_COLD_OVER_C_HOT = 0.95  # C_cold / C_hot
-        DEFAULT_D_R = 0.44
+        DEFAULT_C_COLD_OVER_C_HOT = 1  # 0.95  # C_cold / C_hot
+        DEFAULT_D_R = 0.257  # 0.44
         # g2h = 2e-2
-        DEFAULT_G2_H = 2e-2
-        DEFAULT_T = 1.7  # 980/576
-        DEFAULT_T_DEAD_OVER_T_COLD_IN = 0.52  # 300/576
-        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 7.2
-        DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.03
-        TARGET_EPS = 0.6
-        NTU_MATCH = 1.479
+        DEFAULT_G2_H = 0.5 * 1.4 * 0.1**2  # 2e-2
+        DEFAULT_T = 898 / 588  # 1.7  # 980/576
+        DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 8.82 / 1.04  # 7.2
+        DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04  # 1.03
+        TARGET_EPS = 0.65  # 0.6
+        NTU_MATCH = 1.824
         DEFAULT_NTU_MAX = 5.0
         SHOW_CUBIC = True
     case "g2lim":
@@ -1395,9 +1395,9 @@ if __name__ == "__main__":
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
         r"$A_r$",
         DEFAULT_A_R_MIN,
-        10.0,
+        2.0,
         valinit=DEFAULT_A_R,
-        valstep=0.1,
+        valstep=0.01,
         valfmt="%.2f" + r"$A_{h}$",
     )
     slider_a_r.ax.set_visible(False)  # Hidden by default
@@ -1426,6 +1426,7 @@ if __name__ == "__main__":
         st_over_f = slider_st_over_f.val
         f_c_over_f_h = slider_f_c_over_f_h.val
         d_r = slider_d_r.val
+        print(d_r)
         g2_h = slider_g2_h.val
         # NTU max from default (can be overridden by defaults case)
         ntu_max = DEFAULT_NTU_MAX

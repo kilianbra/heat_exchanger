@@ -280,9 +280,8 @@ class RefPropProperties(FluidPropertiesStrategy):
             ]
 
             # raise ImportError(f"REFPROP initialization failed: {'\n'.join(error_msg)}") from e # this didnt work for me
-            newline = '\n'
+            newline = "\n"
             raise ImportError(f"REFPROP initialization failed: {newline.join(error_msg)}") from e
-
 
     def get_transport_properties(self, T: float, P: float) -> tuple:
         self.AS.update(self.CP.PT_INPUTS, P, T)
