@@ -27,12 +27,12 @@ FIG_SINGLE_COL = (9 / 2.54 / 2, 7 / 2.54)
 T_HIN_STAG = 898.0  # K
 P_HIN = 1.042  # bar
 T_CIN_STAG = 588.0  # K
-P_CIN = 8.82  # bar
+P_CIN = 9.0  # bar
 T0_STAG = 288.0  # K
 P0 = 1.0  # bar
 
-MACH_H = 0.0
-MACH_C = 0.0
+MACH_H = 0.063
+MACH_C = 0.042
 
 GAMMA_H = 1.4
 GAMMA_C = 1.4
@@ -45,6 +45,8 @@ DP_COLD_PCT = 0.02  # 22  # 2.2%
 
 # Waterfall chart: bigger = thicker bars, smaller gaps (try 1.2, 1.5, etc.)
 BAR_WIDTH_SCALE = 2.0
+
+from plot_colors import COLOR_TOTAL, COLOR_THERMAL, COLOR_VISC_COLD, COLOR_VISC_HOT
 
 
 def static_temperature_from_stagnation(T_stag, Mach, gamma):
@@ -328,8 +330,8 @@ def _plot_waterfall_breakdown1(ax, total, viscous, thermal, labels=None, framewo
     # Bar 2: viscous to total (thermal starts from last viscous)
     bottoms = [0, 0, viscous]
     heights = [total, viscous, total - viscous]
-    colors = ["gray", "white", "lightgray"]
-    hatches = ["///", "", ""]
+    colors = [COLOR_TOTAL, COLOR_VISC_HOT, COLOR_THERMAL]  # Total white, viscous blue, thermal red
+    hatches = ["", "", "///"]  # Total no hash, viscous no hash, thermal hashed
     edge = "black"
 
     bar_edge_lw = 0.5
@@ -337,7 +339,7 @@ def _plot_waterfall_breakdown1(ax, total, viscous, thermal, labels=None, framewo
         fc = colors[i]
         hatch = hatches[i]
         if hatch:
-            ax.bar(x, h, bar_w, bottom=bot, facecolor="none", edgecolor=edge, hatch=hatch, linewidth=bar_edge_lw)
+            ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, hatch=hatch, linewidth=bar_edge_lw)
         else:
             ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, linewidth=bar_edge_lw)
 
@@ -397,15 +399,17 @@ def _plot_waterfall_breakdown2(
         heights = [total, visc_h, visc_c, total - (visc_h + visc_c)]
 
     colors = (
-        ["gray", "white", "white", "white", "lightgray"] if has_interaction else ["gray", "white", "white", "lightgray"]
+        [COLOR_TOTAL, COLOR_VISC_HOT, COLOR_VISC_COLD, (0.85, 0.85, 0.9, 0.6), COLOR_THERMAL]
+        if has_interaction
+        else [COLOR_TOTAL, COLOR_VISC_HOT, COLOR_VISC_COLD, COLOR_THERMAL]
     )
-    hatches = ["///", "", "", "", ""] if has_interaction else ["///", "", "", ""]
+    hatches = ["", "", "", "", "///"] if has_interaction else ["", "", "", "///"]  # Thermal hashed only
 
     bar_edge_lw = 0.5
     for i, (x, bot, h) in enumerate(zip(xs, bottoms, heights, strict=True)):
         if hatches[i]:
             ax.bar(
-                x, h, bar_w, bottom=bot, facecolor="none", edgecolor="black", hatch=hatches[i], linewidth=bar_edge_lw
+                x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", hatch=hatches[i], linewidth=bar_edge_lw
             )
         else:
             ax.bar(x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", linewidth=bar_edge_lw)
@@ -571,7 +575,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
         fig_a.savefig(Path(save_dir) / f"fig3a_bar_c.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig_a)
 
-    # Figure 3b: Practical
+    # Figure 3b: Practical (lump thermal + coupling into single bar, labeled "Thermal")
     fig_b, ax_b = plt.subplots(figsize=(w, h))
     _plot_waterfall_breakdown2(
         ax_b,
@@ -581,7 +585,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
         d["delta_rest_av_prac"],
         d["av_prac_thermal"],
         labels=labels_prac,
-        has_interaction=True,
+        has_interaction=False,
         framework="practical",
         for_save=True,
     )

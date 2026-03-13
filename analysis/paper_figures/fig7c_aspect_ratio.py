@@ -6,6 +6,8 @@ import numpy as np
 import xflow
 from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
 
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
+
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
 # Defaults (match fig8/9)
@@ -19,7 +21,7 @@ DEFAULT_ST_OVER_F = 0.4
 DEFAULT_F_C_OVER_F_H = 1.0
 DEFAULT_T = 898 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 8.82 / 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 DEFAULT_MOLAR_MASS_RATIO = 1.0
@@ -110,31 +112,34 @@ def save_figures(
     y_no_dp_masked = y_no_dp[mask_thermal]
 
     line_no_dp.remove()
-    line_no_dp = ax.plot(
-        ntu_no_dp_masked,
-        y_no_dp_masked,
-        "k-",
-        label="_nolegend_",
-        zorder=2,
-    )[0]
-
     line_with_dp.remove()
     ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=2)
-
-    ax.fill_between(ntu_no_dp_masked, 0, y_no_dp_masked, alpha=0.3, color="gray", zorder=1)
 
     ntu_common = np.linspace(ntu_min_valid, ntu_max_valid, 200)
     y_no_dp_interp = np.interp(ntu_common, ntu_no_dp_masked, y_no_dp_masked)
     y_with_dp_interp = np.interp(ntu_common, ntu_with_dp, y_with_dp)
 
+    # Viscous alone = total - thermal = (viscous + thermal) - just_thermal
+    y_viscous_interp = y_with_dp_interp - y_no_dp_interp
+
+    # Stack: viscous (baseline to viscous alone), thermal (viscous to total). Viscous on top for visibility.
     ax.fill_between(
         ntu_common,
+        y_viscous_interp,
         y_with_dp_interp,
-        y_no_dp_interp,
-        facecolor="none",
+        facecolor=COLOR_THERMAL,
         edgecolor="black",
         linewidth=1.5,
         hatch="///",
+        zorder=0,
+    )
+    ax.fill_between(
+        ntu_common,
+        0,
+        y_viscous_interp,
+        facecolor=COLOR_VISC_HOT,
+        edgecolor="black",
+        linewidth=1.5,
         zorder=1,
         label="_nolegend_",
     )
@@ -155,21 +160,21 @@ def save_figures(
 
     ax.set_title("")
     ax.set_xlim(0, 2.5)
-    ax.set_ylim(0, 0.5)
+    ax.set_ylim(-0.1, 0.3)
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{P}}$ [%])")
 
-    ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
-    # Legend: thermal creation and viscous dissipation (match fig5c box style)
-    patch_thermal = mpatches.Patch(facecolor="gray", alpha=0.3, edgecolor="black", label="Thermal creation")
-    patch_viscous = mpatches.Patch(
-        facecolor="none", edgecolor="black", hatch="///", linewidth=1.5, label="Viscous dissipation"
+    # Legend: thermal creation and viscous dissipation (same colors as fig3)
+    patch_thermal = mpatches.Patch(
+        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=1.5, label="Thermal creation"
     )
+    patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", label="Viscous dissipation")
     ax.legend(
         handles=[patch_thermal, patch_viscous],
-        loc="upper left",
+        loc="lower left",
         labelspacing=0.05,
         edgecolor="black",
         frameon=True,
