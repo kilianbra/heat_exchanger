@@ -24,10 +24,10 @@ FIG_SINGLE_COL = (9 / 2.54 / 2, 7 / 2.54)
 # ---------------------------------------------------------------------------
 # Input parameters (stagnation values, Mach=0 → static = stagnation)
 # ---------------------------------------------------------------------------
-T_HIN_STAG = 885.0  # K
-P_HIN = 1.0  # bar
+T_HIN_STAG = 898.0  # K
+P_HIN = 1.042  # bar
 T_CIN_STAG = 588.0  # K
-P_CIN = 9.0  # bar
+P_CIN = 8.82  # bar
 T0_STAG = 288.0  # K
 P0 = 1.0  # bar
 
@@ -38,12 +38,10 @@ GAMMA_H = 1.4
 GAMMA_C = 1.4
 CP_H = 1070.0  # J/(kg·K)
 CP_C = 1070.0  # J/(kg·K)
-MDOT_H = 2.3  # kg/s
-MDOT_C = 2.3  # kg/s
 
 EPSILON = 0.65
-DP_HOT_PCT = 0.03  # 36  # 3.6%
-DP_COLD_PCT = 0.03  # 22  # 2.2%
+DP_HOT_PCT = 0.04  # 36  # 3.6%
+DP_COLD_PCT = 0.02  # 22  # 2.2%
 
 # Waterfall chart: bigger = thicker bars, smaller gaps (try 1.2, 1.5, etc.)
 BAR_WIDTH_SCALE = 2.0

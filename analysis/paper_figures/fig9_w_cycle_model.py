@@ -8,6 +8,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import root
 from tabulate import tabulate
 from xflow import (
     calculate_capacity_ratios,
@@ -36,7 +37,7 @@ kg_dry_engine_per_kg_per_s_of_air = 23.0
 # --- Helicopter parameters from xflow.py (lines 79-92) ---
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
-DEFAULT_D_R = 0.257
+DEFAULT_D_R_hot = 0.257
 DEFAULT_GAMMA = 1.4
 DEFAULT_MACH_IN = 0.1
 # g2h = 0.5 * gamma * M^2 (used only for reference Mach; we compute g2h from M dynamically)
@@ -48,11 +49,11 @@ DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 8.82 / 1.04
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 TARGET_EPS = 0.65
-NTU_MATCH = 1.824
+NTU_MATCH = 1.824  # 1.701
 DEFAULT_NTU_MAX = 8.0
 DEFAULT_DP_MAX = 0.2
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
+DEFAULT_A_R_hot = 1.0
 
 # Baseline and power reference (from plan)
 # Cycle model net_work is J/kg (c_p in J/kg/K, T in K => work in J/kg)
@@ -60,17 +61,19 @@ DEFAULT_A_R = 1.0
 mdot_ref = 2.3  # kg/s
 w_net_ref = 303e3  # J/kg (303 kJ/kg)
 P_shaft_ref = 697e3  # W (~700 kW)
+NTU_ref = 1.824
 
 # Sweep parameters
 AO_SWEEP = np.linspace(0.15, 5, 100)  # extend to allow small m_hex (down to 0.1 kg)
 m_hex_ref = 13.3  # kg
-A_OVER_A_REF_VALUES = np.linspace(0.1 / m_hex_ref, 5.0, 80)  # start at m_hex = 0.1 kg
+A_R_REF_VALUES = np.linspace(0.1 / m_hex_ref, 5.0, 80)  # A/A_ref sweep; start at m_hex = 0.1 kg
 
 # Mission parameters
 mission_hours = 2
 mission_seconds = mission_hours * 3600
-LHV_J_per_kg = 43.2e6  # J/kg (43.2 MJ/kg)
-eta_turb = 0.84
+LHV_MJ_per_kg = 12.0 * 3.6  # MJ/kg (kerosene) — single definition
+LHV_J_per_kg = LHV_MJ_per_kg * 1e6  # J/kg; mdot_fuel = P_shaft/(LHV×η/100), factor_fuel = t_s/(LHV)×η_turb/η_ov×Q_max
+eta_turb = 0.88
 eta_ov = 0.434
 
 
@@ -195,12 +198,12 @@ def calculate_recuperated_cycle_dp_eps(PR, TIT, eta_poly_c, eta_poly_t, effectiv
     return P, T, s, efficiency, net_work
 
 
-def _a_over_a_ref(ao_over_ao_ref, ntu):
-    """A/A_ref = (NTU / NTU_MATCH) * (ao_over_ao_ref)**0.587"""
-    return (ntu / NTU_MATCH) * (ao_over_ao_ref**0.587)
+def _a_r_ref(ao_r_ref, ntu):
+    """A/A_ref = (NTU / NTU_MATCH) * (Ao/Ao_ref)**0.587"""
+    return (ntu / NTU_MATCH) * (ao_r_ref**0.587)
 
 
-def _get_eps_dp_from_g2h(g2_h, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio):
+def _get_eps_dp_from_g2h(g2_h, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r_hot, pressure_drop_ratio):
     """Return (eps, dp_hot, dp_cold) for given g2_h and NTU. dp as fraction of inlet pressure."""
     C_min_over_C_hot, C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
     if c_cold_over_c_hot <= 1.0:
@@ -217,7 +220,7 @@ def _get_eps_dp_from_g2h(g2_h, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, 
     st_over_f_h = st_over_f
     st_over_f_c = st_over_f
     dp_coeff = g2_h * (
-        1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
+        1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r_hot * C_min_over_C_cold
     )
     dp_hot = dp_coeff * ntu
     dp_cold = pressure_drop_ratio * dp_hot
@@ -230,7 +233,7 @@ def _practical_at_ao_ntu_g2h(
     c_cold_over_c_hot,
     st_over_f,
     f_c_over_f_h,
-    d_r,
+    d_r_hot,
     pressure_drop_ratio,
     t,
     p_cold_in_over_p_hot_in,
@@ -240,7 +243,7 @@ def _practical_at_ao_ntu_g2h(
 ):
     """Practical unavailable creation (dQ_o^M/Qmax) given g2_h and NTU."""
     eps, dp_hot, dp_cold = _get_eps_dp_from_g2h(
-        g2_h, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio
+        g2_h, ntu, c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r_hot, pressure_drop_ratio
     )
     if dp_hot >= dp_max or dp_cold >= dp_max:
         return np.nan, np.nan, np.nan, np.nan
@@ -257,49 +260,46 @@ def _practical_at_ao_ntu_g2h(
     return float(out[0]) if len(out) > 0 else np.nan, eps, dp_hot, dp_cold
 
 
-def _compute_mach_and_g2h(mdot, T_hot_in, ao_over_ao_ref, mdot_ref, T_hot_in_ref, gamma):
-    """M_in = M_ref * (mdot/mdot_ref) * sqrt(T_hot_in/T_ref) / (A_o/A_o_ref); g2h = 0.5*gamma*M^2."""
-    M_in = DEFAULT_MACH_IN * (mdot / mdot_ref) * np.sqrt(T_hot_in / T_hot_in_ref) / ao_over_ao_ref
+def _compute_mach_and_g2h(mdot, T_hot_in, ao_r_ref, mdot_ref, T_hot_in_ref, gamma):
+    """M_in = M_ref * (mdot/mdot_ref) * sqrt(T_hot_in/T_ref) / ao_r_ref; g2h = 0.5*gamma*M^2."""
+    M_in = DEFAULT_MACH_IN * (mdot / mdot_ref) * np.sqrt(T_hot_in / T_hot_in_ref) / ao_r_ref
     g2_h = 0.5 * gamma * M_in**2
     return M_in, g2_h
 
 
 def solve_mdot_at_constant_power(
-    ao_over_ao_ref,
+    ao_r_ref,
     ntu,
     pressure_drop_ratio,
     mdot_ref_val,
     T_hot_in_ref,
     P_ref,
-    max_iter=15,
-    tol=1e-6,
 ):
     """
     Solve for mdot such that mdot * w_net = P_shaft_ref.
+    Uses scipy root on residuals: [mdot - P_ref/w_net, T_hot_in - T[4]].
     Returns (mdot, w_net, T_hot_in, eps, dp_hot, dp_cold, dq_o_m_over_qmax, eta_cycle, Mach_in).
     """
     c_cold_over_c_hot = DEFAULT_C_COLD_OVER_C_HOT
     st_over_f = DEFAULT_ST_OVER_F
     f_c_over_f_h = DEFAULT_F_C_OVER_F_H
-    d_r = DEFAULT_D_R
+    d_r_hot = DEFAULT_D_R_hot
     t = DEFAULT_T
     p_cold_in_over_p_hot_in = DEFAULT_P_COLD_IN_OVER_P_HOT_IN
     p_dead_over_p_hot_in = DEFAULT_P_DEAD_OVER_P_HOT_IN
     gamma = DEFAULT_GAMMA
     dp_max = DEFAULT_DP_MAX
 
-    mdot = mdot_ref_val
-    T_hot_in = T_hot_in_ref
-
-    for _ in range(max_iter):
-        M_in, g2_h = _compute_mach_and_g2h(mdot, T_hot_in, ao_over_ao_ref, mdot_ref_val, T_hot_in_ref, gamma)
+    def _residual(x):
+        mdot, T_hot_in = x
+        M_in, g2_h = _compute_mach_and_g2h(mdot, T_hot_in, ao_r_ref, mdot_ref_val, T_hot_in_ref, gamma)
         dq, eps, dp_hot, dp_cold = _practical_at_ao_ntu_g2h(
             g2_h,
             ntu,
             c_cold_over_c_hot,
             st_over_f,
             f_c_over_f_h,
-            d_r,
+            d_r_hot,
             pressure_drop_ratio,
             t,
             p_cold_in_over_p_hot_in,
@@ -308,27 +308,39 @@ def solve_mdot_at_constant_power(
             dp_max,
         )
         if not np.isfinite(dq):
-            return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
-
+            return [np.nan, np.nan]
         P, T, s, eff, w_net = calculate_recuperated_cycle_dp_eps(PR, TIT, eta_poly_c, eta_poly_t, eps, dp_hot, dp_cold)
         if not np.isfinite(w_net) or w_net <= 0:
-            return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
-        # Cycle model returns w_net in J/kg; guard against kJ/kg from alternate codebases
-        if 0 < w_net < 1000:
-            w_net = w_net * 1000
-        T_hot_in_new = T[4]  # turbine exit = hot side inlet to recuperator
-        mdot_new = P_ref / w_net  # W / (J/kg) = kg/s
+            return [np.nan, np.nan]
+        T_hot_out = T[4]
+        mdot_eq = P_ref / w_net
+        return [mdot - mdot_eq, T_hot_in - T_hot_out]
 
-        if abs(mdot_new - mdot) < tol and abs(T_hot_in_new - T_hot_in) < 0.1:
-            break
-        mdot = mdot_new
-        T_hot_in = T_hot_in_new
+    sol = root(_residual, [mdot_ref_val, T_hot_in_ref], method="hybr")
+    if not sol.success or not np.all(np.isfinite(sol.x)):
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
-    M_in, _ = _compute_mach_and_g2h(mdot, T_hot_in, ao_over_ao_ref, mdot_ref_val, T_hot_in_ref, gamma)
+    mdot, T_hot_in = sol.x
+    M_in, g2_h = _compute_mach_and_g2h(mdot, T_hot_in, ao_r_ref, mdot_ref_val, T_hot_in_ref, gamma)
+    dq, eps, dp_hot, dp_cold = _practical_at_ao_ntu_g2h(
+        g2_h,
+        ntu,
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r_hot,
+        pressure_drop_ratio,
+        t,
+        p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in,
+        gamma,
+        dp_max,
+    )
+    P, T, s, eff, w_net = calculate_recuperated_cycle_dp_eps(PR, TIT, eta_poly_c, eta_poly_t, eps, dp_hot, dp_cold)
     return mdot, w_net, T_hot_in, eps, dp_hot, dp_cold, dq, eff, M_in
 
 
-def _optimal_ao_for_each_a_over_a_ref(
+def _optimal_ao_r_ref_for_each_a_r_ref(
     pressure_drop_ratio,
     mdot_ref_val,
     T_hot_in_ref,
@@ -337,40 +349,40 @@ def _optimal_ao_for_each_a_over_a_ref(
     eff_baseline,
 ):
     """
-    For each A/A_ref, find best ao (and NTU) minimizing delta_fuel_cycle + delta_hex + delta_engine.
+    For each A/A_ref, find best ao/ao_ref (and NTU) minimizing delta_fuel_cycle + delta_hex + delta_engine.
     Delta fuel from cycle: (P_shaft/(LHV*eta) - P_shaft/(LHV*eta_baseline)) * mission_seconds.
-    Returns (a_over_a_ref, ao_opt, ntu_opt, mdot, dq, ...).
+    Returns (a_r_ref, ao_r_ref_opt, ntu_opt, mdot, dq, ...).
     """
     a_out, ao_out, ntu_out = [], [], []
     mdot_out, dq_out, m_hex_out, delta_engine_out = [], [], [], []
     eps_out, dp_hot_out, dp_cold_out, eff_out, M_in_out = [], [], [], [], []
     mdot_fuel_baseline = P_ref / (LHV_J_per_kg * eff_baseline / 100)
 
-    for a_target in A_OVER_A_REF_VALUES:
+    for a_r_ref_target in A_R_REF_VALUES:
         best_z = np.inf
-        best_ao = best_ntu = best_mdot = best_dq = None
+        best_ao_r_ref = best_ntu = best_mdot = best_dq = None
         best_eps = best_dp_hot = best_dp_cold = best_eff = best_M_in = None
 
-        for ao in AO_SWEEP:
-            ntu = a_target * NTU_MATCH / (ao**0.587)
+        for ao_r_ref in AO_SWEEP:
+            ntu = a_r_ref_target * NTU_MATCH / (ao_r_ref**0.587)
             if ntu < 0.02 or ntu > DEFAULT_NTU_MAX:  # allow small m_hex (down to 0.1 kg)
                 continue
 
             mdot, w_net, T_hot_in, eps, dp_hot, dp_cold, dq, eff, M_in = solve_mdot_at_constant_power(
-                ao, ntu, pressure_drop_ratio, mdot_ref_val, T_hot_in_ref, P_ref
+                ao_r_ref, ntu, pressure_drop_ratio, mdot_ref_val, T_hot_in_ref, P_ref
             )
             if not np.isfinite(dq) or not np.isfinite(mdot) or not np.isfinite(eff) or eff <= 0:
                 continue
 
             mdot_fuel = P_ref / (LHV_J_per_kg * eff / 100)
             delta_fuel_cycle = (mdot_fuel - mdot_fuel_baseline) * mission_seconds
-            m_hex = a_target * m_hex_ref
+            m_hex = a_r_ref_target * m_hex_ref
             delta_engine = (mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
             total = delta_fuel_cycle + m_hex + delta_engine
 
             if total < best_z:
                 best_z = total
-                best_ao = ao
+                best_ao_r_ref = ao_r_ref
                 best_ntu = ntu
                 best_mdot = mdot
                 best_dq = dq
@@ -380,17 +392,17 @@ def _optimal_ao_for_each_a_over_a_ref(
                 best_eff = eff
                 best_M_in = M_in
 
-        if best_ao is not None:
-            # delta_engine vs baseline (computed in run_plot); here use mdot_ref_val for iteration
+        if best_ao_r_ref is not None:
+            # delta_engine vs baseline (computed in run_plot)
             # Sanity: mdot should be ~2-5 kg/s for this engine class
             if best_mdot > 50 or best_mdot < 0.5:
                 continue  # skip unphysical mdot (unit error elsewhere)
-            a_out.append(a_target)
-            ao_out.append(best_ao)
+            a_out.append(a_r_ref_target)
+            ao_out.append(best_ao_r_ref)
             ntu_out.append(best_ntu)
             mdot_out.append(best_mdot)
             dq_out.append(best_dq)
-            m_hex_out.append(a_target * m_hex_ref)
+            m_hex_out.append(a_r_ref_target * m_hex_ref)
             delta_engine_out.append((best_mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air)
             eps_out.append(best_eps)
             dp_hot_out.append(best_dp_hot)
@@ -416,18 +428,18 @@ def _optimal_ao_for_each_a_over_a_ref(
 
 def run_plot(base_name="fig9_w_cycle_model"):
     """Run the cycle-coupled fig8 analysis and plot three weight-delta lines."""
-    sigma_r = DEFAULT_D_R * DEFAULT_A_R
+    sigma_r_hot = DEFAULT_D_R_hot * DEFAULT_A_R_hot
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         DEFAULT_PRESSURE_DROP_ASSUMPTION,
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_T,
-        DEFAULT_D_R,
+        DEFAULT_D_R_hot,
         DEFAULT_MOLAR_MASS_RATIO,
-        sigma_r,
+        sigma_r_hot,
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
     )
 
-    # Reference design: ao=1, NTU_MATCH. Get T_hot_in_ref and verify eps, dp.
+    # Reference design: ao_r_ref=1, NTU_MATCH. Get T_hot_in_ref and verify eps, dp.
     g2h_ref = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
     eps_ref, dp_hot_ref, dp_cold_ref = _get_eps_dp_from_g2h(
         g2h_ref,
@@ -435,36 +447,31 @@ def run_plot(base_name="fig9_w_cycle_model"):
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
         DEFAULT_F_C_OVER_F_H,
-        DEFAULT_D_R,
+        DEFAULT_D_R_hot,
         pressure_drop_ratio,
     )
     P_ref_cyc, T_ref_cyc, s, eff_ref, w_net_ref = calculate_recuperated_cycle_dp_eps(
         PR, TIT, eta_poly_c, eta_poly_t, eps_ref, dp_hot_ref, dp_cold_ref
     )
-    if 0 < w_net_ref < 1000:
-        w_net_ref = w_net_ref * 1000  # guard: assume kJ/kg from alternate codebase
     T_hot_in_ref = T_ref_cyc[4]
     mdot_at_ref = P_shaft_ref / w_net_ref
     # Baseline unrecuperated (mdot chosen to produce P_shaft_ref)
     P_b, T_b, s_b, eff_b, w_net_baseline = calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t)
-    if 0 < w_net_baseline < 1000:
-        w_net_baseline = w_net_baseline * 1000  # guard: assume kJ/kg from alternate codebase
     mdot_baseline = P_shaft_ref / w_net_baseline
     # P_baseline = mdot_baseline * w_net_baseline
 
-    # For red line (dQ_o^M based): factor to convert dQ_o^M/Qmax to fuel mass delta
-    lhv_kwh_per_kg = 43.2 / 3.6
-    mdot_hot_ref = mdot_at_ref
-    cp_hot = 1.07  # kJ/(kg*K) — high-temp air value (compromise between 1004 and 1170)
+    # For dQ_o^M line: factor to convert dQ_o^M/Q_max to fuel mass delta (all SI units)
+    # Q_max = mdot × c_p × ΔT [W]; factor_fuel = t_s / LHV × η_turb/η_ov × Q_max [kg]
+    cp_hot = 1070.0  # J/(kg·K) — match cycle model
     Th_in_ref = 898
     Tc_in_ref = 588
-    Q_max = mdot_hot_ref * cp_hot * (Th_in_ref - Tc_in_ref)  # kW
-    factor_fuel = mission_hours / lhv_kwh_per_kg * eta_turb / eta_ov * Q_max  # kg (for dQ_o^M scaling)
+    Q_max = mdot_at_ref * cp_hot * (Th_in_ref - Tc_in_ref)  # W
+    factor_fuel = mission_seconds / LHV_J_per_kg * eta_turb / eta_ov * Q_max  # kg
 
     # Sweep and optimize
     (
-        a_over_a_ref_opt,
-        ao_opt,
+        a_r_ref_opt,
+        ao_r_ref_opt,
         ntu_opt,
         mdot_opt,
         dq_o_m_opt,
@@ -475,7 +482,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
         dp_cold_opt,
         eff_opt,
         M_in_opt,
-    ) = _optimal_ao_for_each_a_over_a_ref(
+    ) = _optimal_ao_r_ref_for_each_a_r_ref(
         pressure_drop_ratio,
         mdot_at_ref,
         T_hot_in_ref,
@@ -484,7 +491,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
         eff_b,
     )
 
-    if len(a_over_a_ref_opt) == 0:
+    if len(a_r_ref_opt) == 0:
         print("No valid optimum points found.")
         return
 
@@ -500,8 +507,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
         eff_ref_c,
         M_in_ref_c,
     ) = solve_mdot_at_constant_power(1.0, NTU_MATCH, pressure_drop_ratio, mdot_at_ref, T_hot_in_ref, P_shaft_ref)
-    a_over_a_ref_at_1 = _a_over_a_ref(1.0, NTU_MATCH) if np.isfinite(dq_ref) else np.nan
-    m_hex_at_ref = a_over_a_ref_at_1 * m_hex_ref if np.isfinite(dq_ref) else np.nan
+    a_r_ref_at_1 = _a_r_ref(1.0, NTU_MATCH) if np.isfinite(dq_ref) else np.nan
+    m_hex_at_ref = a_r_ref_at_1 * m_hex_ref if np.isfinite(dq_ref) else np.nan
     if np.isfinite(dq_ref):
         mdot_fuel_ref = P_shaft_ref / (LHV_J_per_kg * eff_ref_c / 100)
         mdot_fuel_baseline_ref = P_shaft_ref / (LHV_J_per_kg * eff_b / 100)
@@ -512,8 +519,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
     else:
         delta_fuel_ref = delta_hex_ref = delta_engine_ref = line3_ref = np.nan
 
-    # Sweep point closest to A/A_ref=1 (optimizer may pick ao != 1)
-    id_close = np.argmin(np.abs(a_over_a_ref_opt - 1.0))
+    # Sweep point closest to A/A_ref=1 (optimizer may pick ao_r_ref != 1)
+    id_close = np.argmin(np.abs(a_r_ref_opt - 1.0))
 
     # Weight deltas vs baseline unrecuperated
     # Delta fuel from cycle efficiency: mdot_fuel = P_shaft/(LHV*eta), delta = (mdot_fuel - mdot_fuel_baseline)*mission_seconds
@@ -555,7 +562,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
             if not np.isfinite(dq_ref):
                 return "—"
             return {
-                "A/A_ref": a_over_a_ref_at_1,
+                "A/A_ref": a_r_ref_at_1,
                 "m_hex": m_hex_at_ref,
                 "ao/ao_ref": 1.0,
                 "Mach_in": M_in_ref_c,
@@ -579,9 +586,9 @@ def run_plot(base_name="fig9_w_cycle_model"):
         if not isinstance(i, int) or i < -len(m_hex_opt) or i >= len(m_hex_opt):
             return "—"
         return {
-            "A/A_ref": a_over_a_ref_opt[i],
+            "A/A_ref": a_r_ref_opt[i],
             "m_hex": m_hex_opt[i],
-            "ao/ao_ref": ao_opt[i],
+            "ao/ao_ref": ao_r_ref_opt[i],
             "Mach_in": M_in_opt[i],
             "NTU": ntu_opt[i],
             "eps": eps_opt[i] * 100,
@@ -641,9 +648,9 @@ def run_plot(base_name="fig9_w_cycle_model"):
     points = [
         ("1st", 0 if len(m_hex_opt) >= 1 else None),
         ("ref", "ref"),
-        ("ref_opt", int(id_close) if np.isfinite(dq_ref) and id_close < len(a_over_a_ref_opt) else None),
-        ("glob", id_min_black),
-        ("square", id_min_red),
+        ("ref_opt", int(id_close) if np.isfinite(dq_ref) and id_close < len(a_r_ref_opt) else None),
+        ("square", id_min_black),  # square marker: cycle-model optimum
+        ("star", id_min_red),  # star marker: dQ_o^M optimum
         ("last", -1 if len(m_hex_opt) >= 2 else None),
         ("unrecup", "unrecup"),
     ]
@@ -776,8 +783,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
     ax.grid(True, alpha=0.3)
     ax.axhline(0, color="gray", linestyle=":", lw=0.8)
     ax.set_xlim(0, 60)
-    ax.set_ylim(-150, 0)
-    ax.set_yticks(np.arange(-150, 1, 25))
+    ax.set_ylim(-100, 0)
+    ax.set_yticks(np.arange(-100, 1, 20))
 
     # Annotations with arrows (xytext further from markers so arrowheads are visible)
     ax.annotate(

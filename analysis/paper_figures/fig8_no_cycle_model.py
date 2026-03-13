@@ -401,7 +401,7 @@ def run_plot(
     # Previously fig8 used: mdot_hot=1.91, Th_in=980, Tc_in=576
     mission_hours = 2
     lhv_kwh_per_kg = 12.0  # 43.2 / 3.6
-    eta_turb = 0.84
+    eta_turb = 0.88
     eta_ov = 0.434
     mdot_hot_ref = 2.3  # kg/s (matches fig8_full_cycle mdot_ref)
     cp_hot = 1.07  # kJ/(kg*K) — high-temp air value (compromise between 1004 and 1170)
@@ -598,8 +598,8 @@ def run_plot(
     ax.grid(True, alpha=0.3)
 
     ax.set_xlim(0, 60)
-    ax.set_ylim(-150, 0)
-    ax.set_yticks(np.arange(-150, 1, 25))
+    ax.set_ylim(-100, 0)
+    ax.set_yticks(np.arange(-100, 1, 20))
 
     plt.tight_layout(pad=0.5)
 

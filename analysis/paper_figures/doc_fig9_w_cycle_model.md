@@ -6,6 +6,19 @@
 
 ---
 
+## Unit Conventions (SI)
+
+| Quantity | Unit | Notes |
+|----------|------|-------|
+| **LHV** | 43.2 MJ/kg | Single definition (`LHV_MJ_per_kg`); derived `LHV_J_per_kg = 43.2e6` for all formulae |
+| **w_net** | J/kg | Cycle uses c_p = 1070 J/(kg·K), T in K ⇒ work in J/kg |
+| **P_shaft** | W | 697e3 W |
+| **mdot**, **ṁ_fuel** | kg/s | |
+| **Q_max** | W | ṁ × c_p × ΔT with c_p in J/(kg·K) |
+| **t_mission** | s | mission_seconds = mission_hours × 3600 |
+
+---
+
 ## Key Equations
 
 ### 1. Power–Mass Flow Constraint
@@ -18,6 +31,15 @@ P_shaft = mdot × w_net    ⇒    mdot = P_ref / w_net
 
 - **w_net**: net specific work from the recuperated cycle (J/kg)
 - **P_ref** = 697 kW: reference shaft power
+
+**Coupled solve** (mdot, T_hot_in are coupled): `scipy.optimize.root` on residuals
+
+```
+res[0] = mdot − P_ref / w_net
+res[1] = T_hot_in − T[4]
+```
+
+where T[4] is turbine exit (hot side inlet to recuperator) from the cycle; w_net, T[4] depend on ε, Δp, which depend on g²h, which depends on mdot and T_hot_in.
 
 ---
 
@@ -101,7 +123,7 @@ The recuperated cycle is computed in `calculate_recuperated_cycle_dp_eps()` with
 ```
 Δm_fuel = (ṁ_fuel − ṁ_fuel,baseline) × t_mission
 ```
-where **ṁ_fuel** = P_shaft / (LHV × η/100)
+where **ṁ_fuel** = P_shaft / (LHV × η/100)  [kg/s] with LHV in J/kg, η in %, P_shaft in W
 
 **HEx mass**:
 
@@ -126,11 +148,11 @@ m_HEx = (A/A_ref) × m_hex_ref    (m_hex_ref = 13.3 kg)
 
 ### 8. Delta Mass Formulae — HEx Model (dQ_o^M–based)
 
-**Fuel scaling factor**:
+**Fuel scaling factor** (all SI; no kWh):
 
 ```
-Q_max = ṁ_hot × c_p × (T_h,in − T_c,in)
-factor_fuel = t_mission / (LHV_kWh/kg) × η_turb/η_ov × Q_max    [kg]
+Q_max = ṁ_hot × c_p × (T_h,in − T_c,in)     [W];  c_p in J/(kg·K)
+factor_fuel = t_mission_s / LHV_J_per_kg × η_turb/η_ov × Q_max   [kg]
 ```
 
 **Fuel delta** (from practical unavailable creation dQ_o^M):
@@ -153,7 +175,7 @@ where **dQ_o^M/Q_max** is computed by `practical_unavailable_creation_hex()` in 
 
 **Cycle model (red lines)** — used for optimization and primary curves:
 
-- **Optimization**: `_optimal_ao_for_each_a_over_a_ref` minimizes `delta_fuel + m_hex + delta_engine` using cycle efficiency η from `calculate_recuperated_cycle_dp_eps`. Design points (ao, NTU, mdot, ε, Δp) come from this.
+- **Optimization**: `_optimal_ao_r_ref_for_each_a_r_ref` minimizes `delta_fuel + m_hex + delta_engine` using cycle efficiency η from `calculate_recuperated_cycle_dp_eps`. Design points (ao, NTU, mdot, ε, Δp) come from this.
 - **Red dashed** = delta_fuel. **Red solid** = delta_fuel + m_hex + delta_engine.
 
 **dQ_o^M model (black lines)** — used for plotting comparison:
@@ -191,7 +213,7 @@ where **dQ_o^M/Q_max** is computed by `practical_unavailable_creation_hex()` in 
 2. **Reference**: Get ε, Δp, w_net at g²h_ref, NTU_MATCH = 1.824.
 3. **Sweep** over A/A_ref (≈ 80 points).
 4. **Optimize**: For each A/A_ref, sweep A_o/A_o_ref (100 points), choose NTU from area relation, and solve for mdot at constant power.
-5. **Solve** coupled system iteratively: mdot → g²h → ε, Δp → w_net → mdot_new.
+5. **Solve** coupled system via `scipy.optimize.root`: residuals [mdot − P_ref/w_net, T_hot_in − T[4]].
 6. **Objective**: Minimize Δm_fuel + m_HEx + Δm_engine.
 7. **Plot**: Δm vs. m_HEx for both cycle-η and dQ_o^M models.
 
