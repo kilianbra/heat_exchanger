@@ -85,7 +85,7 @@ match defaults:
         DEFAULT_G2_H = 0.5 * 1.4 * 0.1**2  # 2e-2
         DEFAULT_T = 898 / 588  # 1.7  # 980/576
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
-        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 8.82 / 1.04  # 7.2
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04  # 7.2
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04  # 1.03
         TARGET_EPS = 0.65  # 0.6
         NTU_MATCH = 1.824
