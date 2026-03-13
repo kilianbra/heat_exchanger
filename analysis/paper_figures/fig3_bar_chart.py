@@ -310,8 +310,8 @@ def _style_y_axis_post(ax, framework="classical"):
         ax.tick_params(axis="y", labelleft=False)
 
 
-YLABEL_CLASSICAL = r"$\varepsilon^{\mathrm{C}} = (\Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$"
-YLABEL_PRACTICAL = r"$\varepsilon^{\mathrm{P}} = (\Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$"
+YLABEL_CLASSICAL = r"$\varepsilon^{\mathrm{C}} = (\Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$ [%]"
+YLABEL_PRACTICAL = r"$\varepsilon^{\mathrm{P}} = (\Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$ [%]"
 
 # False: no arrow, show top ytick (0.3). True: arrow at top, hide top ytick.
 SHOW_Y_ARROW = False

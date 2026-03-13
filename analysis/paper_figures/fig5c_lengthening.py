@@ -155,7 +155,7 @@ def save_figures(
 
     # Independent control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{P}}$)")
+    ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{P}}$ [%])")
 
     # Save as SVG
     fig.savefig(
