@@ -704,26 +704,15 @@ def run_plot(base_name="fig9_w_cycle_model"):
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
 
-    ax.plot(m_hex_opt, line1, "k--", linewidth=1.5, label=r"delta fuel (cycle $\eta$)")
-    ax.plot(m_hex_opt, delta_fuel_dqom, "r--", linewidth=1.5, label="_nolegend_")
+    ax.plot(m_hex_opt, line1, "r--", linewidth=1.5, label=r"delta fuel (cycle $\eta$)")
+    ax.plot(m_hex_opt, delta_fuel_dqom, "k--", linewidth=1.5, label="_nolegend_")
     # ax.plot(m_hex_opt, line2, "k-.", linewidth=1.5, label="delta fuel + HEx")
-    ax.plot(m_hex_opt, line3, "k-", linewidth=1.5, label="delta fuel + HEx + engine")
-    ax.plot(m_hex_opt, line3_dqom, "r-", linewidth=1.5, label="_nolegend_")
+    ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label="delta fuel + HEx + engine")
+    ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="_nolegend_")
 
     ax.scatter(
         m_hex_opt[id_min_black],
         line3[id_min_black],
-        color="black",
-        s=200,
-        zorder=5,
-        marker="*",
-        facecolor="black",
-        edgecolor="white",
-        linewidths=1,
-    )
-    ax.scatter(
-        m_hex_opt[id_min_red],
-        line3_dqom[id_min_red],
         color="red",
         s=80,
         zorder=5,
@@ -732,12 +721,34 @@ def run_plot(base_name="fig9_w_cycle_model"):
         edgecolor="white",
         linewidths=1,
     )
+    ax.scatter(
+        m_hex_opt[id_min_red],
+        line3[id_min_red],
+        color="red",
+        s=200,
+        zorder=5,
+        marker="*",
+        facecolor="red",
+        edgecolor="white",
+        linewidths=1,
+    )
+    ax.scatter(
+        m_hex_opt[id_min_red],
+        line3_dqom[id_min_red],
+        color="black",
+        s=200,
+        zorder=5,
+        marker="*",
+        facecolor="black",
+        edgecolor="white",
+        linewidths=1,
+    )
     if np.isfinite(dq_ref):
         line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
         ax.scatter(
             m_hex_at_ref,
             line3_ref,
-            color="black",
+            color="red",
             s=80,
             zorder=5,
             marker="+",
