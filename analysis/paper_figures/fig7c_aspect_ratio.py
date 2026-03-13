@@ -168,7 +168,7 @@ def save_figures(
     )
     ax.legend(
         handles=[patch_thermal, patch_viscous],
-        loc="lower right",
+        loc="upper left",
         labelspacing=0.05,
         edgecolor="black",
         frameon=True,

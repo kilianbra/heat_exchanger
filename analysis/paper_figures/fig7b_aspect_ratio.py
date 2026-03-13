@@ -192,7 +192,7 @@ def save_figures(
     # Legend box style to match fig5b (frameon, facecolor white, edge black, fancybox=False)
     ax.legend(
         handles=[patch_thermal, patch_viscous],
-        loc="upper left",
+        loc="lower left",
         labelspacing=0.05,
         edgecolor="black",
         frameon=True,
