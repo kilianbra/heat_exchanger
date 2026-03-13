@@ -516,7 +516,7 @@ def plot_waterfalls(data=None, do_print=False):
 
 def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     """
-    Save Breakdown 2 as two separate figures: fig3a_bar_c (classical), fig3b_bac_p (practical).
+    Save Breakdown 2 as two separate figures: fig3a_bar_c (classical), fig3b_bar_p (practical).
     No title; viscous labels written fully with (hot) / (cold) on second line.
     Formats: .svg, .tiff, .png, and .pdf
     """
@@ -593,10 +593,10 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     _style_y_axis_post(ax_b, "practical")
     fig_b.tight_layout(pad=0.5)
     for ext in ["svg", "tiff", "png", "pdf"]:
-        fig_b.savefig(Path(save_dir) / f"fig3b_bac_p.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
+        fig_b.savefig(Path(save_dir) / f"fig3b_bar_p.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig_b)
 
-    print(f"Saved fig3a_bar_c and fig3b_bac_p (.svg, .tiff, .png, .pdf) to {save_dir}")
+    print(f"Saved fig3a_bar_c and fig3b_bar_p (.svg, .tiff, .png, .pdf) to {save_dir}")
 
 
 if __name__ == "__main__":
