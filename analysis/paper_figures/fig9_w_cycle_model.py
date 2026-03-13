@@ -70,17 +70,15 @@ A_OVER_A_REF_VALUES = np.linspace(0.1 / m_hex_ref, 5.0, 80)  # start at m_hex = 
 mission_hours = 2
 mission_seconds = mission_hours * 3600
 LHV_J_per_kg = 43.2e6  # J/kg (43.2 MJ/kg)
-eta_turb = 0.8
-eta_ov = 0.28
+eta_turb = 0.84
+eta_ov = 0.434
 
 
 def calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t):
-    R_universal = 8.314e3  # Universal gas constant (J/mol/K)
-    M_air = 28.97  # Molecular weight of air (g/mol)
     gamma = 1.4  # Ratio of specific heats
-
-    R = R_universal / M_air  # Gas constant (J/kg/K)
-    c_p = R * gamma / (gamma - 1)  # 1004.45 J/kg/K
+    c_p = 1070.0  # J/(kg*K) — high-temp air value (compromise between 1004 and 1170)
+    R = c_p * (gamma - 1) / gamma  # Gas constant from c_p and gamma
+    # R_universal = 8.314e3; M_air = 28.97; R = R_universal / M_air; c_p = R * gamma / (gamma - 1)  # 1004.45 J/kg/K
 
     # Initial conditions
     p_d = 1e5  # Inlet pressure (Pa)
@@ -122,13 +120,10 @@ def calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t):
 
 
 def calculate_recuperated_cycle_dp_eps(PR, TIT, eta_poly_c, eta_poly_t, effectiveness, dp_hot, dp_cold):
-    # Constants
-    R_universal = 8.314e3  # Universal gas constant (J/mol/K)
-    M_air = 28.97  # Molecular weight of air (kg/kmol)
     gamma = 1.4  # Ratio of specific heats
-
-    R = R_universal / M_air  # Gas constant (J/kg/K)
-    c_p = R * gamma / (gamma - 1)
+    c_p = 1070.0  # J/(kg*K) — high-temp air value (compromise between 1004 and 1170)
+    R = c_p * (gamma - 1) / gamma  # Gas constant from c_p and gamma
+    # R_universal = 8.314e3; M_air = 28.97; R = R_universal / M_air; c_p = R * gamma / (gamma - 1)
 
     # print(f"Constants: R = {R:.2f} J/kg/K, c_p = {c_p:.2f} J/kg/K")
 
@@ -460,7 +455,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
     # For red line (dQ_o^M based): factor to convert dQ_o^M/Qmax to fuel mass delta
     lhv_kwh_per_kg = 43.2 / 3.6
     mdot_hot_ref = mdot_at_ref
-    cp_hot = 1.17  # kJ/(kg*K)
+    cp_hot = 1.07  # kJ/(kg*K) — high-temp air value (compromise between 1004 and 1170)
     Th_in_ref = 898
     Tc_in_ref = 588
     Q_max = mdot_hot_ref * cp_hot * (Th_in_ref - Tc_in_ref)  # kW
@@ -565,7 +560,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
                 "ao/ao_ref": 1.0,
                 "Mach_in": M_in_ref_c,
                 "NTU": NTU_MATCH,
-                "eps": eps_ref_c,
+                "eps": eps_ref_c * 100,
+                "eps_P": -dq_ref * 100,
                 "dph": dp_hot_ref_c * 100,
                 "dpc": dp_cold_ref_c * 100,
                 "eta_cycle": eff_ref_c,
@@ -577,6 +573,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
                 "cum_fuel": delta_fuel_ref,
                 "cum_fuel_hex": delta_fuel_ref + delta_hex_ref,
                 "cum_total": line3_ref,
+                "cum_fuel_dqom": dq_ref * factor_fuel,
+                "cum_fuel_hex_dqom": dq_ref * factor_fuel + delta_hex_ref,
             }
         if not isinstance(i, int) or i < -len(m_hex_opt) or i >= len(m_hex_opt):
             return "—"
@@ -586,7 +584,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
             "ao/ao_ref": ao_opt[i],
             "Mach_in": M_in_opt[i],
             "NTU": ntu_opt[i],
-            "eps": eps_opt[i],
+            "eps": eps_opt[i] * 100,
+            "eps_P": -dq_o_m_opt[i] * 100,
             "dph": dp_hot_opt[i] * 100,
             "dpc": dp_cold_opt[i] * 100,
             "eta_cycle": eff_opt[i],
@@ -598,6 +597,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
             "cum_fuel": line1[i],
             "cum_fuel_hex": line2[i],
             "cum_total": line3[i],
+            "cum_fuel_dqom": delta_fuel_dqom[i],
+            "cum_fuel_hex_dqom": delta_fuel_dqom[i] + delta_hex[i],
         }
 
     def _cell(i, key):
@@ -614,12 +615,12 @@ def run_plot(base_name="fig9_w_cycle_model"):
         v = d[key] if isinstance(d, dict) else d
         if isinstance(v, float) and np.isnan(v):
             return "—"
-        if key in ("dph", "dpc"):
+        if key in ("dph", "dpc", "eps", "eps_P"):
             return f"{v:.2f}%"
         if key == "eta_cycle":
             return f"{v:.2f}%"
-        if key in ("eps", "Mach_in", "NTU", "ao/ao_ref", "A/A_ref"):
-            return f"{v:.4f}" if abs(v) < 1e-2 or abs(v) > 1e4 else f"{v:.3f}"
+        if key in ("Mach_in", "NTU", "ao/ao_ref", "A/A_ref"):
+            return f"{v:.4f}" if abs(v) < 1e-3 or abs(v) > 1e4 else f"{v:.3f}"
         if key in (
             "w_net",
             "m_hex",
@@ -630,6 +631,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
             "cum_fuel",
             "cum_fuel_hex",
             "cum_total",
+            "cum_fuel_dqom",
+            "cum_fuel_hex_dqom",
         ):
             return f"{v:.3f}"
         return str(v)
@@ -670,9 +673,13 @@ def run_plot(base_name="fig9_w_cycle_model"):
         ["--- HEx ---", "", "", "", "", "", "", ""],
         _build_row("Mach_in", "Mach_in"),
         _build_row("NTU", "NTU"),
-        _build_row("eps", "eps"),
+        _build_row("eps (%)", "eps"),
+        _build_row("eps^P (%)", "eps_P"),
         _build_row("dph (%)", "dph"),
         _build_row("dpc (%)", "dpc"),
+        ["--- HEx model ---", "", "", "", "", "", "", ""],
+        _build_row("cum_fuel (dQo^M)", "cum_fuel_dqom"),
+        _build_row("cum_fuel+hex (dQo^M)", "cum_fuel_hex_dqom"),
         ["--- CYCLE OUTPUTS ---", "", "", "", "", "", "", ""],
         _build_row("eta_cycle (%)", "eta_cycle"),
         _build_row("w_net (kJ/kg)", "w_net"),

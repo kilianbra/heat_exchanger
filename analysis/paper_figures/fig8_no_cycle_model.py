@@ -400,11 +400,11 @@ def run_plot(
     # Mission and Q_max (matching fig8_full_cycle.py)
     # Previously fig8 used: mdot_hot=1.91, Th_in=980, Tc_in=576
     mission_hours = 2
-    lhv_kwh_per_kg = 43.2 / 3.6
-    eta_turb = 0.8
-    eta_ov = 0.28
+    lhv_kwh_per_kg = 12.0  # 43.2 / 3.6
+    eta_turb = 0.84
+    eta_ov = 0.434
     mdot_hot_ref = 2.3  # kg/s (matches fig8_full_cycle mdot_ref)
-    cp_hot = 1.17  # kJ/(kg*K)
+    cp_hot = 1.07  # kJ/(kg*K) — high-temp air value (compromise between 1004 and 1170)
     Th_in_ref = 898  # K
     Tc_in_ref = 588  # K
     Q_max = mdot_hot_ref * cp_hot * (Th_in_ref - Tc_in_ref)
