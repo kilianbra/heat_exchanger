@@ -181,6 +181,7 @@ def save_figures(
     ax.set_xlim(0, 2.5)
     ax.set_ylim(-0.1, 0)
     ax.set_yticks([-0.1, -0.08, -0.06, -0.04, -0.02, 0])
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{C}}$)")
 

@@ -115,6 +115,7 @@ def save_figures(
     ax.set_xticks([0, 5, 10, 15])
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
     ax.set_ylim(-0.1, 0)
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
     # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
     legend = ax.get_legend()

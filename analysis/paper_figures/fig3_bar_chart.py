@@ -10,7 +10,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import FormatStrFormatter
 
 # Allow import of xflow when run from project root or paper_figures dir
 # _script_dir = Path(__file__).resolve().parent
@@ -303,7 +302,7 @@ def _add_y_arrow_at_tip(ax):
 def _style_y_axis_post(ax, framework="classical"):
     """Hide top ytick + add arrow (if SHOW_Y_ARROW), or keep top tick. Hide y labels for practical when empty."""
     ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
-    ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
     if SHOW_Y_ARROW:
         _hide_top_ytick(ax)
         _add_y_arrow_at_tip(ax)
@@ -591,6 +590,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     ax_b.set_title("")
     ax_b.set_ylim(YLIM_PRACTICAL)
     _style_y_axis_post(ax_b, "practical")
+    ax_b.tick_params(axis="y", labelleft=False)  # fig3b: no tick numbers, just y-axis title
     fig_b.tight_layout(pad=0.5)
     for ext in ["svg", "tiff", "png", "pdf"]:
         fig_b.savefig(Path(save_dir) / f"fig3b_bar_p.{ext}", dpi=300, facecolor="white", bbox_inches="tight")

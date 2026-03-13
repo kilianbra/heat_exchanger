@@ -160,6 +160,7 @@ def save_figures(
     ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{P}}$)")
 
     ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
     # Legend: thermal creation and viscous dissipation (match fig5c box style)
     patch_thermal = mpatches.Patch(facecolor="gray", alpha=0.3, edgecolor="black", label="Thermal creation")
