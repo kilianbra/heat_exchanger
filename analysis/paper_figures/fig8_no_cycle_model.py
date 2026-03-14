@@ -432,14 +432,14 @@ def run_plot(
         label="fuel saving + HEx mass",
     )
 
-    # Global optimum: star marker (was circle)
+    # Global optimum: star marker
     ao_min = ao_opt_line[id_min]
     ntu_min = ntu_opt_line[id_min]
     ax.scatter(
         m_hex[id_min],
         dm_fuel_and_hex[id_min],
         color="black",
-        s=150,
+        s=90,
         zorder=5,
         marker="*",
         facecolor="black",
@@ -461,7 +461,7 @@ def run_plot(
         dm_fixed_interp,
         facecolor="black",
         edgecolor="white",
-        s=50,
+        s=25,
         zorder=5,
         marker="o",
     )
@@ -486,10 +486,10 @@ def run_plot(
         m_hex_ref_design,
         dm_ref_design,
         color="black",
-        s=80,
+        s=25,
         zorder=5,
         marker="+",
-        linewidths=1.5,
+        linewidths=0.7,
     )
 
     # One-liner summaries for each design point
@@ -506,7 +506,7 @@ def run_plot(
     dq_fixed_over_qmax = dq_fixed_interp
     dq_global_over_qmax = dq_o_m_over_qmax_opt_line[id_min]
     print(
-        f"Reference (+): NTU={NTU_MATCH:.3f}, m_HEx={m_hex_ref_design:.2f} kg, eps={eps_ref:.4f}, "
+        f"Baseline (+): NTU={NTU_MATCH:.3f}, m_HEx={m_hex_ref_design:.2f} kg, eps={eps_ref:.4f}, "
         f"Q={eps_ref * Q_max:.1f} kW, dQ_o^M={dq_ref_over_qmax * Q_max:.1f} kW, "
         f"dp/p_in hot={dp_h_ref:.2f}%, cold={dp_c_ref:.2f}%"
     )
@@ -693,11 +693,11 @@ def run_plot(
     #         label="fuel + HEx (const. $g^2_h$)",
     #     )
 
-    # Annotations with arrows: reference design (+), fixed mass optimal (circle), global optimal (star)
+    # Annotations with arrows: baseline design (+), fixed mass optimal (circle), global optimal (star)
     font_size = 8
     arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=12)
     ax.annotate(
-        "reference design",
+        "baseline design",
         xy=(m_hex_ref_design, dm_ref_design),
         xytext=(6, -20),
         fontsize=font_size,
@@ -707,7 +707,7 @@ def run_plot(
     ax.annotate(
         "fixed mass\noptimal design",
         xy=(m_hex_ref_design, dm_fixed_interp),
-        xytext=(5, -70),
+        xytext=(5, -80),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,

@@ -80,7 +80,7 @@ NTU_ref = 1.479
 # Sweep parameters
 AO_SWEEP = np.linspace(0.15, 5, 100)  # extend to allow small m_hex (down to 0.1 kg)
 m_hex_ref = 13.3  # kg
-A_R_REF_VALUES = np.linspace(0.1 / m_hex_ref, 5.0, 80)  # A/A_ref sweep; start at m_hex = 0.1 kg
+A_R_REF_VALUES = np.linspace(0.1 / m_hex_ref, 5.0, 100)  # A/A_ref sweep; start at m_hex = 0.1 kg
 
 # Mission parameters
 mission_hours = 2
@@ -735,14 +735,14 @@ def run_plot(base_name="fig9_w_cycle_model"):
     ax.plot(m_hex_opt, line1, "r--", linewidth=1.5, label="Fuel saving")
     # ax.plot(m_hex_opt, delta_fuel_dqom, "k--", linewidth=1.5, label="_nolegend_")  # black dashed, may add back
     ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label="Fuel + HEx")
-    ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="Fuel + HEx")
+    # ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="Fuel + HEx")  # black line, may add back
 
     ax.scatter(
         m_hex_opt[id_min_black],
         line3[id_min_black],
         color="red",
-        s=80,
-        zorder=5,
+        s=27,
+        zorder=6,
         marker="s",
         facecolor="red",
         edgecolor="white",
@@ -752,55 +752,55 @@ def run_plot(base_name="fig9_w_cycle_model"):
         m_hex_opt[id_min_red],
         line3[id_min_red],
         color="red",
-        s=200,
+        s=90,  # match fig8 star
         zorder=5,
         marker="*",
         facecolor="red",
         edgecolor="white",
         linewidths=1,
     )
-    ax.scatter(
-        m_hex_opt[id_min_red],
-        line3_dqom[id_min_red],
-        color="black",
-        s=200,
-        zorder=5,
-        marker="*",
-        facecolor="black",
-        edgecolor="white",
-        linewidths=1,
-    )
+    # ax.scatter(
+    #     m_hex_opt[id_min_red],
+    #     line3_dqom[id_min_red],
+    #     color="black",
+    #     s=200,
+    #     zorder=5,
+    #     marker="*",
+    #     facecolor="black",
+    #     edgecolor="white",
+    #     linewidths=1,
+    # )  # black star at black line optimum, may add back
     if np.isfinite(dq_ref):
         line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
         ax.scatter(
             m_hex_at_ref,
             line3_ref,
             color="red",
-            s=80,
+            s=25,  # match fig8 +
             zorder=5,
             marker="+",
-            linewidths=1.5,
+            linewidths=0.7,
         )
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
     ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
     # Custom legend with section titles; sum notation in "No cycle model" title
     legend_handles = [
-        Line2D([], [], linestyle="", label="Cycle model"),
+        # Line2D([], [], linestyle="", label="Cycle model"),
         Line2D([], [], color="r", linestyle="--", linewidth=1.5, label="Fuel saving"),
-        Line2D([], [], color="r", linestyle="-", linewidth=1.5, label="Fuel + HEx"),
-        Line2D(
-            [],
-            [],
-            linestyle="",
-            label=r"$\sum_i \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}$",
-        ),
-        Line2D([], [], color="k", linestyle="-", linewidth=1.5, label="Fuel + HEx"),
+        Line2D([], [], color="r", linestyle="-", linewidth=1.5, label="ΔFuel + HEx + ΔEngine"),
+        # Line2D(
+        #     [],
+        #     [],
+        #     linestyle="",
+        #     label=r"$\sum_i \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}$",
+        # ),
+        # Line2D([], [], color="k", linestyle="-", linewidth=1.5, label="Fuel + HEx"),  # black line entry, may add back
     ]
     ax.legend(
         handles=legend_handles,
-        loc="upper right",
-        ncol=2,
+        loc="upper center",
+        ncol=1,
         fontsize=6,
         frameon=True,
         edgecolor="black",
@@ -816,7 +816,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
 
     # Annotations with arrows (xytext further from markers so arrowheads are visible)
     ax.annotate(
-        "global optimal design\nwith cycle model",
+        "global optimal design with\n fuel burn from cycle efficiency",
         xy=(m_hex_opt[id_min_black] - 1, line3[id_min_black] - 1),
         xytext=(m_hex_opt[id_min_black] - 20, -75),
         fontsize=6,
@@ -824,14 +824,14 @@ def run_plot(base_name="fig9_w_cycle_model"):
     )
     if np.isfinite(dq_ref):
         ax.annotate(
-            "reference design",
+            "baseline design",
             xy=(m_hex_at_ref, line3_ref),
             xytext=(m_hex_at_ref - 10, line3_ref + 15),
             fontsize=6,
             arrowprops=dict(arrowstyle="->", color="black", lw=1),
         )
     ax.annotate(
-        "practical availability\noptimal design",
+        "global optimal design with\n practical availability fuel burn model",
         xy=(m_hex_opt[id_min_red], line3[id_min_red]),
         xytext=(m_hex_opt[id_min_red] + 5, line3[id_min_red] - 15),
         fontsize=6,

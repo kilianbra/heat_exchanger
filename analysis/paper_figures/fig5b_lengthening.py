@@ -6,6 +6,8 @@ import xflow
 from scipy.signal import find_peaks
 from xflow import calculate_pressure_drop_ratio, create_plot
 
+from plot_colors import MARKER_SIZE_LATEX
+
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
 # Default modeling assumptions (match fig8/9)
@@ -164,7 +166,7 @@ def save_figures(
                     color="white",
                     marker="o",
                     zorder=5,
-                    s=50,
+                    s=MARKER_SIZE_LATEX,
                     facecolor="black",
                 )
         # Arrows from "optimal designs" label to the valid optimum points; text in empty space above -0.025

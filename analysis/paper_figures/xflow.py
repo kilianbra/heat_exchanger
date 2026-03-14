@@ -88,7 +88,7 @@ match defaults:
         DEFAULT_C_COLD_OVER_C_HOT = 1  # 0.95  # C_cold / C_hot
         DEFAULT_D_R = 0.257  # 0.44
         # g2h = 2e-2
-        DEFAULT_G2_H = 0.5 * 1.4 * 0.06**2  # 2e-2
+        DEFAULT_G2_H = 0.5 * 1.4 * 0.11**2  # 2e-2
         DEFAULT_T = 898 / 588  # 1.7  # 980/576
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04  # 7.2

@@ -6,6 +6,8 @@ from matplotlib.ticker import MultipleLocator
 import xflow
 from xflow import calculate_pressure_drop_ratio, create_plot
 
+from plot_colors import MARKER_SIZE_LATEX
+
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
 # Defaults (match fig8/9)
@@ -160,14 +162,14 @@ def save_figures(
     NTU_REF = NTU_MATCH
     NTU_OPT = 1.2513  # From fig7c with Mh_in=0.11, f_c/f_h=0.25
 
-    # Markers: + for reference design, o for optimal design
+    # Markers: + for baseline design, o for optimal design
     x_eps = np.array(line_eps.get_xdata())
     y_eps = np.array(line_eps.get_ydata())
     idx_ref = (np.abs(x_eps - NTU_REF)).argmin()
-    ax.scatter(NTU_REF, y_eps[idx_ref], marker="+", s=80, linewidths=1.5, color="black", zorder=10)
+    ax.scatter(NTU_REF, y_eps[idx_ref], marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=10)
     idx_opt = (np.abs(x_eps - NTU_OPT)).argmin()
     ax.scatter(
-        NTU_OPT, y_eps[idx_opt], marker="o", color="white", zorder=10, s=50, facecolor="black", edgecolor="white"
+        NTU_OPT, y_eps[idx_opt], marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
     )
 
     # Same markers on right-axis (pressure drop) lines only (hot and cold, not other artists)
@@ -176,11 +178,11 @@ def save_figures(
         y_data = np.array(line.get_ydata())
         idx_ref = (np.abs(x_data - NTU_REF)).argmin()
         y_ref = y_data[idx_ref]
-        ax_twin.scatter(NTU_REF, y_ref, marker="+", s=80, linewidths=1.5, color="black", zorder=10)
+        ax_twin.scatter(NTU_REF, y_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=10)
         idx_opt = (np.abs(x_data - NTU_OPT)).argmin()
         y_opt = y_data[idx_opt]
         ax_twin.scatter(
-            NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=50, facecolor="black", edgecolor="white"
+            NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
         )
 
     plt.tight_layout(pad=0.5)

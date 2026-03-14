@@ -7,7 +7,7 @@ import numpy as np
 import xflow
 from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
 
-from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
@@ -161,24 +161,24 @@ def save_figures(
     )
     ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=3, linewidth=1.5)
 
-    # Reference marker: + (reference design)
+    # Baseline marker: + (baseline design)
     idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
     x_pressure = ntu_with_dp[idx_pressure]
     y_pressure = y_with_dp[idx_pressure]
-    ax.scatter(x_pressure, y_pressure, marker="+", s=80, linewidths=1.5, color="black", zorder=5)
+    ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
     # Optimal marker: circle, black, s=50, white edge (match fig5b)
     if ntu_optimum is not None:
         idx_opt = np.argmin(np.abs(ntu_with_dp - ntu_optimum))
         x_opt = ntu_with_dp[idx_opt]
         y_opt = y_with_dp[idx_opt]
-        ax.scatter(x_opt, y_opt, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
+        ax.scatter(x_opt, y_opt, marker="o", facecolor="black", edgecolor="white", zorder=5, s=MARKER_SIZE_LATEX)
 
-    # Annotations with arrows: reference design, optimal design (text within ylim)
+    # Annotations with arrows: baseline design, optimal design (text within ylim)
     arrow_kw_opt = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
     arrow_kw_ref = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
     ax.annotate(
-        "reference design",
+        "baseline design",
         xy=(x_pressure, y_pressure),
         xytext=(0.15, -0.075),
         fontsize=font_size,

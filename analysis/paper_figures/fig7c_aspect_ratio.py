@@ -7,7 +7,7 @@ import numpy as np
 import xflow
 from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
 
-from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
@@ -164,11 +164,11 @@ def save_figures(
 
     print(f"Optimum NTU: {x_optimum:.4f}")
 
-    # Reference marker: + (reference design)
+    # Baseline marker: + (baseline design)
     idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
     x_pressure = ntu_with_dp[idx_pressure]
     y_pressure = y_with_dp[idx_pressure]
-    ax.scatter(x_pressure, y_pressure, marker="+", s=80, linewidths=1.5, color="black", zorder=5)
+    ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
     ax.set_title("")
     ax.set_xlim(0, 2.0)
