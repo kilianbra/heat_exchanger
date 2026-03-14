@@ -29,9 +29,15 @@ D_R_RANGE = (0.1, 10.0)  # Will use exponential slider
 G2_H_RANGE = (1e-5, 8e-2)  # Will use exponential slider
 
 
-# Pressure drop assumption options
+# Pressure drop assumption options (internal strings - backward compatible)
 PRESSURE_DROP_OPTIONS = ["dp_c=dp_h", "dp_c<<dp_h", "inlet_density"]
+# Display labels for xflow UI (dp_c=dp_h shown as propto)
+DISPLAY_PRESSURE_DROP_OPTIONS = ["dp_c∝dp_h", "dp_c<<dp_h", "inlet_density"]
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"  # Default to option 2
+
+# Slider for dp_c∝dp_h: ratio (dp_h/p_hin)/(dp_c/p_cin). When =1, same as old dp_c=dp_h.
+DEFAULT_DP_H_OVER_DP_C_RATIO = 1.0  # (dp_h/p_hin) / (dp_c/p_cin)
+DP_H_OVER_DP_C_RATIO_RANGE = (0.2, 5.0)
 
 # Default values for inlet density assumption (option 3)
 DEFAULT_MOLAR_MASS_RATIO = 1.0  # M_cold / M_hot (cold/hot)
@@ -50,7 +56,7 @@ SHOW_CUBIC = False
 NTU_MATCH = None  # Will be set in match case if SHOW_CUBIC is True
 
 
-defaults = "Helicopter"
+defaults = "Helicopte_retrofit"
 match defaults:
     case "Brewer":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
@@ -77,12 +83,12 @@ match defaults:
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 0.4 / 0.24  # 0.4/0.24 abt 1.7
         TARGET_EPS = 0.8043
         NTU_MATCH = 1.747
-    case "Helicopter":
+    case "Helicopter_redesign":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
         DEFAULT_C_COLD_OVER_C_HOT = 1  # 0.95  # C_cold / C_hot
         DEFAULT_D_R = 0.257  # 0.44
         # g2h = 2e-2
-        DEFAULT_G2_H = 0.5 * 1.4 * 0.1**2  # 2e-2
+        DEFAULT_G2_H = 0.5 * 1.4 * 0.06**2  # 2e-2
         DEFAULT_T = 898 / 588  # 1.7  # 980/576
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04  # 7.2
@@ -91,6 +97,27 @@ match defaults:
         NTU_MATCH = 1.824
         DEFAULT_NTU_MAX = 5.0
         SHOW_CUBIC = True
+    case "Helicopte_retrofit":
+        DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
+        DEFAULT_C_COLD_OVER_C_HOT = 1  # 0.95  # C_cold / C_hot
+        # DEFAULT_D_R = 0.92  # 0.257  # 0.44
+        DEFAULT_D_R = 0.25
+        # g2h = 2e-2
+        # DEFAULT_G2_H = 0.5 * 1.4 * 0.12**2  # 2e-2  # M=0.12
+        DEFAULT_G2_H = 0.5 * 1.4 * 0.11**2  # Mh_in=0.11
+        # DEFAULT_A_R = 1.0  # (module default)
+        DEFAULT_A_R = 0.92
+        DEFAULT_T = 907 / 588  # 1.7  # 980/576
+        DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064  # 7.2
+        DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064  # 1.03
+        TARGET_EPS = 0.6  # 0.6
+        # NTU_MATCH = 1.824
+        NTU_MATCH = 1.479
+        DEFAULT_NTU_MAX = 5.0
+        SHOW_CUBIC = True
+        # DEFAULT_F_C_OVER_F_H = 0.23
+        DEFAULT_F_C_OVER_F_H = 0.25
     case "g2lim":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"
         DEFAULT_C_COLD_OVER_C_HOT = 1.0
@@ -517,13 +544,17 @@ def create_plot(
         # plot_triple_g2 is a list/array of g^2 values
         g2_values = list(plot_triple_g2)
 
-    # Calculate epsilon and pressure drops (same for all g^2 values)
+    # Epsilon: always use lowest g^2 (lowest Mach) when multiple - it extends furthest in NTU
+    # since high Mach hits pressure drop limit early
+    g2_for_eps = g2_values[-1] if len(g2_values) > 1 else g2_values[0]
+
+    # Calculate epsilon and pressure drops
     ntu, epsilon, dp_over_p_in_hot, dp_over_p_in_cold, validity_mask = calculate_epsilon_ntu_curve(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
         d_r,
-        g2_values[0],
+        g2_for_eps,
         ntu_max=ntu_max,
         dp_max=dp_max,
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_percent_ratio_cold_over_hot,
@@ -559,7 +590,7 @@ def create_plot(
         )[0]
         ax.set_ylim(0, 1)
         ax.set_xlabel("NTU [-]")
-        ax.set_ylabel(r"$\varepsilon$ [%]" + " (all)" if is_multiple_g2 else "")
+        ax.set_ylabel(r"$\varepsilon$ [%]" + " (lowest M)" if is_multiple_g2 else "")
         ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
         # Set NTU max from parameter
         ax.set_xlim(0, ntu_max if ntu_max is not None else 15)
@@ -1254,10 +1285,11 @@ if __name__ == "__main__":
     )
     y_pos -= button_height * 3 + slider_spacing
 
-    # Pressure drop assumption radio buttons
+    # Pressure drop assumption radio buttons (display propto for first option)
+    display_to_internal = dict(zip(DISPLAY_PRESSURE_DROP_OPTIONS, PRESSURE_DROP_OPTIONS, strict=True))
     radio_pressure_drop = RadioButtons(
         plt.axes([slider_left, y_pos, slider_width, button_height * 3]),
-        PRESSURE_DROP_OPTIONS,
+        DISPLAY_PRESSURE_DROP_OPTIONS,
         active=PRESSURE_DROP_OPTIONS.index(DEFAULT_PRESSURE_DROP_ASSUMPTION),
     )
     y_pos -= button_height * 1 + slider_spacing
@@ -1403,19 +1435,38 @@ if __name__ == "__main__":
     slider_a_r.ax.set_visible(False)  # Hidden by default
     y_pos -= slider_spacing
 
+    # (dp_h/p_hin)/(dp_c/p_cin) slider - for dp_c∝dp_h; when =1, same as old dp_c=dp_h
+    slider_dp_h_over_dp_c = Slider(
+        plt.axes([slider_left, y_pos, slider_width, slider_height]),
+        r"$\Delta p_h/p_h$",
+        0.2,
+        5.0,
+        valinit=DEFAULT_DP_H_OVER_DP_C_RATIO,
+        valstep=0.01,
+        valfmt="%.2f" + r"$\Delta p_c/p_c$",
+    )
+    slider_dp_h_over_dp_c.ax.set_visible(False)  # Hidden unless dp_c∝dp_h
+    y_pos -= slider_spacing
+
     def update_pressure_drop_slider_visibility():
         """Update visibility of pressure drop assumption sliders"""
         assumption = pressure_drop_assumption_state["value"]
         if assumption == "inlet_density":
             slider_molar_mass_ratio.ax.set_visible(True)
             slider_a_r.ax.set_visible(True)
+            slider_dp_h_over_dp_c.ax.set_visible(False)
+        elif assumption == "dp_c=dp_h":
+            slider_molar_mass_ratio.ax.set_visible(False)
+            slider_a_r.ax.set_visible(False)
+            slider_dp_h_over_dp_c.ax.set_visible(True)
         else:
             slider_molar_mass_ratio.ax.set_visible(False)
             slider_a_r.ax.set_visible(False)
+            slider_dp_h_over_dp_c.ax.set_visible(False)
 
     def select_pressure_drop_assumption(label):
-        """Handle pressure drop assumption selection"""
-        pressure_drop_assumption_state["value"] = label
+        """Handle pressure drop assumption selection (map display label to internal)"""
+        pressure_drop_assumption_state["value"] = display_to_internal.get(label, label)
         update_slider_visibility()  # This will also call update_pressure_drop_slider_visibility()
         update_plot()
 
@@ -1426,7 +1477,6 @@ if __name__ == "__main__":
         st_over_f = slider_st_over_f.val
         f_c_over_f_h = slider_f_c_over_f_h.val
         d_r = slider_d_r.val
-        print(d_r)
         g2_h = slider_g2_h.val
         # NTU max from default (can be overridden by defaults case)
         ntu_max = DEFAULT_NTU_MAX
@@ -1474,6 +1524,10 @@ if __name__ == "__main__":
         pressure_drop_ratio = calculate_pressure_drop_ratio(
             assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
         )
+        # When dp_c∝dp_h, override with user-set (dp_h/p_hin)/(dp_c/p_cin); ratio=1 gives same as before
+        if assumption == "dp_c=dp_h":
+            dp_h_over_dp_c = slider_dp_h_over_dp_c.val
+            pressure_drop_ratio = 1.0 / dp_h_over_dp_c  # (dp_c/p_cin)/(dp_h/p_hin)
 
         # Clear and recreate plot with current settings
         ax.clear()
@@ -1551,6 +1605,7 @@ if __name__ == "__main__":
     # Connect pressure drop assumption sliders
     slider_a_r.on_changed(update_plot)
     slider_molar_mass_ratio.on_changed(update_plot)
+    slider_dp_h_over_dp_c.on_changed(update_plot)
 
     # Connect framework radio buttons
     radio_framework.on_clicked(select_framework)

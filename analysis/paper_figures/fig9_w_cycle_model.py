@@ -8,6 +8,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from scipy.optimize import root
 from tabulate import tabulate
 from xflow import (
@@ -21,9 +22,12 @@ from heat_exchanger.epsilon_ntu import epsilon_ntu
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
 
-effectiveness = 0.65
-dp_hot = 0.04  # 0.036
-dp_cold = 0.02  # 0.022
+# effectiveness = 0.65
+effectiveness = 0.6
+# dp_hot = 0.04  # 0.036
+dp_hot = 0.06  # dp_h/pin
+# dp_cold = 0.02  # 0.022
+dp_cold = 0.04  # dpc/pcin
 
 PR = 9.0
 TIT = 1500
@@ -34,34 +38,44 @@ kg_dry_engine_per_kg_per_s_of_air = 23.0
 # m_engine_no_HEx = kg_dry_engine_per_kg_per_s_of_air * mdot_air
 
 
-# --- Helicopter parameters from xflow.py (lines 79-92) ---
+# --- Helicopter parameters from xflow.py (ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04) ---
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
-DEFAULT_D_R_hot = 0.257
+# DEFAULT_D_R_hot = 0.257  # chosen to get pressure drops?
+DEFAULT_D_R_hot = 0.25
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1
+# DEFAULT_MACH_IN = 0.1
+DEFAULT_MACH_IN = 0.11  # Mh_in
 # g2h = 0.5 * gamma * M^2 (used only for reference Mach; we compute g2h from M dynamically)
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_T = 898 / 588
+# DEFAULT_F_C_OVER_F_H = 1.0
+DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_T = 898 / 588
+DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
-DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+# DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
+# DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
-TARGET_EPS = 0.65
-NTU_MATCH = 1.824  # 1.701
+# TARGET_EPS = 0.65
+TARGET_EPS = 0.6
+# NTU_MATCH = 1.824  # 1.701
+NTU_MATCH = 1.479
 DEFAULT_NTU_MAX = 8.0
 DEFAULT_DP_MAX = 0.2
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R_hot = 1.0
+# DEFAULT_A_R_hot = 1.0
+DEFAULT_A_R_hot = 0.92
 
 # Baseline and power reference (from plan)
 # Cycle model net_work is J/kg (c_p in J/kg/K, T in K => work in J/kg)
 # P = mdot * w_net => W = (kg/s) * (J/kg) = J/s = W
-mdot_ref = 2.3  # kg/s
-w_net_ref = 303e3  # J/kg (303 kJ/kg)
-P_shaft_ref = 697e3  # W (~700 kW)
-NTU_ref = 1.824
+mdot_ref = 2.24  # kg/s
+w_net_ref = 312e3  # J/kg (303 kJ/kg)
+P_shaft_ref = 700e3  # W (~700 kW)
+# NTU_ref = 1.824
+NTU_ref = 1.479
 
 # Sweep parameters
 AO_SWEEP = np.linspace(0.15, 5, 100)  # extend to allow small m_hex (down to 0.1 kg)
@@ -74,7 +88,7 @@ mission_seconds = mission_hours * 3600
 LHV_MJ_per_kg = 12.0 * 3.6  # MJ/kg (kerosene) — single definition
 LHV_J_per_kg = LHV_MJ_per_kg * 1e6  # J/kg; mdot_fuel = P_shaft/(LHV×η/100), factor_fuel = t_s/(LHV)×η_turb/η_ov×Q_max
 eta_turb = 0.88
-eta_ov = 0.434
+eta_ov = 0.4045  #
 
 
 def calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t):
@@ -718,11 +732,10 @@ def run_plot(base_name="fig9_w_cycle_model"):
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
 
-    ax.plot(m_hex_opt, line1, "r--", linewidth=1.5, label=r"delta fuel (cycle $\eta$)")
-    ax.plot(m_hex_opt, delta_fuel_dqom, "k--", linewidth=1.5, label="_nolegend_")
-    # ax.plot(m_hex_opt, line2, "k-.", linewidth=1.5, label="delta fuel + HEx")
-    ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label="delta fuel + HEx + engine")
-    ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="_nolegend_")
+    ax.plot(m_hex_opt, line1, "r--", linewidth=1.5, label="Fuel saving")
+    # ax.plot(m_hex_opt, delta_fuel_dqom, "k--", linewidth=1.5, label="_nolegend_")  # black dashed, may add back
+    ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label="Fuel + HEx")
+    ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="Fuel + HEx")
 
     ax.scatter(
         m_hex_opt[id_min_black],
@@ -770,9 +783,24 @@ def run_plot(base_name="fig9_w_cycle_model"):
         )
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
-    ax.set_ylabel(r"Change in Mass $\Delta m$ (kg) vs baseline unrecuperated")
+    ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
+    # Custom legend with section titles; sum notation in "No cycle model" title
+    legend_handles = [
+        Line2D([], [], linestyle="", label="Cycle model"),
+        Line2D([], [], color="r", linestyle="--", linewidth=1.5, label="Fuel saving"),
+        Line2D([], [], color="r", linestyle="-", linewidth=1.5, label="Fuel + HEx"),
+        Line2D(
+            [],
+            [],
+            linestyle="",
+            label=r"$\sum_i \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}$",
+        ),
+        Line2D([], [], color="k", linestyle="-", linewidth=1.5, label="Fuel + HEx"),
+    ]
     ax.legend(
-        loc="upper center",
+        handles=legend_handles,
+        loc="upper right",
+        ncol=2,
         fontsize=6,
         frameon=True,
         edgecolor="black",
@@ -789,8 +817,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
     # Annotations with arrows (xytext further from markers so arrowheads are visible)
     ax.annotate(
         "global optimal design\nwith cycle model",
-        xy=(m_hex_opt[id_min_black] + 1, line3[id_min_black] - 1),
-        xytext=(m_hex_opt[id_min_black] + 8, -68),
+        xy=(m_hex_opt[id_min_black] - 1, line3[id_min_black] - 1),
+        xytext=(m_hex_opt[id_min_black] - 20, -75),
         fontsize=6,
         arrowprops=dict(arrowstyle="->", color="black", lw=1),
     )
@@ -798,10 +826,17 @@ def run_plot(base_name="fig9_w_cycle_model"):
         ax.annotate(
             "reference design",
             xy=(m_hex_at_ref, line3_ref),
-            xytext=(m_hex_at_ref + 3, line3_ref + 15),
+            xytext=(m_hex_at_ref - 10, line3_ref + 15),
             fontsize=6,
             arrowprops=dict(arrowstyle="->", color="black", lw=1),
         )
+    ax.annotate(
+        "practical availability\noptimal design",
+        xy=(m_hex_opt[id_min_red], line3[id_min_red]),
+        xytext=(m_hex_opt[id_min_red] + 5, line3[id_min_red] - 15),
+        fontsize=6,
+        arrowprops=dict(arrowstyle="->", color="black", lw=1),
+    )
 
     plt.tight_layout(pad=0.5)
 

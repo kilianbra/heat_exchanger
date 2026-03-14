@@ -8,6 +8,7 @@ Y-axis: Change in mass (dQ_o^M-based fuel + HEx)
 import os
 
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 import numpy as np
 import xflow
 from xflow import (
@@ -24,25 +25,33 @@ save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_curren
 # Group parameters that are THE SAME for both scripts first:
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1
+# DEFAULT_MACH_IN = 0.1
+DEFAULT_MACH_IN = 0.11  # Mh_in
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
+# DEFAULT_F_C_OVER_F_H = 1.0
+DEFAULT_F_C_OVER_F_H = 0.25
 DEFAULT_DP_MAX = 0.2
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
+# DEFAULT_A_R = 1.0
+DEFAULT_A_R = 0.92
 
 # Define a switch for input set: 'fig8' (default, matches fig8_full_cycle.py) or 'newfig6'
 NEW_INPUT_SET = True  # Options: "fig8", "newfig6"
 
 if NEW_INPUT_SET:
-    # Parameters UNIQUE TO THIS SCRIPT / MATCHING fig8_full_cycle.py
+    # Parameters UNIQUE TO THIS SCRIPT / ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04
     DEFAULT_C_COLD_OVER_C_HOT = 1.0
-    DEFAULT_D_R = 0.257
-    DEFAULT_T = 898 / 588  # = 1.527
+    # DEFAULT_D_R = 0.257
+    DEFAULT_D_R = 0.25
+    # DEFAULT_T = 898 / 588  # = 1.527
+    DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
     DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
-    DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
-    NTU_MATCH = 1.824
+    # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+    DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
+    # DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+    DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
+    # NTU_MATCH = 1.824
+    NTU_MATCH = 1.479
     DEFAULT_NTU_MAX = 8.0
     # g2h = 0.5 * gamma * M^2 at reference (M=M_ref for ao=1)
     DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
@@ -512,6 +521,129 @@ def run_plot(
         f"dp/p_in hot={dp_h_global:.2f}%, cold={dp_c_global:.2f}%"
     )
 
+    # Build table (HEx model only, no cycle)
+    delta_fuel = dq_o_m_over_qmax_opt_line * factor_fuel
+    delta_hex = m_hex
+    cum_fuel = delta_fuel
+    cum_fuel_hex = delta_fuel + delta_hex
+
+    # Get eps, dp for all sweep points
+    eps_arr = np.zeros(len(ao_opt_line))
+    dp_h_arr = np.zeros(len(ao_opt_line))
+    dp_c_arr = np.zeros(len(ao_opt_line))
+    for i in range(len(ao_opt_line)):
+        eps_arr[i], dp_h_arr[i], dp_c_arr[i] = _get_eps_dp_at_ao_ntu(
+            ao_opt_line[i], ntu_opt_line[i], c_cold_over_c_hot, st_over_f, f_c_over_f_h, d_r, pressure_drop_ratio
+        )
+
+    def _val_fig8(pi):
+        """Get dict of values for point pi: 0, 'ref', 'ref_opt', id_min, -1."""
+        if pi == "ref":
+            return {
+                "A/A_ref": a_over_a_ref_ref,
+                "m_hex": m_hex_ref_design,
+                "ao/ao_ref": 1.0,
+                "Mach_in": DEFAULT_MACH_IN,
+                "NTU": NTU_MATCH,
+                "eps": eps_ref * 100,
+                "eps_P": -dq_ref_over_qmax * 100,
+                "dph": dp_h_ref,
+                "dpc": dp_c_ref,
+                "delta_fuel": dq_ref_over_qmax * factor_fuel,
+                "delta_hex": m_hex_ref_design,
+                "cum_fuel": dq_ref_over_qmax * factor_fuel,
+                "cum_fuel_hex": dq_ref_over_qmax * factor_fuel + m_hex_ref_design,
+            }
+        if pi == "ref_opt":
+            return {
+                "A/A_ref": a_over_a_ref_ref,
+                "m_hex": m_hex_ref_design,
+                "ao/ao_ref": ao_fixed_interp,
+                "Mach_in": DEFAULT_MACH_IN / ao_fixed_interp,
+                "NTU": ntu_fixed_interp,
+                "eps": eps_fixed * 100,
+                "eps_P": -dq_fixed_over_qmax * 100,
+                "dph": dp_h_fixed,
+                "dpc": dp_c_fixed,
+                "delta_fuel": dq_fixed_over_qmax * factor_fuel,
+                "delta_hex": m_hex_ref_design,
+                "cum_fuel": dq_fixed_over_qmax * factor_fuel,
+                "cum_fuel_hex": dq_fixed_over_qmax * factor_fuel + m_hex_ref_design,
+            }
+        i = pi if pi >= 0 else len(m_hex) + pi
+        return {
+            "A/A_ref": a_over_a_ref_opt_line[i],
+            "m_hex": m_hex[i],
+            "ao/ao_ref": ao_opt_line[i],
+            "Mach_in": DEFAULT_MACH_IN / ao_opt_line[i],
+            "NTU": ntu_opt_line[i],
+            "eps": eps_arr[i] * 100,
+            "eps_P": -dq_o_m_over_qmax_opt_line[i] * 100,
+            "dph": dp_h_arr[i],
+            "dpc": dp_c_arr[i],
+            "delta_fuel": delta_fuel[i],
+            "delta_hex": delta_hex[i],
+            "cum_fuel": cum_fuel[i],
+            "cum_fuel_hex": cum_fuel_hex[i],
+        }
+
+    def _cell_fig8(pi, key):
+        d = _val_fig8(pi)
+        v = d.get(key, np.nan)
+        if isinstance(v, float) and np.isnan(v):
+            return "—"
+        if key in ("dph", "dpc", "eps", "eps_P"):
+            return f"{v:.2f}%"
+        if key in ("Mach_in", "NTU", "ao/ao_ref", "A/A_ref"):
+            return f"{v:.4f}" if abs(v) < 1e-3 or abs(v) > 1e4 else f"{v:.3f}"
+        if key in ("m_hex", "delta_fuel", "delta_hex", "cum_fuel", "cum_fuel_hex"):
+            return f"{v:.3f}"
+        return str(v)
+
+    points = [
+        ("1st", 0),
+        ("ref", "ref"),
+        ("ref_opt", "ref_opt"),
+        ("star", id_min),
+        ("last", -1),
+    ]
+    point_cols = [p[0] for p in points]
+
+    def _build_row(label, key):
+        row = [label]
+        for _, pi in points:
+            if pi == "ref":
+                row.append(_cell_fig8("ref", key))
+            elif pi == "ref_opt":
+                row.append(_cell_fig8("ref_opt", key))
+            else:
+                row.append(_cell_fig8(pi, key))
+        return row
+
+    table_rows = [
+        ["--- INPUTS ---", "", "", "", "", ""],
+        _build_row("A/A_ref", "A/A_ref"),
+        _build_row("m_hex (kg)", "m_hex"),
+        _build_row("ao/ao_ref", "ao/ao_ref"),
+        ["--- HEx ---", "", "", "", "", ""],
+        _build_row("Mach_in", "Mach_in"),
+        _build_row("NTU", "NTU"),
+        _build_row("eps (%)", "eps"),
+        _build_row("eps^P (%)", "eps_P"),
+        _build_row("dph (%)", "dph"),
+        _build_row("dpc (%)", "dpc"),
+        ["--- HEx model ---", "", "", "", "", ""],
+        _build_row("cum_fuel (dQo^M)", "cum_fuel"),
+        _build_row("cum_fuel+hex (dQo^M)", "cum_fuel_hex"),
+        ["--- DELTAS (kg) ---", "", "", "", "", ""],
+        _build_row("delta_fuel", "delta_fuel"),
+        _build_row("delta_hex", "delta_hex"),
+        ["--- CUMULATIVE (kg) ---", "", "", "", "", ""],
+        _build_row("cum_fuel", "cum_fuel"),
+        _build_row("cum_fuel+hex", "cum_fuel_hex"),
+    ]
+    print("\n" + tabulate(table_rows, headers=["", *point_cols], tablefmt="simple", stralign="right"))
+
     ax.plot(
         m_hex,
         dq_o_m_over_qmax_opt_line * factor_fuel,
@@ -567,15 +699,15 @@ def run_plot(
     ax.annotate(
         "reference design",
         xy=(m_hex_ref_design, dm_ref_design),
-        xytext=(6, -32),
+        xytext=(6, -20),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,
     )
     ax.annotate(
-        "fixed mass optimal design",
+        "fixed mass\noptimal design",
         xy=(m_hex_ref_design, dm_fixed_interp),
-        xytext=(15, -55),
+        xytext=(5, -70),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw,

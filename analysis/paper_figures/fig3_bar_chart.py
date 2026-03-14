@@ -24,24 +24,31 @@ FIG_SINGLE_COL = (9 / 2.54 / 2, 7 / 2.54)
 # ---------------------------------------------------------------------------
 # Input parameters (stagnation values, Mach=0 → static = stagnation)
 # ---------------------------------------------------------------------------
-T_HIN_STAG = 898.0  # K
-P_HIN = 1.042  # bar
+# T_HIN_STAG = 898.0  # K
+T_HIN_STAG = 907.0  # K  (T_ratio 907/588 from xflow)
+# P_HIN = 1.042  # bar
+P_HIN = 1.064  # bar  (P_hot_in_over_p_dead=1.064 from xflow)
 T_CIN_STAG = 588.0  # K
 P_CIN = 9.0  # bar
 T0_STAG = 288.0  # K
 P0 = 1.0  # bar
 
-MACH_H = 0.063
-MACH_C = 0.042
+# MACH_H = 0.063
+# MACH_H = 0.15  # Mh_in from reference
+MACH_H = 0.11  # Mh_in from reference
+MACH_C = 0.05  # fixed by Mach_h / (d_r*A_r*SQRT(T_h_in/T_c_in) p_c_in/p_h_in)
 
 GAMMA_H = 1.4
 GAMMA_C = 1.4
 CP_H = 1070.0  # J/(kg·K)
 CP_C = 1070.0  # J/(kg·K)
 
-EPSILON = 0.65
-DP_HOT_PCT = 0.04  # 36  # 3.6%
-DP_COLD_PCT = 0.02  # 22  # 2.2%
+# EPSILON = 0.65
+EPSILON = 0.6
+# DP_HOT_PCT = 0.04  # 36  # 3.6%
+DP_HOT_PCT = 0.06  # dp_h/pin
+# DP_COLD_PCT = 0.02  # 22  # 2.2%
+DP_COLD_PCT = 0.04  # dpc/pcin
 
 # Waterfall chart: bigger = thicker bars, smaller gaps (try 1.2, 1.5, etc.)
 BAR_WIDTH_SCALE = 2.0
@@ -310,8 +317,8 @@ def _style_y_axis_post(ax, framework="classical"):
         ax.tick_params(axis="y", labelleft=False)
 
 
-YLABEL_CLASSICAL = r"$\varepsilon^{\mathrm{C}} = (\Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{C}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$ [%]"
-YLABEL_PRACTICAL = r"$\varepsilon^{\mathrm{P}} = (\Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,hot}} + \Delta \dot{W}^{\mathrm{P}}_{\mathrm{A,cold}}) / \dot{Q}_{\mathrm{max}}$ [%]"
+YLABEL_CLASSICAL = r"$\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%]"
+YLABEL_PRACTICAL = r"$\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%]"
 
 # False: no arrow, show top ytick (0.3). True: arrow at top, hide top ytick.
 SHOW_Y_ARROW = False
@@ -335,13 +342,23 @@ def _plot_waterfall_breakdown1(ax, total, viscous, thermal, labels=None, framewo
     edge = "black"
 
     bar_edge_lw = 0.5
+    total_bar_lw = 1.5  # Match fig7b/7c line thickness
     for i, (x, bot, h) in enumerate(zip(xs, bottoms, heights, strict=True)):
         fc = colors[i]
         hatch = hatches[i]
+        # Total bar: thin outline everywhere; thick lines drawn separately on top/left/right only
+        lw = bar_edge_lw if i == 0 else bar_edge_lw
         if hatch:
-            ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, hatch=hatch, linewidth=bar_edge_lw)
+            ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, hatch=hatch, linewidth=lw)
         else:
-            ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, linewidth=bar_edge_lw)
+            ax.bar(x, h, bar_w, bottom=bot, facecolor=fc, edgecolor=edge, linewidth=lw)
+        if i == 0:
+            # Thick outline on top, left, right only (not bottom touching x-axis)
+            x0, x1 = x - bar_w / 2, x + bar_w / 2
+            y_top = bot + h
+            ax.plot([x0, x1], [y_top, y_top], "k-", linewidth=total_bar_lw, zorder=5)
+            ax.plot([x0, x0], [bot, y_top], "k-", linewidth=total_bar_lw, zorder=5)
+            ax.plot([x1, x1], [bot, y_top], "k-", linewidth=total_bar_lw, zorder=5)
 
     # Dotted connectors between bars (skip i=0 to avoid duplicate at y=total)
     for i in range(1, len(xs) - 1):
@@ -406,13 +423,21 @@ def _plot_waterfall_breakdown2(
     hatches = ["", "", "", "", "///"] if has_interaction else ["", "", "", "///"]  # Thermal hashed only
 
     bar_edge_lw = 0.5
+    total_bar_lw = 1.5  # Match fig7b/7c line thickness
     for i, (x, bot, h) in enumerate(zip(xs, bottoms, heights, strict=True)):
+        # Total bar: thin outline everywhere; thick lines drawn separately on top/left/right only
+        lw = bar_edge_lw
         if hatches[i]:
-            ax.bar(
-                x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", hatch=hatches[i], linewidth=bar_edge_lw
-            )
+            ax.bar(x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", hatch=hatches[i], linewidth=lw)
         else:
-            ax.bar(x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", linewidth=bar_edge_lw)
+            ax.bar(x, h, bar_w, bottom=bot, facecolor=colors[i], edgecolor="black", linewidth=lw)
+        if i == 0:
+            # Thick outline on top, left, right only (not bottom touching x-axis)
+            x0, x1 = x - bar_w / 2, x + bar_w / 2
+            y_top = bot + h
+            ax.plot([x0, x1], [y_top, y_top], "k-", linewidth=total_bar_lw, zorder=5)
+            ax.plot([x0, x0], [bot, y_top], "k-", linewidth=total_bar_lw, zorder=5)
+            ax.plot([x1, x1], [bot, y_top], "k-", linewidth=total_bar_lw, zorder=5)
 
     # Dotted connectors between bars (skip i=0 to avoid duplicate at y=total)
     for i in range(1, len(xs) - 1):
@@ -458,6 +483,7 @@ def plot_waterfalls(data=None, do_print=False):
             "ytick.labelsize": 8,
             "legend.fontsize": 8,
             "mathtext.fontset": "stix",
+            "hatch.linewidth": 0.5,
         }
     )
 
@@ -537,6 +563,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
             "ytick.labelsize": 8,
             "legend.fontsize": 8,
             "mathtext.fontset": "stix",
+            "hatch.linewidth": 0.5,
         }
     )
 
@@ -571,6 +598,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     ax_a.set_ylim(YLIM_CLASSICAL)
     _style_y_axis_post(ax_a, "classical")
     fig_a.tight_layout(pad=0.5)
+    ax_a.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     for ext in ["svg", "tiff", "png", "pdf"]:
         fig_a.savefig(Path(save_dir) / f"fig3a_bar_c.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig_a)
@@ -592,8 +620,8 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     ax_b.set_title("")
     ax_b.set_ylim(YLIM_PRACTICAL)
     _style_y_axis_post(ax_b, "practical")
-    ax_b.tick_params(axis="y", labelleft=False)  # fig3b: no tick numbers, just y-axis title
     fig_b.tight_layout(pad=0.5)
+    ax_b.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     for ext in ["svg", "tiff", "png", "pdf"]:
         fig_b.savefig(Path(save_dir) / f"fig3b_bar_p.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
     plt.close(fig_b)

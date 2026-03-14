@@ -2,6 +2,7 @@ import os
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import numpy as np
 import xflow
 from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
@@ -10,29 +11,38 @@ from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
-# Defaults (match fig8/9)
+# Defaults (match fig8/9, ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
-DEFAULT_D_R = 0.257
+# DEFAULT_D_R = 0.257
+DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1
+# DEFAULT_MACH_IN = 0.1
+DEFAULT_MACH_IN = 0.11  # Mh_in
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_T = 898 / 588
+# DEFAULT_F_C_OVER_F_H = 1.0
+DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_T = 898 / 588
+DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
-DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+# DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
+# DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
-NTU_MATCH = 1.824
+# DEFAULT_A_R = 1.0
+DEFAULT_A_R = 0.92
+# NTU_MATCH = 1.824
+NTU_MATCH = 1.479
 DEFAULT_NTU_MAX = 8.0
 SHOW_CUBIC = True
 DEFAULT_DP_MAX = 0.2
 
 # Optimum NTU from practical framework (run fig7c first to get value)
-NTU_OPTIMUM = 1.6482  # From fig7c with fig8/9 defaults
+# NTU_OPTIMUM = 1.6482  # From fig7c with fig8/9 defaults (previous)
+NTU_OPTIMUM = 1.2513  # From fig7c with Mh_in=0.11, f_c/f_h=0.25
 
 
 def save_figures(
@@ -70,6 +80,7 @@ def save_figures(
             "ytick.labelsize": font_size,
             "legend.fontsize": font_size,
             "figure.titlesize": font_size,
+            "hatch.linewidth": 0.5,
         }
     )
 
@@ -117,7 +128,6 @@ def save_figures(
 
     line_no_dp.remove()
     line_with_dp.remove()
-    ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=2)
 
     ntu_common = np.linspace(ntu_min_valid, ntu_max_valid, 200)
     y_no_dp_interp = np.interp(ntu_common, ntu_no_dp_masked, y_no_dp_masked)
@@ -127,13 +137,15 @@ def save_figures(
     y_viscous_interp = y_with_dp_interp - y_no_dp_interp
 
     # Stack: first viscous (baseline to viscous alone), then thermal (viscous to total)
+    # Thin outlines (0.5) like bar chart; main line drawn on top
+    edge_lw = 0.5
     ax.fill_between(
         ntu_common,
         0,
         y_viscous_interp,
         facecolor=COLOR_VISC_HOT,
         edgecolor="black",
-        linewidth=1.5,
+        linewidth=edge_lw,
         zorder=0,
         label="_nolegend_",
     )
@@ -143,10 +155,11 @@ def save_figures(
         y_with_dp_interp,
         facecolor=COLOR_THERMAL,
         edgecolor="black",
-        linewidth=1.5,
+        linewidth=edge_lw,
         hatch="///",
         zorder=1,
     )
+    ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=3, linewidth=1.5)
 
     # Reference marker: + (reference design)
     idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
@@ -167,7 +180,7 @@ def save_figures(
     ax.annotate(
         "reference design",
         xy=(x_pressure, y_pressure),
-        xytext=(0.35, -0.075),
+        xytext=(0.15, -0.075),
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw_ref,
@@ -183,17 +196,20 @@ def save_figures(
         )
 
     ax.set_title("")
-    ax.set_xlim(0, 2.5)
+    ax.set_xlim(0, 2.0)
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.set_ylim(-0.1, 0)
     ax.set_yticks([-0.1, -0.08, -0.06, -0.04, -0.02, 0])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{C}}$ [%])")
+    ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
 
     patch_thermal = mpatches.Patch(
-        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=1.5, label="Thermal dissipation"
+        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal dissipation"
     )
-    patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", label="Viscous dissipation")
+    patch_viscous = mpatches.Patch(
+        facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous dissipation"
+    )
 
     # Legend box style to match fig5b (frameon, facecolor white, edge black, fancybox=False)
     ax.legend(
@@ -208,6 +224,8 @@ def save_figures(
     )
 
     plt.tight_layout(pad=0.5)
+    ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
+    fig.subplots_adjust(left=0.25)
 
     fig.savefig(
         os.path.join(save_dir, f"{base_name}.svg"),

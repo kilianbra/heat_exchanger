@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MultipleLocator
 import xflow
 from xflow import calculate_pressure_drop_ratio, create_plot
 
@@ -10,21 +11,21 @@ save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_curren
 # Defaults (match fig8/9)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
-DEFAULT_D_R = 0.257
+DEFAULT_D_R = 0.25  # 0.257
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1
+DEFAULT_MACH_IN = 0.11  # Mh_in
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_T = 898 / 588
+DEFAULT_F_C_OVER_F_H = 0.25
+DEFAULT_T = 907 / 588  # 898 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
-DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064  # 9.0 / 1.04
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064  # 1.04
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
+DEFAULT_A_R = 0.92  # 1.0
 TARGET_EPS = 0.65
-NTU_MATCH = 1.824
+NTU_MATCH = 1.479  # 1.824
 DEFAULT_NTU_MAX = 8.0
 SHOW_CUBIC = True
 DEFAULT_DP_MAX = 0.2
@@ -147,8 +148,9 @@ def save_figures(
             fancybox=False,
         )
 
-    # Set x-axis limits to 0-2 and labels to match fig2a
-    ax.set_xlim(0, 2.5)
+    # Set x-axis limits and ticks
+    ax.set_xlim(0, 2.0)
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.set_ylim(0, 0.7)
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
@@ -156,7 +158,7 @@ def save_figures(
 
     # NTU reference and optimum values (match fig8/9)
     NTU_REF = NTU_MATCH
-    NTU_OPT = 1.6482  # From fig7c with fig8/9 defaults
+    NTU_OPT = 1.2513  # From fig7c with Mh_in=0.11, f_c/f_h=0.25
 
     # Markers: + for reference design, o for optimal design
     x_eps = np.array(line_eps.get_xdata())

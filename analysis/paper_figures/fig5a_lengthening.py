@@ -9,15 +9,19 @@ save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_curren
 # Default modeling assumptions (match fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0  # C_cold / C_hot
 DEFAULT_ST_OVER_F = 0.4  # Assumed same for both fluids
-DEFAULT_F_C_OVER_F_H = 1.0  # f_c/f_h
-DEFAULT_D_R = 0.257  # d_r = sigma_r/A_r (cold/hot ratio), match fig8/9
+# DEFAULT_F_C_OVER_F_H = 1.0  # f_c/f_h
+DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_D_R = 0.257  # d_r = sigma_r/A_r (cold/hot ratio), match fig8/9
+DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1  # Reference Mach; g2 = 0.5 * gamma * M^2
+# DEFAULT_MACH_IN = 0.1  # Reference Mach; g2 = 0.5 * gamma * M^2
+DEFAULT_MACH_IN = 0.11  # Mh_in
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 
 DEFAULT_DP_MAX = 0.2
 
-PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
+# PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
+PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
 PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
 
@@ -99,10 +103,10 @@ def save_figures(
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
     ax_twin.set_ylabel(r"Hot Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
     h_right, _ = ax_twin.get_legend_handles_labels()
-    # Add legend to ax_twin so it draws on top of the pressure-drop lines (same axes)
+    # Reverse so highest Mach (0.11) is on top in legend, matching visual order (last plotted = on top)
     legend = ax_twin.legend(
-        h_right,
-        [r"$0.17$", r"$0.08$", r"$0.04$"],
+        h_right[::-1],
+        [r"$0.11$", r"$0.06$", r"$0.04$"],
         loc="center right",
         bbox_to_anchor=(1, 0.62),
         frameon=True,

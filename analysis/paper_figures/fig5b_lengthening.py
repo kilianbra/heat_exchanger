@@ -11,24 +11,31 @@ save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_curren
 # Default modeling assumptions (match fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_D_R = 0.257
+# DEFAULT_F_C_OVER_F_H = 1.0
+DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_D_R = 0.257
+DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.1
+# DEFAULT_MACH_IN = 0.1
+DEFAULT_MACH_IN = 0.11  # Mh_in
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 
 DEFAULT_DP_MAX = 0.2
 
-PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
+# PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
+PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
 PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
-# Framework parameters (match fig8/9)
-DEFAULT_T = 898 / 588
+# Framework parameters (match fig8/9, T_ratios from xflow 106-109)
+# DEFAULT_T = 898 / 588
+DEFAULT_T = 907 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"
-DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
+# DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
 DEFAULT_MOLAR_MASS_RATIO = 1.0
-DEFAULT_A_R = 1.0
+# DEFAULT_A_R = 1.0
+DEFAULT_A_R = 0.92
 
 
 def save_figures(
@@ -77,6 +84,7 @@ def save_figures(
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
+    print(f"Pressure drop ratio (inlet_density): (dp_c/p_cin)/(dp_h/p_hin) = {pressure_drop_ratio:.6f}")
 
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
@@ -175,15 +183,14 @@ def save_figures(
             ax.annotate(
                 "",
                 xy=opt_xy[1],
-                xytext=(8.8, y_text),
+                xytext=(6.8, y_text),
                 arrowprops=arrow_kw,
             )
 
-    plt.tight_layout(pad=0.5)
-
-    # Independent control for figure
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Availability ($\varepsilon^{\mathrm{C}}$ [%])")
+    ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
+    plt.tight_layout(pad=0.5)
+    ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
 
     # Save as SVG
     fig.savefig(
