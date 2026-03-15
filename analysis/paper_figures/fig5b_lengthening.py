@@ -28,6 +28,9 @@ DEFAULT_DP_MAX = 0.2
 PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
 PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
+# A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
+NTU_MATCH = 1.479
+
 # Framework parameters (match fig8/9, T_ratios from xflow 106-109)
 # DEFAULT_T = 898 / 588
 DEFAULT_T = 907 / 588
@@ -56,6 +59,7 @@ def save_figures(
     p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for classical framework with multiple g^2 values.
@@ -122,8 +126,28 @@ def save_figures(
     # Remove title if present
     ax.set_title("")
 
-    ax.set_xticks([0, 5, 10, 15])
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_lengthening", "_A_A_ref")
+        # Transform x from NTU to A/A_ref = NTU/NTU_MATCH
+        for line in line_list:
+            line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
+        for ax_use in (ax, ax_twin):
+            for line in ax_use.get_lines():
+                if line not in line_list:
+                    line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
+            for coll in ax_use.collections:
+                if hasattr(coll, "get_offsets") and coll.get_offsets().size > 0:
+                    off = coll.get_offsets().copy()
+                    off[:, 0] = off[:, 0] / NTU_MATCH
+                    coll.set_offsets(off)
+        ax.set_xlim(0, 10)
+        ax.set_xticks([0, 2, 4, 6, 8, 10])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
+        ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
+    else:
+        ax.set_xticks([0, 5, 10, 15])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylim(-0.1, 0)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
@@ -171,7 +195,8 @@ def save_figures(
                 )
         # Arrows from "optimal designs" label to the valid optimum points; text in empty space above -0.025
         if len(opt_xy) >= 2:
-            x_text = 5
+            x_text = 5 / NTU_MATCH if plot_area_ratio_ref else 5
+            x_text2 = 6.8 / NTU_MATCH if plot_area_ratio_ref else 6.8
             y_text = -0.012  # In empty space above -0.025, within ylim (-0.1, 0)
             arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=12)
             ax.annotate(
@@ -185,11 +210,12 @@ def save_figures(
             ax.annotate(
                 "",
                 xy=opt_xy[1],
-                xytext=(6.8, y_text),
+                xytext=(x_text2, y_text),
                 arrowprops=arrow_kw,
             )
 
-    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    if not plot_area_ratio_ref:
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
@@ -239,7 +265,7 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    # Save figures with classical framework
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig5b_A_A_ref.svg etc.
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -256,4 +282,5 @@ if __name__ == "__main__":
         p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )

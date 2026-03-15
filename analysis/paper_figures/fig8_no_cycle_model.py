@@ -429,7 +429,7 @@ def run_plot(
         dm_fuel_and_hex,
         "k-",
         linewidth=1.5,
-        label="fuel saving + HEx mass",
+        label="fuel + HEx",
     )
 
     # Global optimum: star marker
@@ -649,7 +649,7 @@ def run_plot(
         dq_o_m_over_qmax_opt_line * factor_fuel,
         "k--",
         linewidth=1.5,
-        label="fuel saving",
+        label="fuel only",
     )
 
     # # Add red lines for constant reference g2^h case (using linear relations)

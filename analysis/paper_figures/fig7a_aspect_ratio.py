@@ -28,6 +28,8 @@ DEFAULT_MOLAR_MASS_RATIO = 1.0
 DEFAULT_A_R = 0.92  # 1.0
 TARGET_EPS = 0.65
 NTU_MATCH = 1.479  # 1.824
+# Ao propto NTU^-0.704; Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+AO_REF_OVER_AO_EXP = 0.704
 DEFAULT_NTU_MAX = 8.0
 SHOW_CUBIC = True
 DEFAULT_DP_MAX = 0.2
@@ -52,6 +54,7 @@ def save_figures(
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for conventional framework (left subplot from newfig4).
@@ -153,8 +156,8 @@ def save_figures(
     # Set x-axis limits and ticks
     ax.set_xlim(0, 2.0)
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
-    ax.set_ylim(0, 0.7)
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    ax.set_ylim(0, 0.7)
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
     ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
 
@@ -184,6 +187,24 @@ def save_figures(
         ax_twin.scatter(
             NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
         )
+
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_aspect_ratio", "_Ao_Aoref")
+        # Transform x from NTU to Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+        def _ao_ref_over_ao(ntu):
+            return (np.asarray(ntu) / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+
+        for line in list(ax.get_lines()) + list(ax_twin.get_lines()):
+            line.set_xdata(_ao_ref_over_ao(line.get_xdata()))
+        for ax_use in (ax, ax_twin):
+            for coll in ax_use.collections:
+                if hasattr(coll, "get_offsets") and coll.get_offsets().size > 0:
+                    off = coll.get_offsets().copy()
+                    off[:, 0] = _ao_ref_over_ao(off[:, 0])
+                    coll.set_offsets(off)
+        ax.set_xlim(0.2, 1.2)
+        ax.xaxis.set_major_locator(MultipleLocator(0.2))
+        ax.set_xlabel(r"Inverse of Free-Flow Area $A_{\mathrm{o,ref}}/A_\mathrm{o}$ [-]")
 
     plt.tight_layout(pad=0.5)
 
@@ -232,7 +253,7 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    # Save figures with Helicopter defaults
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig7a_Ao_Aoref.svg etc.
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -249,4 +270,5 @@ if __name__ == "__main__":
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )

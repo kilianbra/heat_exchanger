@@ -71,8 +71,8 @@ DEFAULT_A_R_hot = 0.92
 # Baseline and power reference (from plan)
 # Cycle model net_work is J/kg (c_p in J/kg/K, T in K => work in J/kg)
 # P = mdot * w_net => W = (kg/s) * (J/kg) = J/s = W
-mdot_ref = 2.24  # kg/s
-w_net_ref = 312e3  # J/kg (303 kJ/kg)
+# mdot_ref = 2.24  # kg/s
+# w_net_ref = 312e3  # J/kg (303 kJ/kg)
 P_shaft_ref = 700e3  # W (~700 kW)
 # NTU_ref = 1.824
 NTU_ref = 1.479
@@ -89,6 +89,14 @@ LHV_MJ_per_kg = 12.0 * 3.6  # MJ/kg (kerosene) — single definition
 LHV_J_per_kg = LHV_MJ_per_kg * 1e6  # J/kg; mdot_fuel = P_shaft/(LHV×η/100), factor_fuel = t_s/(LHV)×η_turb/η_ov×Q_max
 eta_turb = 0.88
 eta_ov = 0.4045  #
+
+# --- Black-line variant toggles ---
+# If True, (mdot - mdot_baseline)*kg_dry is added to ALL dQ^M-based objectives.
+# Effect 1 (BC) uses uncoupled cycle and reference mdot, so delta_engine ≈ 0 regardless.
+INCLUDE_DELTA_ENGINE = False
+# If True, black lines and black star are hidden in the plot (printouts always shown).
+HIDE_BLACK_LINES = True
+FONT_SIZE = 8
 
 
 def calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t):
@@ -361,25 +369,64 @@ def _optimal_ao_r_ref_for_each_a_r_ref(
     P_ref,
     mdot_baseline,
     eff_baseline,
+    factor_fuel,
+    include_delta_engine,
 ):
     """
-    For each A/A_ref, find best ao/ao_ref (and NTU) minimizing delta_fuel_cycle + delta_hex + delta_engine.
-    Delta fuel from cycle: (P_shaft/(LHV*eta) - P_shaft/(LHV*eta_baseline)) * mission_seconds.
-    Returns (a_r_ref, ao_r_ref_opt, ntu_opt, mdot, dq, ...).
+    For each A/A_ref, sweeps Ao/Ao_ref calling the coupled cycle model ONCE per point.
+    Simultaneously tracks optima for three objectives:
+
+      'red'        : cycle-efficiency fuel + m_hex + delta_engine  (always includes delta_engine)
+      'mdot_dqom'  : dQ^M (fixed DEFAULT BCs, actual Mach via actual mdot/T_hot_in)
+                     * factor_fuel + m_hex  [+ delta_engine if include_delta_engine]
+      'bc_mdot_dqom': dQ^M (actual BCs: t=T_hot_in/T_cold_in, p_ratios from dp_hot,
+                     actual Mach) * factor_fuel + m_hex  [+ delta_engine if include_delta_engine]
+
+    'mdot_dqom' isolates Effect 2 (changing mdot → changing Mach).
+    'bc_mdot_dqom' captures Effects 1+2 combined.
+    The dQ^M for 'mdot_dqom' re-uses the dq value already returned by solve_mdot_at_constant_power,
+    which internally uses DEFAULT_T and DEFAULT_P_... for the BCs but the actual g2_h from actual mdot.
+
+    Returns a dict of numpy arrays keyed by variant name.
     """
-    a_out, ao_out, ntu_out = [], [], []
-    mdot_out, dq_out, m_hex_out, delta_engine_out = [], [], [], []
-    eps_out, dp_hot_out, dp_cold_out, eff_out, M_in_out = [], [], [], [], []
+    gamma = DEFAULT_GAMMA
+    # Compressor exit temperature — constant for fixed PR/eta_poly_c
+    T_cold_in = 288.0 * (PR ** ((gamma - 1) / (gamma * eta_poly_c)))
+
     mdot_fuel_baseline = P_ref / (LHV_J_per_kg * eff_baseline / 100)
 
+    red = dict(
+        a=[],
+        ao=[],
+        ntu=[],
+        mdot=[],
+        dq=[],
+        m_hex=[],
+        delta_engine=[],
+        eps=[],
+        dp_hot=[],
+        dp_cold=[],
+        eff=[],
+        M_in=[],
+        T_hot_in=[],
+    )
+    mdot_dqom = dict(a=[], ao=[], obj=[])
+    bc_mdot_dqom = dict(a=[], ao=[], obj=[])
+
     for a_r_ref_target in A_R_REF_VALUES:
-        best_z = np.inf
-        best_ao_r_ref = best_ntu = best_mdot = best_dq = None
-        best_eps = best_dp_hot = best_dp_cold = best_eff = best_M_in = None
+        m_hex = a_r_ref_target * m_hex_ref
+
+        # Per-A/A_ref bests
+        bz_red = np.inf
+        bao_red = bNtu = bMdot = bDq = bEps = bDph = bDpc = bEff = bMin = bThi = None
+        bz_mdot = np.inf
+        bao_mdot = None
+        bz_bc = np.inf
+        bao_bc = None
 
         for ao_r_ref in AO_SWEEP:
             ntu = a_r_ref_target * NTU_MATCH / (ao_r_ref**0.587)
-            if ntu < 0.02 or ntu > DEFAULT_NTU_MAX:  # allow small m_hex (down to 0.1 kg)
+            if ntu < 0.02 or ntu > DEFAULT_NTU_MAX:
                 continue
 
             mdot, w_net, T_hot_in, eps, dp_hot, dp_cold, dq, eff, M_in = solve_mdot_at_constant_power(
@@ -387,57 +434,172 @@ def _optimal_ao_r_ref_for_each_a_r_ref(
             )
             if not np.isfinite(dq) or not np.isfinite(mdot) or not np.isfinite(eff) or eff <= 0:
                 continue
+            if mdot > 50 or mdot < 0.5:
+                continue
 
+            delta_engine_val = (mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
+            de = delta_engine_val if include_delta_engine else 0.0
+
+            # --- Red line (always includes delta_engine) ---
             mdot_fuel = P_ref / (LHV_J_per_kg * eff / 100)
             delta_fuel_cycle = (mdot_fuel - mdot_fuel_baseline) * mission_seconds
-            m_hex = a_r_ref_target * m_hex_ref
-            delta_engine = (mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
-            total = delta_fuel_cycle + m_hex + delta_engine
+            obj_red = delta_fuel_cycle + m_hex + delta_engine_val
+            if obj_red < bz_red:
+                bz_red = obj_red
+                bao_red = ao_r_ref
+                bNtu = ntu
+                bMdot = mdot
+                bDq = dq
+                bEps = eps
+                bDph = dp_hot
+                bDpc = dp_cold
+                bEff = eff
+                bMin = M_in
+                bThi = T_hot_in
 
-            if total < best_z:
-                best_z = total
-                best_ao_r_ref = ao_r_ref
-                best_ntu = ntu
-                best_mdot = mdot
-                best_dq = dq
-                best_eps = eps
-                best_dp_hot = dp_hot
-                best_dp_cold = dp_cold
-                best_eff = eff
-                best_M_in = M_in
+            # --- mdot-dQ^M (Effect 2 only: actual Mach, fixed DEFAULT BCs) ---
+            # dq from solve_mdot already uses actual g2_h (actual mdot, T_hot_in) but
+            # fixed DEFAULT_T and DEFAULT_P_... for the BCs — isolates the mdot/Mach effect.
+            obj_mdot = dq * factor_fuel + m_hex + de
+            if obj_mdot < bz_mdot:
+                bz_mdot = obj_mdot
+                bao_mdot = ao_r_ref
 
-        if best_ao_r_ref is not None:
-            # delta_engine vs baseline (computed in run_plot)
-            # Sanity: mdot should be ~2-5 kg/s for this engine class
-            if best_mdot > 50 or best_mdot < 0.5:
-                continue  # skip unphysical mdot (unit error elsewhere)
+            # --- bc-mdot-dQ^M (Effects 1+2: actual BCs + actual Mach) ---
+            if np.isfinite(T_hot_in) and np.isfinite(dp_hot):
+                t_act = T_hot_in / T_cold_in
+                p_dead_act = 1.0 - dp_hot
+                p_cold_act = PR * (1.0 - dp_hot)
+                dq_bc_raw = practical_unavailable_creation_hex(
+                    np.array([eps]),
+                    t_act,
+                    np.array([dp_hot]),
+                    np.array([dp_cold]),
+                    np.array([True]),
+                    p_cold_in_over_p_hot_in=p_cold_act,
+                    p_dead_over_p_hot_in=p_dead_act,
+                    gamma=gamma,
+                )
+                dq_bc = float(dq_bc_raw[0]) if len(dq_bc_raw) > 0 else np.nan
+                if np.isfinite(dq_bc):
+                    obj_bc = dq_bc * factor_fuel + m_hex + de
+                    if obj_bc < bz_bc:
+                        bz_bc = obj_bc
+                        bao_bc = ao_r_ref
+
+        # Store red line result
+        if bao_red is not None:
+            red["a"].append(a_r_ref_target)
+            red["ao"].append(bao_red)
+            red["ntu"].append(bNtu)
+            red["mdot"].append(bMdot)
+            red["dq"].append(bDq)
+            red["m_hex"].append(m_hex)
+            red["delta_engine"].append((bMdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air)
+            red["eps"].append(bEps)
+            red["dp_hot"].append(bDph)
+            red["dp_cold"].append(bDpc)
+            red["eff"].append(bEff)
+            red["M_in"].append(bMin)
+            red["T_hot_in"].append(bThi)
+
+        # Store dQ^M variant results
+        if bao_mdot is not None:
+            mdot_dqom["a"].append(a_r_ref_target)
+            mdot_dqom["ao"].append(bao_mdot)
+            mdot_dqom["obj"].append(bz_mdot)
+        if bao_bc is not None:
+            bc_mdot_dqom["a"].append(a_r_ref_target)
+            bc_mdot_dqom["ao"].append(bao_bc)
+            bc_mdot_dqom["obj"].append(bz_bc)
+
+    # Convert all lists to numpy arrays
+    for d in (red, mdot_dqom, bc_mdot_dqom):
+        for k in d:
+            d[k] = np.array(d[k])
+
+    return {"red": red, "mdot_dqom": mdot_dqom, "bc_mdot_dqom": bc_mdot_dqom}
+
+
+def _sweep_bc_only(pressure_drop_ratio, factor_fuel):
+    """
+    Effect 1 (BC) only variant: reference Mach for g2_h → eps/dp, then uncoupled cycle
+    to obtain the actual T_hot_in (turbine exit) at those HEx conditions.  Uses actual
+    BCs (t = T_hot_in/T_cold_in, p_ratios from dp_hot) in the dQ^M calculation.
+
+    No coupled cycle solver call, so mdot = mdot_ref and delta_engine ≈ 0 by definition.
+    Objective: dQ^M * factor_fuel + m_hex  (no delta_engine).
+
+    Returns dict with 'a', 'ao', 'obj' numpy arrays.
+    """
+    gamma = DEFAULT_GAMMA
+    T_cold_in = 288.0 * (PR ** ((gamma - 1) / (gamma * eta_poly_c)))
+    g2h_ref = 0.5 * gamma * DEFAULT_MACH_IN**2
+
+    a_out, ao_out, obj_out = [], [], []
+
+    for a_r_ref_target in A_R_REF_VALUES:
+        m_hex = a_r_ref_target * m_hex_ref
+        best_z = np.inf
+        best_ao = None
+
+        for ao_r_ref in AO_SWEEP:
+            ntu = a_r_ref_target * NTU_MATCH / (ao_r_ref**0.587)
+            if ntu < 0.02 or ntu > DEFAULT_NTU_MAX:
+                continue
+
+            # Reference Mach scaled by ao_r_ref only (mdot = mdot_ref)
+            g2_h = g2h_ref / ao_r_ref**2
+            eps, dp_hot, dp_cold = _get_eps_dp_from_g2h(
+                g2_h,
+                ntu,
+                DEFAULT_C_COLD_OVER_C_HOT,
+                DEFAULT_ST_OVER_F,
+                DEFAULT_F_C_OVER_F_H,
+                DEFAULT_D_R_hot,
+                pressure_drop_ratio,
+            )
+            if dp_hot >= DEFAULT_DP_MAX or dp_cold >= DEFAULT_DP_MAX:
+                continue
+
+            # Uncoupled cycle → actual T_hot_in at these eps/dp (no mdot solve)
+            _, T_cyc, _, _, w_net_cyc = calculate_recuperated_cycle_dp_eps(
+                PR, TIT, eta_poly_c, eta_poly_t, eps, dp_hot, dp_cold
+            )
+            if not np.isfinite(w_net_cyc) or w_net_cyc <= 0:
+                continue
+            T_hot_in = T_cyc[4]
+
+            # Actual BCs from cycle at this (eps, dp)
+            t_act = T_hot_in / T_cold_in
+            p_dead_act = 1.0 - dp_hot
+            p_cold_act = PR * (1.0 - dp_hot)
+
+            dq_raw = practical_unavailable_creation_hex(
+                np.array([eps]),
+                t_act,
+                np.array([dp_hot]),
+                np.array([dp_cold]),
+                np.array([True]),
+                p_cold_in_over_p_hot_in=p_cold_act,
+                p_dead_over_p_hot_in=p_dead_act,
+                gamma=gamma,
+            )
+            dq = float(dq_raw[0]) if len(dq_raw) > 0 else np.nan
+            if not np.isfinite(dq):
+                continue
+
+            obj = dq * factor_fuel + m_hex
+            if obj < best_z:
+                best_z = obj
+                best_ao = ao_r_ref
+
+        if best_ao is not None:
             a_out.append(a_r_ref_target)
-            ao_out.append(best_ao_r_ref)
-            ntu_out.append(best_ntu)
-            mdot_out.append(best_mdot)
-            dq_out.append(best_dq)
-            m_hex_out.append(a_r_ref_target * m_hex_ref)
-            delta_engine_out.append((best_mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air)
-            eps_out.append(best_eps)
-            dp_hot_out.append(best_dp_hot)
-            dp_cold_out.append(best_dp_cold)
-            eff_out.append(best_eff)
-            M_in_out.append(best_M_in)
+            ao_out.append(best_ao)
+            obj_out.append(best_z)
 
-    return (
-        np.array(a_out),
-        np.array(ao_out),
-        np.array(ntu_out),
-        np.array(mdot_out),
-        np.array(dq_out),
-        np.array(m_hex_out),
-        np.array(delta_engine_out),
-        np.array(eps_out),
-        np.array(dp_hot_out),
-        np.array(dp_cold_out),
-        np.array(eff_out),
-        np.array(M_in_out),
-    )
+    return {"a": np.array(a_out), "ao": np.array(ao_out), "obj": np.array(obj_out)}
 
 
 def run_plot(base_name="fig9_w_cycle_model"):
@@ -474,38 +636,59 @@ def run_plot(base_name="fig9_w_cycle_model"):
     mdot_baseline = P_shaft_ref / w_net_baseline
     # P_baseline = mdot_baseline * w_net_baseline
 
-    # For dQ_o^M line: factor to convert dQ_o^M/Q_max to fuel mass delta (all SI units)
-    # Q_max = mdot × c_p × ΔT [W]; factor_fuel = t_s / LHV × η_turb/η_ov × Q_max [kg]
+    # Fixed fuel conversion factor (reference Q_max — same for all dQ^M variants)
     cp_hot = 1070.0  # J/(kg·K) — match cycle model
     Th_in_ref = 898
     Tc_in_ref = 588
     Q_max = mdot_at_ref * cp_hot * (Th_in_ref - Tc_in_ref)  # W
     factor_fuel = mission_seconds / LHV_J_per_kg * eta_turb / eta_ov * Q_max  # kg
 
-    # Sweep and optimize
-    (
-        a_r_ref_opt,
-        ao_r_ref_opt,
-        ntu_opt,
-        mdot_opt,
-        dq_o_m_opt,
-        m_hex_opt,
-        delta_engine_opt,
-        eps_opt,
-        dp_hot_opt,
-        dp_cold_opt,
-        eff_opt,
-        M_in_opt,
-    ) = _optimal_ao_r_ref_for_each_a_r_ref(
+    # Print active toggle
+    de_label = "YES (delta_engine included)" if INCLUDE_DELTA_ENGINE else "NO  (delta_engine excluded)"
+    print(f"\n{'=' * 65}")
+    print(f"  INCLUDE_DELTA_ENGINE = {INCLUDE_DELTA_ENGINE}  ->  {de_label}")
+    print(f"  (delta_engine = (mdot - mdot_baseline) * {kg_dry_engine_per_kg_per_s_of_air} kg/(kg/s))")
+    print(f"  factor_fuel  = {factor_fuel:.2f} kg  (fixed reference Q_max conversion)")
+    print(f"{'=' * 65}\n")
+
+    # --- Main coupled sweep: red, mdot-dQ^M, bc-mdot-dQ^M variants ---
+    print("Running coupled cycle sweep (red / mdot-dQ^M / bc-mdot-dQ^M)...")
+    res = _optimal_ao_r_ref_for_each_a_r_ref(
         pressure_drop_ratio,
         mdot_at_ref,
         T_hot_in_ref,
         P_shaft_ref,
         mdot_baseline,
         eff_b,
+        factor_fuel,
+        INCLUDE_DELTA_ENGINE,
     )
+    red_r = res["red"]
 
-    if len(a_r_ref_opt) == 0:
+    if len(red_r["a"]) == 0:
+        print("No valid optimum points found.")
+        return
+
+    # Unpack red line arrays for backward-compatible table/plot code
+    a_r_ref_opt = red_r["a"]
+    ao_r_ref_opt = red_r["ao"]
+    ntu_opt = red_r["ntu"]
+    mdot_opt = red_r["mdot"]
+    dq_o_m_opt = red_r["dq"]
+    m_hex_opt = red_r["m_hex"]
+    delta_engine_opt = red_r["delta_engine"]
+    eps_opt = red_r["eps"]
+    dp_hot_opt = red_r["dp_hot"]
+    dp_cold_opt = red_r["dp_cold"]
+    eff_opt = red_r["eff"]
+    M_in_opt = red_r["M_in"]
+    T_hot_in_opt = red_r["T_hot_in"]
+
+    # --- Effect 1 (BC only) sweep: uncoupled cycle, reference Mach ---
+    print("Running BC-only sweep (uncoupled cycle, ref Mach)...")
+    res_bc = _sweep_bc_only(pressure_drop_ratio, factor_fuel)
+
+    if len(res["mdot_dqom"]["a"]) == 0:
         print("No valid optimum points found.")
         return
 
@@ -536,32 +719,85 @@ def run_plot(base_name="fig9_w_cycle_model"):
     # Sweep point closest to A/A_ref=1 (optimizer may pick ao_r_ref != 1)
     id_close = np.argmin(np.abs(a_r_ref_opt - 1.0))
 
-    # Weight deltas vs baseline unrecuperated
-    # Delta fuel from cycle efficiency: mdot_fuel = P_shaft/(LHV*eta), delta = (mdot_fuel - mdot_fuel_baseline)*mission_seconds
+    # Weight deltas vs baseline unrecuperated — red line (cycle efficiency)
     mdot_fuel_baseline = P_shaft_ref / (LHV_J_per_kg * eff_b / 100)
     mdot_fuel_opt = P_shaft_ref / (LHV_J_per_kg * eff_opt / 100)
     delta_fuel = (mdot_fuel_opt - mdot_fuel_baseline) * mission_seconds
-    # Red line: old dQ_o^M based delta fuel (for comparison only)
-    # Offset so dashed red = dashed black at reference mass (m_hex_ref_design)
+    # dQ^M at red-line's optimal Ao/Ao_ref (fixed DEFAULT BCs, actual Mach) — for table
     delta_fuel_dqom = dq_o_m_opt * factor_fuel
-    if np.isfinite(dq_ref) and False:
-        delta_fuel_dqom_ref = dq_ref * factor_fuel
-        shift_kg = delta_fuel_ref - delta_fuel_dqom_ref
-        delta_fuel_dqom = delta_fuel_dqom + shift_kg
-        print(f"\nRed line offset at reference m_hex={m_hex_at_ref:.2f} kg: shift = {shift_kg:.2f} kg")
-    else:
-        shift_kg = 0.0
-    delta_hex = m_hex_opt  # HEx mass added
-    # delta_engine: (mdot - mdot_baseline) * 23
+    delta_hex = m_hex_opt
     delta_engine = (mdot_opt - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
 
-    # Three lines
+    # Red line curves
     line1 = delta_fuel  # fuel savings only
     line2 = delta_fuel + delta_hex  # fuel + HEx
     line3 = delta_fuel + delta_hex + delta_engine  # fuel + HEx + engine
-    line3_dqom = delta_fuel_dqom + delta_hex + delta_engine
-    id_min_black = int(np.argmin(line3))
-    id_min_red = int(np.argmin(line3_dqom))
+    id_min_red = int(np.argmin(line3))
+
+    # dQ^M variant objective lines (pre-aligned to red line's A/A_ref grid via shared loop)
+    # mdot-dQ^M: Effect 2 only (actual Mach, fixed DEFAULT BCs)
+    line_mdot = res["mdot_dqom"]["obj"]  # optimal obj per A/A_ref
+    id_min_mdot = int(np.nanargmin(line_mdot))
+
+    # bc-mdot-dQ^M: Effects 1+2 (actual BCs + actual Mach)
+    line_bc_mdot = res["bc_mdot_dqom"]["obj"]
+    id_min_bc_mdot = int(np.nanargmin(line_bc_mdot))
+
+    # --- Evaluate black star's (ao, A/A_ref) through the full red cycle model ---
+    ao_black_star = res["bc_mdot_dqom"]["ao"][id_min_bc_mdot]
+    a_r_black_star = res["bc_mdot_dqom"]["a"][id_min_bc_mdot]
+    ntu_black_star = a_r_black_star * NTU_MATCH / (ao_black_star**0.587)
+    (mdot_bs, w_net_bs, T_hi_bs, eps_bs, dph_bs, dpc_bs, dq_bs, eff_bs, Min_bs) = solve_mdot_at_constant_power(
+        ao_black_star, ntu_black_star, pressure_drop_ratio, mdot_at_ref, T_hot_in_ref, P_shaft_ref
+    )
+    if np.isfinite(eff_bs) and eff_bs > 0:
+        mf_bs = P_shaft_ref / (LHV_J_per_kg * eff_bs / 100)
+        df_bs = (mf_bs - P_shaft_ref / (LHV_J_per_kg * eff_b / 100)) * mission_seconds
+        de_bs = (mdot_bs - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
+        line3_bs = df_bs + a_r_black_star * m_hex_ref + de_bs  # on the red model scale
+        # Red line value at same A/A_ref (interpolated)
+        line3_red_at_bs = float(np.interp(a_r_black_star, a_r_ref_opt, line3))
+        delta_subopt = line3_bs - line3_red_at_bs  # positive → black star is worse than red optimum
+    else:
+        line3_bs = line3_red_at_bs = delta_subopt = np.nan
+
+    # BC-only (Effect 1): uncoupled cycle, ref Mach — may have different A/A_ref grid
+    line_bc = res_bc["obj"]
+    m_hex_bc = res_bc["a"] * m_hex_ref
+    id_min_bc = int(np.nanargmin(line_bc)) if len(line_bc) > 0 else None
+
+    # Optimal HEx mass for each variant (for printed comparison)
+    def _opt_m_hex(idx, arr_a):
+        return arr_a[idx] * m_hex_ref if idx is not None and len(arr_a) > idx else np.nan
+
+    opt_mhex_red = m_hex_opt[id_min_red]
+    opt_mhex_mdot = _opt_m_hex(id_min_mdot, res["mdot_dqom"]["a"])
+    opt_mhex_bc_mdot = _opt_m_hex(id_min_bc_mdot, res["bc_mdot_dqom"]["a"])
+    opt_mhex_bc = _opt_m_hex(id_min_bc, res_bc["a"])
+
+    print(f"\n{'-' * 65}")
+    print(f"  VARIANT COMPARISON  (INCLUDE_DELTA_ENGINE={INCLUDE_DELTA_ENGINE})")
+    print(f"  {'Variant':<42}  {'Opt m_HEx(kg)':>13}  {'Min dm(kg)':>10}")
+    print(f"  {'-' * 67}")
+    de_note = "+dEng" if INCLUDE_DELTA_ENGINE else "     "
+    bc_min_obj = line_bc[id_min_bc] if id_min_bc is not None else float("nan")
+    print(f"  {'Fig 8 style (neither effect - see fig8)':42}  {'(see fig8)':>13}  {'(see fig8)':>10}")
+    print(f"  {'Effect 1 only: BC (uncoupled cyc, ref mdot)':42}  {opt_mhex_bc:>13.2f}  {bc_min_obj:>10.2f}")
+    print(f"  {f'Effect 2 only: mdot/Mach {de_note}':42}  {opt_mhex_mdot:>13.2f}  {line_mdot[id_min_mdot]:>10.2f}")
+    print(
+        f"  {f'Effects 1+2:   BC+mdot/Mach {de_note}':42}  {opt_mhex_bc_mdot:>13.2f}  {line_bc_mdot[id_min_bc_mdot]:>10.2f}"
+    )
+    print(f"  {'Red line (cycle efficiency, always +dEng)':42}  {opt_mhex_red:>13.2f}  {line3[id_min_red]:>10.2f}")
+    print(f"  {'-' * 67}")
+    print(f"\n  Black star (BC+mdot opt) plugged into RED cycle model:")
+    print(f"    A/A_ref = {a_r_black_star:.3f},  Ao/Ao_ref = {ao_black_star:.3f},  NTU = {ntu_black_star:.3f}")
+    if np.isfinite(line3_bs):
+        print(f"    Red-model value at black-star design:    {line3_bs:>8.2f} kg")
+        print(f"    Red-model optimum at same A/A_ref:       {line3_red_at_bs:>8.2f} kg")
+        print(f"    Sub-optimality (black -> red cost delta): {delta_subopt:>+8.2f} kg")
+    else:
+        print(f"    Could not evaluate black star through red model (solver failed).")
+    print(f"  {'-' * 67}\n")
 
     def _val(i, key):
         """Get value for point i (index into sweep arrays) or 'ref'/'unrecup' for special designs."""
@@ -663,8 +899,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
         ("1st", 0 if len(m_hex_opt) >= 1 else None),
         ("ref", "ref"),
         ("ref_opt", int(id_close) if np.isfinite(dq_ref) and id_close < len(a_r_ref_opt) else None),
-        ("square", id_min_black),  # square marker: cycle-model optimum
-        ("star", id_min_red),  # star marker: dQ_o^M optimum
+        ("square", id_min_red),  # red square: cycle-model optimum
+        ("star", id_min_bc_mdot),  # black star: BC+mdot dQ^M optimum
         ("last", -1 if len(m_hex_opt) >= 2 else None),
         ("unrecup", "unrecup"),
     ]
@@ -732,51 +968,66 @@ def run_plot(base_name="fig9_w_cycle_model"):
     )
     fig, ax = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
 
+    # Red lines — full cycle model (always includes delta_engine)
     ax.plot(m_hex_opt, line1, "r--", linewidth=1.5, label="Fuel saving")
-    # ax.plot(m_hex_opt, delta_fuel_dqom, "k--", linewidth=1.5, label="_nolegend_")  # black dashed, may add back
-    ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label="Fuel + HEx")
-    # ax.plot(m_hex_opt, line3_dqom, "k-", linewidth=1.5, label="Fuel + HEx")  # black line, may add back
+    ax.plot(m_hex_opt, line3, "r-", linewidth=1.5, label=r"$\Delta$Fuel + m$_{\mathrm{HEx}}$ + $\Delta$Engine")
 
+    # Black lines — dQ^M variants (hidden when HIDE_BLACK_LINES=True)
+    if not HIDE_BLACK_LINES:
+        if len(line_bc) > 0:
+            ax.plot(m_hex_bc, line_bc, "k--", linewidth=1.2, label=r"$\Delta\dot{W}^M$: BC effect only")
+        ax.plot(
+            m_hex_opt,
+            line_bc_mdot,
+            "k-",
+            linewidth=1.5,
+            label=r"$\Delta\dot{W}^M$: BC + $\dot{m}$" + (r" + $\Delta$Eng" if INCLUDE_DELTA_ENGINE else ""),
+        )
+
+    # Red square: red-line optimum
     ax.scatter(
-        m_hex_opt[id_min_black],
-        line3[id_min_black],
+        m_hex_opt[id_min_red],
+        line3[id_min_red],
         color="red",
-        s=27,
+        s=25,
         zorder=6,
         marker="s",
         facecolor="red",
         edgecolor="white",
         linewidths=1,
     )
+    # Black star: BC+mdot dQ^M optimum on the black line
     ax.scatter(
-        m_hex_opt[id_min_red],
-        line3[id_min_red],
-        color="red",
-        s=90,  # match fig8 star
+        a_r_black_star * m_hex_ref,
+        line_bc_mdot[id_min_bc_mdot],
+        color="black",
+        s=90,
         zorder=5,
         marker="*",
-        facecolor="red",
+        facecolor="black",
         edgecolor="white",
         linewidths=1,
     )
-    # ax.scatter(
-    #     m_hex_opt[id_min_red],
-    #     line3_dqom[id_min_red],
-    #     color="black",
-    #     s=200,
-    #     zorder=5,
-    #     marker="*",
-    #     facecolor="black",
-    #     edgecolor="white",
-    #     linewidths=1,
-    # )  # black star at black line optimum, may add back
+    # Circle on red line showing where the black-star design lands on the cycle model
+    if np.isfinite(line3_bs):
+        ax.scatter(
+            a_r_black_star * m_hex_ref,
+            line3_bs,
+            color="red",
+            s=90,
+            zorder=4,
+            marker="*",
+            facecolor="red",
+            edgecolor="white",
+            linewidths=1,
+        )
     if np.isfinite(dq_ref):
         line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
         ax.scatter(
             m_hex_at_ref,
             line3_ref,
             color="red",
-            s=25,  # match fig8 +
+            s=25,
             zorder=5,
             marker="+",
             linewidths=0.7,
@@ -784,24 +1035,27 @@ def run_plot(base_name="fig9_w_cycle_model"):
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
     ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
-    # Custom legend with section titles; sum notation in "No cycle model" title
     legend_handles = [
-        # Line2D([], [], linestyle="", label="Cycle model"),
-        Line2D([], [], color="r", linestyle="--", linewidth=1.5, label="Fuel saving"),
-        Line2D([], [], color="r", linestyle="-", linewidth=1.5, label="ΔFuel + HEx + ΔEngine"),
-        # Line2D(
-        #     [],
-        #     [],
-        #     linestyle="",
-        #     label=r"$\sum_i \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}$",
-        # ),
-        # Line2D([], [], color="k", linestyle="-", linewidth=1.5, label="Fuel + HEx"),  # black line entry, may add back
+        Line2D([], [], color="r", linestyle="-", linewidth=1.5, label=r"fuel + HEx + engine"),
+        Line2D([], [], color="r", linestyle="--", linewidth=1.5, label="fuel only"),
     ]
+    if not HIDE_BLACK_LINES:
+        legend_handles += [
+            Line2D([], [], color="k", linestyle="--", linewidth=1.2, label=r"$\Delta\dot{W}^M$: BC effect only"),
+            Line2D(
+                [],
+                [],
+                color="k",
+                linestyle="-",
+                linewidth=1.5,
+                label=r"$\Delta\dot{W}^M$: BC + $\dot{m}$" + (" + dEng" if INCLUDE_DELTA_ENGINE else ""),
+            ),
+        ]
     ax.legend(
         handles=legend_handles,
-        loc="upper center",
+        loc="upper right",
         ncol=1,
-        fontsize=6,
+        fontsize=FONT_SIZE,
         frameon=True,
         edgecolor="black",
         facecolor="white",
@@ -814,12 +1068,13 @@ def run_plot(base_name="fig9_w_cycle_model"):
     ax.set_ylim(-100, 0)
     ax.set_yticks(np.arange(-100, 1, 20))
 
-    # Annotations with arrows (xytext further from markers so arrowheads are visible)
+    # Annotations
     ax.annotate(
-        "global optimal design with\n fuel burn from cycle efficiency",
-        xy=(m_hex_opt[id_min_black] - 1, line3[id_min_black] - 1),
-        xytext=(m_hex_opt[id_min_black] - 20, -75),
-        fontsize=6,
+        "optimal design A for fuel\n burn from cycle $\eta$",
+        xy=(m_hex_opt[id_min_red], line3[id_min_red]),
+        xytext=(m_hex_opt[id_min_red] - 16, -78),
+        fontsize=FONT_SIZE,
+        zorder=6,
         arrowprops=dict(arrowstyle="->", color="black", lw=1),
     )
     if np.isfinite(dq_ref):
@@ -827,16 +1082,27 @@ def run_plot(base_name="fig9_w_cycle_model"):
             "baseline design",
             xy=(m_hex_at_ref, line3_ref),
             xytext=(m_hex_at_ref - 10, line3_ref + 15),
-            fontsize=6,
+            fontsize=FONT_SIZE,
             arrowprops=dict(arrowstyle="->", color="black", lw=1),
         )
+    # r"optimal: $\sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$ with\n $\Delta m_{\mathrm{f}} \propto \sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$",
     ax.annotate(
-        "global optimal design with\n practical availability fuel burn model",
-        xy=(m_hex_opt[id_min_red], line3[id_min_red]),
-        xytext=(m_hex_opt[id_min_red] + 5, line3[id_min_red] - 15),
-        fontsize=6,
+        "optimal design B for fuel\n" + r" burn from $\sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$",
+        xy=(a_r_black_star * m_hex_ref, line_bc_mdot[id_min_bc_mdot]),
+        xytext=(a_r_black_star * m_hex_ref + 4, line_bc_mdot[id_min_bc_mdot] - 12),
+        fontsize=FONT_SIZE,
+        zorder=6,
         arrowprops=dict(arrowstyle="->", color="black", lw=1),
     )
+    if np.isfinite(line3_bs):
+        ax.annotate(
+            "design B with fuel burn\n from cycle $\eta$",
+            xy=(a_r_black_star * m_hex_ref, line3_bs),
+            xytext=(a_r_black_star * m_hex_ref + 4, line3_bs + 8),
+            fontsize=FONT_SIZE,
+            zorder=6,
+            arrowprops=dict(arrowstyle="->", color="black", lw=1),
+        )
 
     plt.tight_layout(pad=0.5)
 

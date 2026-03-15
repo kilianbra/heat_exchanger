@@ -2,7 +2,7 @@
 
 ## Overview
 
-`fig9_w_cycle_model.py` performs a **cycle-coupled heat exchanger (HEx) analysis** for a helicopter recuperated gas turbine. It uses parameters from `xflow.py`, solves for mass flow at constant shaft power, and produces weight-delta curves vs. a baseline unrecuperated engine. The script compares two fuel-delta models: (1) cycle efficiency η, and (2) dQ_o^M (practical unavailable creation).
+`fig9_w_cycle_model.py` performs a **cycle-coupled heat exchanger (HEx) analysis** for a helicopter recuperated gas turbine. It uses parameters from `xflow.py`, solves for mass flow at constant shaft power, and produces weight-delta curves vs. a baseline unrecuperated engine. The script compares the **cycle-efficiency model** (red lines) with several **dQ_o^M–based variants** (black lines) that isolate two effects the cycle model captures: (1) **changing boundary conditions** (T_hot_in, pressure ratios), and (2) **changing mass flow** (→ Mach, ε, Δp). A printed variant comparison table shows optimal m_HEx and min Δm for each.
 
 ---
 
@@ -53,7 +53,7 @@ M_in = M_ref × (mdot/mdot_ref) × √(T_hot_in/T_hot_in_ref) / (A_o/A_o_ref)
 g²h = (1/2) × γ × M_in²
 ```
 
-- **M_ref** = 0.1, **mdot_ref** = 2.3 kg/s
+- **M_ref** = 0.11, **mdot_ref** ≈ 2.24 kg/s (from P_shaft / w_net at reference design)
 - **A_o**: hot-side free-flow area
 - **g²h** couples flow rate, inlet temperature, and geometry via dynamic pressure
 
@@ -148,11 +148,11 @@ m_HEx = (A/A_ref) × m_hex_ref    (m_hex_ref = 13.3 kg)
 
 ### 8. Delta Mass Formulae — HEx Model (dQ_o^M–based)
 
-**Fuel scaling factor** (all SI; no kWh):
+**Fixed fuel scaling factor** (reference Q_max; same for all dQ^M variants):
 
 ```
-Q_max = ṁ_hot × c_p × (T_h,in − T_c,in)     [W];  c_p in J/(kg·K)
-factor_fuel = t_mission_s / LHV_J_per_kg × η_turb/η_ov × Q_max   [kg]
+Q_max_ref = ṁ_ref × c_p × (T_h,in − T_c,in)_ref     [W]
+factor_fuel = t_mission_s / LHV_J_per_kg × η_turb/η_ov × Q_max_ref   [kg]
 ```
 
 **Fuel delta** (from practical unavailable creation dQ_o^M):
@@ -161,29 +161,53 @@ factor_fuel = t_mission_s / LHV_J_per_kg × η_turb/η_ov × Q_max   [kg]
 Δm_fuel,dQoM = (dQ_o^M / Q_max) × factor_fuel
 ```
 
-where **dQ_o^M/Q_max** is computed by `practical_unavailable_creation_hex()` in xflow.py (work potential change normalised by Q_max).
+- **dQ_o^M/Q_max** from `practical_unavailable_creation_hex()` in xflow.py.
+- **factor_fuel** is fixed at reference; dQ^M itself varies with boundary conditions and Mach.
 
-**Cumulative (HEx model, black lines, fuel + HEx only)**:
-- cum_fuel (dQo^M) = Δm_fuel,dQoM
-- cum_fuel+hex (dQo^M) = Δm_fuel,dQoM + m_HEx
+**Cumulative (dQ^M variants)**:
+- Effect 1: objective = dQ^M × factor_fuel + m_HEx (no delta_engine).
+- Effect 2 / Effects 1+2: objective = dQ^M × factor_fuel + m_HEx [+ delta_engine if INCLUDE_DELTA_ENGINE].
 
-(The full black solid plot line adds engine: cum_total = Δm_fuel,dQoM + m_HEx + Δm_engine, but the printed HEx model table omits engine mass.)
+---
+
+## Toggle Flags (top of script)
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| **INCLUDE_DELTA_ENGINE** | `False` | If `True`, adds `(mdot − mdot_baseline) × 23` to all dQ^M-based objectives. Effect 1 (BC) uses uncoupled cycle and reference mdot, so delta_engine ≈ 0 regardless. |
+| **HIDE_BLACK_LINES** | `False` | If `True`, black lines and black star are hidden in the plot (all printouts still shown). |
 
 ---
 
 ## Where Cycle Model vs. dQ_o^M Are Used
 
-**Cycle model (red lines)** — used for optimization and primary curves:
+**Cycle model (red lines)** — primary optimization and curves:
 
-- **Optimization**: `_optimal_ao_r_ref_for_each_a_r_ref` minimizes `delta_fuel + m_hex + delta_engine` using cycle efficiency η from `calculate_recuperated_cycle_dp_eps`. Design points (ao, NTU, mdot, ε, Δp) come from this.
+- **Optimization**: `_optimal_ao_r_ref_for_each_a_r_ref` minimizes `delta_fuel + m_hex + delta_engine` using cycle efficiency η. Always includes delta_engine.
 - **Red dashed** = delta_fuel. **Red solid** = delta_fuel + m_hex + delta_engine.
+- **Red square + red star** = cycle-model optimum.
 
-**dQ_o^M model (black lines)** — used for plotting comparison:
+**dQ_o^M variants (black lines)** — isolate effects the cycle captures vs. a pure dQ^M approach:
 
-- **Same design points** as red (same ε, Δp, mdot from the cycle-coupled solve), but a different way to estimate fuel impact.
-- At each point, `solve_mdot_at_constant_power` returns `dq` from `practical_unavailable_creation_hex` (dQ_o^M / Q_max).
-- **Black dashed** = delta_fuel_dqom. **Black solid** = delta_fuel_dqom + m_hex + delta_engine.
-- The optimizer does **not** use dQ_o^M; black lines are for comparison only.
+| Variant | Effect | Description | delta_engine |
+|---------|--------|-------------|--------------|
+| **Effect 1 only (BC)** | Changing boundary conditions | Uncoupled cycle for T_hot_in; ref Mach for g²h. Actual t, p_ratios in dQ^M. | No (ref mdot) |
+| **Effect 2 only (mdot/Mach)** | Changing mdot → Mach → ε, Δp | Coupled cycle; actual Mach; fixed DEFAULT BCs in dQ^M. | Toggle |
+| **Effects 1+2 (BC+mdot)** | Both | Coupled cycle; actual BCs and actual Mach in dQ^M. | Toggle |
+
+- **Black dashed** = Effect 1 only. **Black solid** = Effects 1+2.
+- All dQ^M variants use a **fixed reference factor_fuel** (from Q_max at reference conditions) to convert dQ^M/Q_max → fuel mass.
+- Effect 2 optimum is in the printed table only (not plotted).
+
+---
+
+## Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `solve_mdot_at_constant_power` | Coupled solve for mdot, T_hot_in at given ao_r_ref, ntu. Returns mdot, w_net, T_hot_in, eps, dp_hot, dp_cold, dq (dQ^M/Q_max), eff, M_in. |
+| `_optimal_ao_r_ref_for_each_a_r_ref` | Main sweep: for each A/A_ref, sweeps Ao/Ao_ref calling the coupled cycle once per point. Returns dict `{red, mdot_dqom, bc_mdot_dqom}` with optima for cycle model, Effect 2 (mdot), and Effects 1+2 (BC+mdot). |
+| `_sweep_bc_only` | Effect 1 only: uncoupled cycle, reference Mach, actual BCs in dQ^M. Returns dict with `a`, `ao`, `obj` arrays. |
 
 ---
 
@@ -195,9 +219,9 @@ where **dQ_o^M/Q_max** is computed by `practical_unavailable_creation_hex()` in 
 | **Gas properties** | γ = 1.4, ideal gas |
 | **Cycle parameters** | PR = 9, TIT = 1500 K, η_poly,c = 0.88, η_poly,t = 0.84 |
 | **Capacity ratio** | C_cold/C_hot = 1 |
-| **Reference Mach** | M_in = 0.1 at reference design |
+| **Reference Mach** | M_in = 0.11 at reference design |
 | **Pressure drop limit** | Δp/p ≤ 20% on both sides |
-| **NTU range** | 0.02 ≤ NTU ≤ 5 |
+| **NTU range** | 0.02 ≤ NTU ≤ 8 |
 | **Pressure drop model** | "inlet_density" for cold/hot Δp ratio |
 | **Area scaling** | A/A_ref ∝ (A_o/A_o_ref)^0.587 × NTU |
 | **Mission** | 2 h, LHV = 43.2 MJ/kg |
@@ -210,17 +234,25 @@ where **dQ_o^M/Q_max** is computed by `practical_unavailable_creation_hex()` in 
 ## Algorithm Flow
 
 1. **Baseline**: Compute unrecuperated cycle and mdot_baseline at P_shaft.
-2. **Reference**: Get ε, Δp, w_net at g²h_ref, NTU_MATCH = 1.824.
-3. **Sweep** over A/A_ref (≈ 80 points).
-4. **Optimize**: For each A/A_ref, sweep A_o/A_o_ref (100 points), choose NTU from area relation, and solve for mdot at constant power.
-5. **Solve** coupled system via `scipy.optimize.root`: residuals [mdot − P_ref/w_net, T_hot_in − T[4]].
-6. **Objective**: Minimize Δm_fuel + m_HEx + Δm_engine.
-7. **Plot**: Δm vs. m_HEx for both cycle-η and dQ_o^M models.
+2. **Reference**: Get ε, Δp, w_net at g²h_ref, NTU_MATCH = 1.479.
+3. **Coupled sweep**: For each A/A_ref, sweep A_o/A_o_ref, call `solve_mdot_at_constant_power` once per point. Simultaneously track optima for:
+   - **red**: cycle η → delta_fuel + m_HEx + delta_engine
+   - **mdot_dqom**: dQ^M (fixed DEFAULT BCs, actual Mach) × factor_fuel + m_HEx [+ delta_engine]
+   - **bc_mdot_dqom**: dQ^M (actual BCs, actual Mach) × factor_fuel + m_HEx [+ delta_engine]
+4. **BC-only sweep**: Separate `_sweep_bc_only` — uncoupled cycle, ref Mach, actual BCs in dQ^M. No delta_engine.
+5. **Print** variant comparison table (opt m_HEx, min Δm per variant).
+6. **Plot**: Red lines (cycle model), black lines (dQ^M variants) if not HIDE_BLACK_LINES.
 
 ---
 
 ## Outputs
 
-- **Figure**: Δm vs. HEx core mass. Red square = design that minimizes cycle-model total (cum_total); red+black star = design that minimizes dQ_o^M-based total (cum_total from HEx model).
+- **Figure**: Δm vs. HEx core mass.
+  - Red square + red star = cycle-model optimum (min cum_total).
+  - Black star = BC+mdot dQ^M optimum (when HIDE_BLACK_LINES is False).
+  - Red + black marker at baseline design (ao=1).
 - **Exports**: SVG, TIFF, PNG, PDF in `Figs_current/`.
-- **Console**: Reference conditions, baseline, optima, and mass deltas (including HEx model cumulatives: cum_fuel, cum_fuel+hex, no engine).
+- **Console**:
+  - INCLUDE_DELTA_ENGINE and factor_fuel at start.
+  - Variant comparison table: opt m_HEx, min Δm for Effect 1, Effect 2, Effects 1+2, and red line.
+  - Detailed table: 1st, ref, ref_opt, square (red opt), star (BC+mdot opt), last, unrecup.

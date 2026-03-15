@@ -36,6 +36,8 @@ DEFAULT_MOLAR_MASS_RATIO = 1.0
 DEFAULT_A_R = 0.92
 # NTU_MATCH = 1.824
 NTU_MATCH = 1.479
+# Ao propto NTU^-0.704; Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+AO_REF_OVER_AO_EXP = 0.704
 DEFAULT_NTU_MAX = 8.0
 SHOW_CUBIC = True
 DEFAULT_DP_MAX = 0.2
@@ -62,6 +64,7 @@ def save_figures(
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
     ntu_optimum=None,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing classical unavailable energy breakdown.
@@ -136,6 +139,13 @@ def save_figures(
     # Viscous alone = total - thermal = (viscous + thermal) - just_thermal
     y_viscous_interp = y_with_dp_interp - y_no_dp_interp
 
+    ntu_with_dp_orig = np.array(ntu_with_dp)
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_aspect_ratio", "_Ao_Aoref")
+        # x = Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+        ntu_common = (ntu_common / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        ntu_with_dp = (ntu_with_dp_orig / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+
     # Stack: first viscous (baseline to viscous alone), then thermal (viscous to total)
     # Thin outlines (0.5) like bar chart; main line drawn on top
     edge_lw = 0.5
@@ -162,14 +172,18 @@ def save_figures(
     ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=3, linewidth=1.5)
 
     # Baseline marker: + (baseline design)
-    idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
-    x_pressure = ntu_with_dp[idx_pressure]
+    idx_pressure = np.argmin(np.abs(ntu_with_dp_orig - NTU_MATCH))
+    x_pressure = (
+        (ntu_with_dp_orig[idx_pressure] / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        if plot_area_ratio_ref
+        else ntu_with_dp_orig[idx_pressure]
+    )
     y_pressure = y_with_dp[idx_pressure]
     ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
     # Optimal marker: circle, black, s=50, white edge (match fig5b)
     if ntu_optimum is not None:
-        idx_opt = np.argmin(np.abs(ntu_with_dp - ntu_optimum))
+        idx_opt = np.argmin(np.abs(ntu_with_dp_orig - ntu_optimum))
         x_opt = ntu_with_dp[idx_opt]
         y_opt = y_with_dp[idx_opt]
         ax.scatter(x_opt, y_opt, marker="o", facecolor="black", edgecolor="white", zorder=5, s=MARKER_SIZE_LATEX)
@@ -177,10 +191,12 @@ def save_figures(
     # Annotations with arrows: baseline design, optimal design (text within ylim)
     arrow_kw_opt = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
     arrow_kw_ref = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
+    xytext_ref = (0.25, -0.075) if plot_area_ratio_ref else (0.15, -0.075)
+    xytext_opt = (0.25, -0.06) if plot_area_ratio_ref else (0.10, -0.06)
     ax.annotate(
         "baseline design",
         xy=(x_pressure, y_pressure),
-        xytext=(0.15, -0.075),
+        xytext=xytext_ref,
         fontsize=font_size,
         ha="left",
         arrowprops=arrow_kw_ref,
@@ -189,19 +205,24 @@ def save_figures(
         ax.annotate(
             "optimal design",
             xy=(x_opt, y_opt),
-            xytext=(0.10, -0.06),
+            xytext=xytext_opt,
             fontsize=font_size,
             ha="left",
             arrowprops=arrow_kw_opt,
         )
 
     ax.set_title("")
-    ax.set_xlim(0, 2.0)
-    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    if plot_area_ratio_ref:
+        ax.set_xlim(0.2, 1.2)
+        ax.xaxis.set_major_locator(MultipleLocator(0.2))
+        ax.set_xlabel(r"Inverse of Free-Flow Area $A_{\mathrm{o,ref}}/A_\mathrm{o}$ [-]")
+    else:
+        ax.set_xlim(0, 2.0)
+        ax.xaxis.set_major_locator(MultipleLocator(0.5))
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylim(-0.1, 0)
     ax.set_yticks([-0.1, -0.08, -0.06, -0.04, -0.02, 0])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
-    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
 
     patch_thermal = mpatches.Patch(
@@ -265,6 +286,7 @@ def save_figures(
 
 
 if __name__ == "__main__":
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig7b_Ao_Aoref.svg etc.
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -282,4 +304,5 @@ if __name__ == "__main__":
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
         ntu_optimum=NTU_OPTIMUM,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )

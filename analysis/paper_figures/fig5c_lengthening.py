@@ -38,6 +38,9 @@ DEFAULT_MOLAR_MASS_RATIO = 1.0
 # DEFAULT_A_R = 1.0
 DEFAULT_A_R = 0.92
 
+# A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
+NTU_MATCH = 1.479
+
 
 def save_figures(
     c_cold_over_c_hot,
@@ -55,6 +58,7 @@ def save_figures(
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for practical framework with multiple g^2 values.
@@ -121,8 +125,28 @@ def save_figures(
     # Remove title if present
     ax.set_title("")
 
-    ax.set_xticks([0, 5, 10, 15])
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_lengthening", "_A_A_ref")
+        # Transform x from NTU to A/A_ref = NTU/NTU_MATCH
+        for line in line_list:
+            line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
+        for ax_use in (ax, ax_twin):
+            for line in ax_use.get_lines():
+                if line not in line_list:
+                    line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
+            for coll in ax_use.collections:
+                if hasattr(coll, "get_offsets") and coll.get_offsets().size > 0:
+                    off = coll.get_offsets().copy()
+                    off[:, 0] = off[:, 0] / NTU_MATCH
+                    coll.set_offsets(off)
+        ax.set_xlim(0, 10)
+        ax.set_xticks([0, 2, 4, 6, 8, 10])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
+        ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
+    else:
+        ax.set_xticks([0, 5, 10, 15])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylim(0, 0.5)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
@@ -159,10 +183,15 @@ def save_figures(
                     s=50,
                 )
 
-    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    if not plot_area_ratio_ref:
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
+
+    # Top-left and top-right labels (no border)
+    ax.text(0.02, 0.98, "small length", transform=ax.transAxes, va="top", ha="left", fontsize=font_size)
+    ax.text(0.98, 0.98, "big length", transform=ax.transAxes, va="top", ha="right", fontsize=font_size)
 
     # Save as SVG
     fig.savefig(
@@ -209,7 +238,7 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    # Save figures with practical framework
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig5c_A_A_ref.svg etc.
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -226,4 +255,5 @@ if __name__ == "__main__":
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )

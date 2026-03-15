@@ -1,10 +1,14 @@
 import os
 
+import numpy as np
 import matplotlib.pyplot as plt
 import xflow
 from xflow import create_plot
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+
+# A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
+NTU_MATCH = 1.479
 
 # Default modeling assumptions (match fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0  # C_cold / C_hot
@@ -34,6 +38,7 @@ def save_figures(
     dp_max=DEFAULT_DP_MAX,
     base_name="fig5a_lengthening",
     plot_triple_g2=None,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for given parameter values.
@@ -99,7 +104,23 @@ def save_figures(
     # Add new legend using handles2 with custom labels High, Medium, Low and a title
 
     # independet control for figure
-    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_lengthening", "_A_A_ref")
+        # Transform x from NTU to A/A_ref = NTU/NTU_MATCH
+        for ax_use in (ax, ax_twin):
+            for line in ax_use.get_lines():
+                line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
+            for coll in ax_use.collections:
+                if hasattr(coll, "get_offsets") and coll.get_offsets().size > 0:
+                    off = coll.get_offsets()
+                    off[:, 0] = off[:, 0] / NTU_MATCH
+                    coll.set_offsets(off)
+        ax.set_xlim(0, 10)
+        ax.set_xticks([0, 2, 4, 6, 8, 10])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
+        ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
+    else:
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
     ax_twin.set_ylabel(r"Hot Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
     h_right, _ = ax_twin.get_legend_handles_labels()
@@ -125,9 +146,10 @@ def save_figures(
     # Remove title if present
     ax.set_title("")
 
-    # Ensure x-axis shows only 0, 5, 10, 15 with integer formatting
-    ax.set_xticks([0, 5, 10, 15])
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
+    # Ensure x-axis shows only 0, 5, 10, 15 with integer formatting (unless plot_area_ratio_ref)
+    if not plot_area_ratio_ref:
+        ax.set_xticks([0, 5, 10, 15])
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
 
     plt.tight_layout(pad=0.5)
 
@@ -176,7 +198,7 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    # Save figures
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig5a_A_A_ref.svg etc.
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -186,4 +208,5 @@ if __name__ == "__main__":
         dp_max=DEFAULT_DP_MAX,
         base_name="fig5a_lengthening",
         plot_triple_g2=PLOT_TRIPLE_G2,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )

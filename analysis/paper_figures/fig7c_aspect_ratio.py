@@ -36,6 +36,8 @@ DEFAULT_MOLAR_MASS_RATIO = 1.0
 DEFAULT_A_R = 0.92
 # NTU_MATCH = 1.824
 NTU_MATCH = 1.479
+# Ao propto NTU^-0.704; Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+AO_REF_OVER_AO_EXP = 0.704
 DEFAULT_NTU_MAX = 8.0
 SHOW_CUBIC = True
 DEFAULT_DP_MAX = 0.2
@@ -57,6 +59,7 @@ def save_figures(
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
+    plot_area_ratio_ref=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
@@ -131,6 +134,13 @@ def save_figures(
     # Viscous alone = total - thermal = (viscous + thermal) - just_thermal
     y_viscous_interp = y_with_dp_interp - y_no_dp_interp
 
+    ntu_with_dp_orig = np.array(ntu_with_dp)
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_aspect_ratio", "_Ao_Aoref")
+        # x = Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+        ntu_common = (ntu_common / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        ntu_with_dp = (ntu_with_dp_orig / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+
     # Stack: viscous (baseline to viscous alone), thermal (viscous to total). Viscous on top for visibility.
     # Thin outlines (0.5) like bar chart; main line drawn on top
     edge_lw = 0.5
@@ -159,22 +169,28 @@ def save_figures(
     # Optimal marker: circle, black, s=50, no double edge (match fig5c)
     idx_optimum = np.argmax(y_with_dp)  # Max availability after negation
     x_optimum = ntu_with_dp[idx_optimum]
+    ntu_optimum_actual = ntu_with_dp_orig[idx_optimum]
     y_optimum = y_with_dp[idx_optimum]
     ax.scatter(x_optimum, y_optimum, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
 
-    print(f"Optimum NTU: {x_optimum:.4f}")
+    print(f"Optimum NTU: {ntu_optimum_actual:.4f}")
 
     # Baseline marker: + (baseline design)
-    idx_pressure = np.argmin(np.abs(ntu_with_dp - NTU_MATCH))
-    x_pressure = ntu_with_dp[idx_pressure]
+    idx_pressure = np.argmin(np.abs(ntu_with_dp_orig - NTU_MATCH))
+    x_pressure = (ntu_with_dp_orig[idx_pressure] / NTU_MATCH) ** AO_REF_OVER_AO_EXP if plot_area_ratio_ref else ntu_with_dp_orig[idx_pressure]
     y_pressure = y_with_dp[idx_pressure]
     ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
     ax.set_title("")
-    ax.set_xlim(0, 2.0)
-    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    if plot_area_ratio_ref:
+        ax.set_xlim(0.2, 1.2)
+        ax.xaxis.set_major_locator(MultipleLocator(0.2))
+        ax.set_xlabel(r"Inverse of Free-Flow Area $A_{\mathrm{o,ref}}/A_\mathrm{o}$ [-]")
+    else:
+        ax.set_xlim(0, 2.0)
+        ax.xaxis.set_major_locator(MultipleLocator(0.5))
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylim(-0.1, 0.3)
-    ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylabel(
         r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])"
     )
@@ -203,6 +219,10 @@ def save_figures(
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     fig.subplots_adjust(left=0.25)  # Reduce left whitespace
+
+    # Top-left and top-right labels (no border)
+    ax.text(0.02, 0.98, "small Mach", transform=ax.transAxes, va="top", ha="left", fontsize=font_size)
+    ax.text(0.98, 0.98, "big Mach", transform=ax.transAxes, va="top", ha="right", fontsize=font_size)
 
     fig.savefig(
         os.path.join(save_dir, f"{base_name}.svg"),
@@ -240,10 +260,11 @@ def save_figures(
     plt.close(fig)
     print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
 
-    return x_optimum
+    return ntu_optimum_actual
 
 
 if __name__ == "__main__":
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig7c_Ao_Aoref.svg etc.
     optimum_ntu = save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -260,5 +281,6 @@ if __name__ == "__main__":
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
     )
     print(f"\nUse this NTU_OPTIMUM value in fig6a: {optimum_ntu:.4f}")
