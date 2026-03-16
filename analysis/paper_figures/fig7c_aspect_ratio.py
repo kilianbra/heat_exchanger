@@ -177,7 +177,11 @@ def save_figures(
 
     # Baseline marker: + (baseline design)
     idx_pressure = np.argmin(np.abs(ntu_with_dp_orig - NTU_MATCH))
-    x_pressure = (ntu_with_dp_orig[idx_pressure] / NTU_MATCH) ** AO_REF_OVER_AO_EXP if plot_area_ratio_ref else ntu_with_dp_orig[idx_pressure]
+    x_pressure = (
+        (ntu_with_dp_orig[idx_pressure] / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        if plot_area_ratio_ref
+        else ntu_with_dp_orig[idx_pressure]
+    )
     y_pressure = y_with_dp[idx_pressure]
     ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
@@ -200,11 +204,9 @@ def save_figures(
 
     # Legend: thermal creation and viscous dissipation (same colors as fig3)
     patch_thermal = mpatches.Patch(
-        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal creation"
+        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal"
     )
-    patch_viscous = mpatches.Patch(
-        facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous dissipation"
-    )
+    patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous")
     ax.legend(
         handles=[patch_thermal, patch_viscous],
         loc="lower left",
@@ -220,9 +222,23 @@ def save_figures(
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     fig.subplots_adjust(left=0.25)  # Reduce left whitespace
 
-    # Top-left and top-right labels (no border)
-    ax.text(0.02, 0.98, "small Mach", transform=ax.transAxes, va="top", ha="left", fontsize=font_size)
-    ax.text(0.98, 0.98, "big Mach", transform=ax.transAxes, va="top", ha="right", fontsize=font_size)
+    # Top-center label with arrow indicating increasing Mach
+    ax.text(
+        0.5,
+        0.98,
+        "increasing Mach",
+        transform=ax.transAxes,
+        va="top",
+        ha="center",
+        fontsize=font_size,
+    )
+    ax.annotate(
+        "",
+        xy=(0.7, 0.92),
+        xytext=(0.3, 0.92),
+        xycoords=ax.transAxes,
+        arrowprops=dict(arrowstyle="->", linewidth=0.75),
+    )
 
     fig.savefig(
         os.path.join(save_dir, f"{base_name}.svg"),

@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from plot_colors import MARKER_SIZE_LATEX
 import xflow
 from xflow import calculate_pressure_drop_ratio, create_plot
 
@@ -59,6 +60,7 @@ def save_figures(
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
     plot_area_ratio_ref=False,
+    plot_ref_plus=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for practical framework with multiple g^2 values.
@@ -126,7 +128,9 @@ def save_figures(
     ax.set_title("")
 
     if plot_area_ratio_ref:
-        base_name = base_name.replace("_lengthening", "_A_A_ref")
+        base_name = base_name.replace(
+            "_lengthening", "_A_A_ref_w_plus" if plot_ref_plus else "_A_A_ref"
+        )
         # Transform x from NTU to A/A_ref = NTU/NTU_MATCH
         for line in line_list:
             line.set_xdata(np.array(line.get_xdata()) / NTU_MATCH)
@@ -143,10 +147,34 @@ def save_figures(
         ax.set_xticks([0, 2, 4, 6, 8, 10])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
         ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
+        # Add + marker at reference design (A/A_ref=1) on practical availability line (Mach 0.11 only)
+        if plot_ref_plus and line_list and len(line_list) > 2:
+            x_ref = 1.0
+            line_m011 = line_list[2]  # [0]=M0.04, [1]=M0.06, [2]=M0.11
+            x_ln, y_ln = line_m011.get_xdata(), line_m011.get_ydata()
+            if np.min(x_ln) <= x_ref <= np.max(x_ln):
+                y_at_ref = np.interp(x_ref, x_ln, y_ln)
+                ax.scatter(
+                    x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX,
+                    linewidths=1, color="black", zorder=5
+                )
     else:
+        if plot_ref_plus:
+            base_name = base_name.replace("_lengthening", "_NTU_w_plus")
         ax.set_xticks([0, 5, 10, 15])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+        # Add + marker at reference design (NTU=NTU_MATCH) on practical availability line (Mach 0.11 only)
+        if plot_ref_plus and line_list and len(line_list) > 2:
+            x_ref = NTU_MATCH
+            line_m011 = line_list[2]
+            x_ln, y_ln = line_m011.get_xdata(), line_m011.get_ydata()
+            if np.min(x_ln) <= x_ref <= np.max(x_ln):
+                y_at_ref = np.interp(x_ref, x_ln, y_ln)
+                ax.scatter(
+                    x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX,
+                    linewidths=1, color="black", zorder=5
+                )
     ax.set_ylim(0, 0.5)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
@@ -185,13 +213,29 @@ def save_figures(
 
     if not plot_area_ratio_ref:
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
+    ax.set_ylabel(
+        r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])"
+    )
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
 
-    # Top-left and top-right labels (no border)
-    ax.text(0.02, 0.98, "small length", transform=ax.transAxes, va="top", ha="left", fontsize=font_size)
-    ax.text(0.98, 0.98, "big length", transform=ax.transAxes, va="top", ha="right", fontsize=font_size)
+    # Top-center label with arrow indicating increasing length
+    ax.text(
+        0.5,
+        0.98,
+        "increasing length",
+        transform=ax.transAxes,
+        va="top",
+        ha="center",
+        fontsize=font_size,
+    )
+    ax.annotate(
+        "",
+        xy=(0.7, 0.92),
+        xytext=(0.3, 0.92),
+        xycoords=ax.transAxes,
+        arrowprops=dict(arrowstyle="->", linewidth=0.75),
+    )
 
     # Save as SVG
     fig.savefig(
@@ -238,7 +282,8 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig5c_A_A_ref.svg etc.
+    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig5c_A_A_ref.svg etc.
+    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig5c_NTU_w_plus.svg when NTU axis
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -256,4 +301,5 @@ if __name__ == "__main__":
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
         plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
+        plot_ref_plus=PLOT_REF_PLUS,
     )

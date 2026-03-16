@@ -226,11 +226,9 @@ def save_figures(
     ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
 
     patch_thermal = mpatches.Patch(
-        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal dissipation"
+        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal"
     )
-    patch_viscous = mpatches.Patch(
-        facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous dissipation"
-    )
+    patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous")
 
     # Legend box style to match fig5b (frameon, facecolor white, edge black, fancybox=False)
     ax.legend(

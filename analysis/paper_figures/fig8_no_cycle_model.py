@@ -652,6 +652,57 @@ def run_plot(
         label="fuel only",
     )
 
+    # Linearised fuel trade-factors: delta_m_f = 128*(eps-0.6) - 173*(dp_h-0.06) - 169*(dp_c-0.04)
+    # Coefficients at baseline design (eps=0.6, dp_h=6%, dp_c=4%). Restrict to A/A_ref in [0.5, 2.0].
+    BASELINE_EPS = 0.6
+    BASELINE_DP_H = 0.06
+    BASELINE_DP_C = 0.04
+    TF_EPS = 128
+    TF_DP_H = 173
+    TF_DP_C = 169
+    mask = (a_over_a_ref_opt_line >= 0.5) & (a_over_a_ref_opt_line <= 2.0)
+    if np.any(mask):
+        a_trim = a_over_a_ref_opt_line[mask]
+        m_hex_trim = m_hex[mask]
+        eps_trim = eps_arr[mask]
+        dp_h_trim = dp_h_arr[mask]
+        dp_c_trim = dp_c_arr[mask]
+        # Print first, mid (A=A_ref), last for fuel trade-factors sweep
+        idx_first, idx_last = 0, len(a_trim) - 1
+        idx_mid = np.argmin(np.abs(a_trim - 1.0))
+        # eps from epsilon_ntu is fraction; dp_h, dp_c from _get_eps_dp_at_ao_ntu are in %
+        delta_m_f = (
+            TF_EPS * (eps_trim - BASELINE_EPS)
+            - TF_DP_H * (dp_h_trim / 100 - BASELINE_DP_H)
+            - TF_DP_C * (dp_c_trim / 100 - BASELINE_DP_C)
+        )
+        print("\nFuel trade-factors sweep (optimal Ao at each A):")
+        print(
+            f"  First (A/A_ref={a_trim[idx_first]:.3f}): "
+            f"eps={eps_trim[idx_first]:.4f}, dp_h={dp_h_trim[idx_first]:.2f}%, dp_c={dp_c_trim[idx_first]:.2f}%, "
+            f"delta_m_f={delta_m_f[idx_first]:.2f} kg"
+        )
+        print(
+            f"  Mid @ A=A_ref ({a_trim[idx_mid]:.3f}): "
+            f"eps={eps_trim[idx_mid]:.4f}, dp_h={dp_h_trim[idx_mid]:.2f}%, dp_c={dp_c_trim[idx_mid]:.2f}%, "
+            f"delta_m_f={delta_m_f[idx_mid]:.2f} kg"
+        )
+        print(
+            f"  Last (A/A_ref={a_trim[idx_last]:.3f}): "
+            f"eps={eps_trim[idx_last]:.4f}, dp_h={dp_h_trim[idx_last]:.2f}%, dp_c={dp_c_trim[idx_last]:.2f}%, "
+            f"delta_m_f={delta_m_f[idx_last]:.2f} kg"
+        )
+
+        # Add baseline fuel to get absolute fuel mass (no HEx mass); comparable to dashed line
+        dm_fuel_linearised = delta_m_f + 2 * 700 / 12 * (1 / 0.345 - 1 / 0.405)
+        ax.plot(
+            m_hex_trim,
+            -dm_fuel_linearised + m_hex_trim,
+            "r",
+            linewidth=1.5,
+            label="trade-factor validation",
+        )
+
     # # Add red lines for constant reference g2^h case (using linear relations)
     # # Calculate dQ_o^M/Qmax for constant g2_h = DEFAULT_G2_H
     # a_over_a_ref_constant_g2h, dq_o_m_over_qmax_constant_g2h = _optimal_ntu_line_constant_g2h(
@@ -726,7 +777,13 @@ def run_plot(
     ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
     # ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$ vs $A/A_{\mathrm{ref}}$")
     # ax.set_title(r"Practical Design Example")
-    ax.legend(loc="upper right", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
+    # Reorder legend so "trade-factor validation" appears first
+    handles, labels = ax.get_legend_handles_labels()
+    if "trade-factor validation" in labels:
+        idx = labels.index("trade-factor validation")
+        handles = [handles[idx]] + [h for i, h in enumerate(handles) if i != idx]
+        labels = [labels[idx]] + [l for i, l in enumerate(labels) if i != idx]
+    ax.legend(handles, labels, loc="upper right", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
     ax.grid(True, alpha=0.3)
 
     ax.set_xlim(0, 60)

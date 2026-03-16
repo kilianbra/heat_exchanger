@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import xflow
 from xflow import create_plot
 
+from plot_colors import MARKER_SIZE_LATEX
+
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
 # A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
@@ -39,6 +41,7 @@ def save_figures(
     base_name="fig5a_lengthening",
     plot_triple_g2=None,
     plot_area_ratio_ref=False,
+    plot_ref_plus=False,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG for given parameter values.
@@ -70,7 +73,7 @@ def save_figures(
     ax = plt.subplot(111)
     ax_twin = ax.twinx()
 
-    create_plot(
+    line_eps, line_dp_list, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -105,7 +108,7 @@ def save_figures(
 
     # independet control for figure
     if plot_area_ratio_ref:
-        base_name = base_name.replace("_lengthening", "_A_A_ref")
+        base_name = base_name.replace("_lengthening", "_A_A_ref_w_plus" if plot_ref_plus else "_A_A_ref")
         # Transform x from NTU to A/A_ref = NTU/NTU_MATCH
         for ax_use in (ax, ax_twin):
             for line in ax_use.get_lines():
@@ -119,8 +122,59 @@ def save_figures(
         ax.set_xticks([0, 2, 4, 6, 8, 10])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
         ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
+        # Add + markers at reference design (A/A_ref=1) on heat transfer and hot pressure drop (Mach 0.11 only)
+        if plot_ref_plus and line_eps is not None and line_dp_list is not None:
+            x_ref = 1.0
+            x_eps, y_eps = line_eps.get_xdata(), line_eps.get_ydata()
+            if np.min(x_eps) <= x_ref <= np.max(x_eps):
+                y_at_ref = np.interp(x_ref, x_eps, y_eps)
+                ax.scatter(x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
+                ax.annotate(
+                    "baseline\n design",
+                    xy=(x_ref, y_at_ref),
+                    xytext=(0.08, 0.88),
+                    fontsize=font_size,
+                    ha="left",
+                    zorder=6,
+                    arrowprops=dict(arrowstyle="->", color="black", lw=1, shrinkB=12),
+                )
+            # line_dp_list: [0]=M0.04, [1]=M0.06, [2]=M0.11
+            line_dp_m011 = line_dp_list[2] if len(line_dp_list) > 2 else None
+            if line_dp_m011 is not None:
+                x_dp, y_dp = line_dp_m011.get_xdata(), line_dp_m011.get_ydata()
+                if np.min(x_dp) <= x_ref <= np.max(x_dp):
+                    y_dp_at_ref = np.interp(x_ref, x_dp, y_dp)
+                    ax_twin.scatter(
+                        x_ref, y_dp_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5
+                    )
     else:
+        if plot_ref_plus:
+            base_name = base_name.replace("_lengthening", "_NTU_w_plus")
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+        # Add + markers at reference design (NTU=NTU_MATCH) when plot_ref_plus
+        if plot_ref_plus and line_eps is not None and line_dp_list is not None:
+            x_ref = NTU_MATCH
+            x_eps, y_eps = line_eps.get_xdata(), line_eps.get_ydata()
+            if np.min(x_eps) <= x_ref <= np.max(x_eps):
+                y_at_ref = np.interp(x_ref, x_eps, y_eps)
+                ax.scatter(x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
+                ax.annotate(
+                    "baseline\n design",
+                    xy=(x_ref, y_at_ref),
+                    xytext=(0.08, 0.88),
+                    fontsize=font_size,
+                    ha="left",
+                    zorder=6,
+                    arrowprops=dict(arrowstyle="->", color="black", lw=1, shrinkB=12),
+                )
+            line_dp_m011 = line_dp_list[2] if len(line_dp_list) > 2 else None
+            if line_dp_m011 is not None:
+                x_dp, y_dp = line_dp_m011.get_xdata(), line_dp_m011.get_ydata()
+                if np.min(x_dp) <= x_ref <= np.max(x_dp):
+                    y_dp_at_ref = np.interp(x_ref, x_dp, y_dp)
+                    ax_twin.scatter(
+                        x_ref, y_dp_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5
+                    )
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
     ax_twin.set_ylabel(r"Hot Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
     h_right, _ = ax_twin.get_legend_handles_labels()
@@ -198,7 +252,8 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig5a_A_A_ref.svg etc.
+    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig5a_A_A_ref.svg etc.
+    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig5a_NTU_w_plus.svg when NTU axis
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -209,4 +264,5 @@ if __name__ == "__main__":
         base_name="fig5a_lengthening",
         plot_triple_g2=PLOT_TRIPLE_G2,
         plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
+        plot_ref_plus=PLOT_REF_PLUS,
     )
