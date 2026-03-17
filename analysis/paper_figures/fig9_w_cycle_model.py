@@ -602,6 +602,70 @@ def _sweep_bc_only(pressure_drop_ratio, factor_fuel):
     return {"a": np.array(a_out), "ao": np.array(ao_out), "obj": np.array(obj_out)}
 
 
+def get_line_data():
+    """Return (m_hex_opt, line1, line3, m_hex_bc, line_bc, line_bc_mdot) for combined plots. No markers."""
+    sigma_r_hot = DEFAULT_D_R_hot * DEFAULT_A_R_hot
+    pressure_drop_ratio = calculate_pressure_drop_ratio(
+        DEFAULT_PRESSURE_DROP_ASSUMPTION,
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_T,
+        DEFAULT_D_R_hot,
+        DEFAULT_MOLAR_MASS_RATIO,
+        sigma_r_hot,
+        DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    )
+    g2h_ref = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
+    eps_ref, dp_hot_ref, dp_cold_ref = _get_eps_dp_from_g2h(
+        g2h_ref,
+        NTU_MATCH,
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_ST_OVER_F,
+        DEFAULT_F_C_OVER_F_H,
+        DEFAULT_D_R_hot,
+        pressure_drop_ratio,
+    )
+    P_ref_cyc, T_ref_cyc, s, eff_ref, w_net_ref = calculate_recuperated_cycle_dp_eps(
+        PR, TIT, eta_poly_c, eta_poly_t, eps_ref, dp_hot_ref, dp_cold_ref
+    )
+    T_hot_in_ref = T_ref_cyc[4]
+    mdot_at_ref = P_shaft_ref / w_net_ref
+    P_b, T_b, s_b, eff_b, w_net_baseline = calculate_cycle(PR, TIT, eta_poly_c, eta_poly_t)
+    mdot_baseline = P_shaft_ref / w_net_baseline
+    cp_hot = 1070.0
+    Th_in_ref = 898
+    Tc_in_ref = 588
+    Q_max = mdot_at_ref * cp_hot * (Th_in_ref - Tc_in_ref)
+    factor_fuel = mission_seconds / LHV_J_per_kg * eta_turb / eta_ov * Q_max
+    P_ref = P_shaft_ref
+    res = _optimal_ao_r_ref_for_each_a_r_ref(
+        pressure_drop_ratio,
+        mdot_at_ref,
+        T_hot_in_ref,
+        P_ref,
+        mdot_baseline,
+        eff_b,
+        factor_fuel,
+        INCLUDE_DELTA_ENGINE,
+    )
+    red_r = res["red"]
+    if len(red_r["a"]) == 0:
+        return None
+    a_r_ref_opt = red_r["a"]
+    m_hex_opt = red_r["m_hex"]
+    mdot_fuel_baseline = P_shaft_ref / (LHV_J_per_kg * eff_b / 100)
+    mdot_fuel_opt = P_shaft_ref / (LHV_J_per_kg * red_r["eff"] / 100)
+    delta_fuel = (mdot_fuel_opt - mdot_fuel_baseline) * mission_seconds
+    delta_hex = m_hex_opt
+    delta_engine = (red_r["mdot"] - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
+    line1 = delta_fuel
+    line3 = delta_fuel + delta_hex + delta_engine
+    res_bc = _sweep_bc_only(pressure_drop_ratio, factor_fuel)
+    line_bc = res_bc["obj"]
+    m_hex_bc = res_bc["a"] * m_hex_ref
+    line_bc_mdot = res["bc_mdot_dqom"]["obj"]
+    return (m_hex_opt, line1, line3, m_hex_bc, line_bc, line_bc_mdot)
+
+
 def run_plot(base_name="fig9_w_cycle_model"):
     """Run the cycle-coupled fig8 analysis and plot three weight-delta lines."""
     sigma_r_hot = DEFAULT_D_R_hot * DEFAULT_A_R_hot
@@ -997,30 +1061,30 @@ def run_plot(base_name="fig9_w_cycle_model"):
         linewidths=1,
     )
     # Black star: BC+mdot dQ^M optimum on the black line
-    ax.scatter(
-        a_r_black_star * m_hex_ref,
-        line_bc_mdot[id_min_bc_mdot],
-        color="black",
-        s=90,
-        zorder=5,
-        marker="*",
-        facecolor="black",
-        edgecolor="white",
-        linewidths=1,
-    )
+    # ax.scatter(
+    #     a_r_black_star * m_hex_ref,
+    #     line_bc_mdot[id_min_bc_mdot],
+    #     color="black",
+    #     s=90,
+    #     zorder=5,
+    #     marker="*",
+    #     facecolor="black",
+    #     edgecolor="white",
+    #     linewidths=1,
+    # )
     # Circle on red line showing where the black-star design lands on the cycle model
-    if np.isfinite(line3_bs):
-        ax.scatter(
-            a_r_black_star * m_hex_ref,
-            line3_bs,
-            color="red",
-            s=90,
-            zorder=4,
-            marker="*",
-            facecolor="red",
-            edgecolor="white",
-            linewidths=1,
-        )
+    # if np.isfinite(line3_bs):
+    #     ax.scatter(
+    #         a_r_black_star * m_hex_ref,
+    #         line3_bs,
+    #         color="red",
+    #         s=90,
+    #         zorder=4,
+    #         marker="*",
+    #         facecolor="red",
+    #         edgecolor="white",
+    #         linewidths=1,
+    #     )
     if np.isfinite(dq_ref):
         line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
         ax.scatter(
@@ -1034,7 +1098,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
         )
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
-    ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
+    ax.set_ylabel(r"Change in Take-off Mass $\Delta m$ (kg)")
     legend_handles = [
         Line2D([], [], color="r", linestyle="-", linewidth=1.5, label=r"fuel + HEx + engine"),
         Line2D([], [], color="r", linestyle="--", linewidth=1.5, label="fuel only"),
@@ -1070,9 +1134,9 @@ def run_plot(base_name="fig9_w_cycle_model"):
 
     # Annotations
     ax.annotate(
-        "optimal design A for fuel\n burn from cycle $\eta$",
+        "true global optimal design with\n fuel burn from cycle $\eta$",
         xy=(m_hex_opt[id_min_red], line3[id_min_red]),
-        xytext=(m_hex_opt[id_min_red] - 16, -78),
+        xytext=(30, -60),
         fontsize=FONT_SIZE,
         zorder=6,
         arrowprops=dict(arrowstyle="->", color="black", lw=1),
@@ -1086,23 +1150,23 @@ def run_plot(base_name="fig9_w_cycle_model"):
             arrowprops=dict(arrowstyle="->", color="black", lw=1),
         )
     # r"optimal: $\sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$ with\n $\Delta m_{\mathrm{f}} \propto \sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$",
-    ax.annotate(
-        "optimal design B for fuel\n" + r" burn from $\sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$",
-        xy=(a_r_black_star * m_hex_ref, line_bc_mdot[id_min_bc_mdot]),
-        xytext=(a_r_black_star * m_hex_ref + 4, line_bc_mdot[id_min_bc_mdot] - 12),
-        fontsize=FONT_SIZE,
-        zorder=6,
-        arrowprops=dict(arrowstyle="->", color="black", lw=1),
-    )
-    if np.isfinite(line3_bs):
-        ax.annotate(
-            "design B with fuel burn\n from cycle $\eta$",
-            xy=(a_r_black_star * m_hex_ref, line3_bs),
-            xytext=(a_r_black_star * m_hex_ref + 4, line3_bs + 8),
-            fontsize=FONT_SIZE,
-            zorder=6,
-            arrowprops=dict(arrowstyle="->", color="black", lw=1),
-        )
+    # ax.annotate(
+    #     "optimal design B for fuel\n" + r" burn from $\sum\Delta\dot{W}^{\mathrm{M}}_{\mathrm{A}}$",
+    #     xy=(a_r_black_star * m_hex_ref, line_bc_mdot[id_min_bc_mdot]),
+    #     xytext=(a_r_black_star * m_hex_ref + 4, line_bc_mdot[id_min_bc_mdot] - 12),
+    #     fontsize=FONT_SIZE,
+    #     zorder=6,
+    #     arrowprops=dict(arrowstyle="->", color="black", lw=1),
+    # )
+    # if np.isfinite(line3_bs):
+    #     ax.annotate(
+    #         "design B with fuel burn\n from cycle $\eta$",
+    #         xy=(a_r_black_star * m_hex_ref, line3_bs),
+    #         xytext=(a_r_black_star * m_hex_ref + 4, line3_bs + 8),
+    #         fontsize=FONT_SIZE,
+    #         zorder=6,
+    #         arrowprops=dict(arrowstyle="->", color="black", lw=1),
+    #     )
 
     plt.tight_layout(pad=0.5)
 

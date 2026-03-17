@@ -344,6 +344,61 @@ def _optimal_ntu_line_constant_g2h(
     return np.array(a_over_a_ref_vals), np.array(dq_o_m_over_qmax_vals)
 
 
+def get_line_data(
+    c_cold_over_c_hot=DEFAULT_C_COLD_OVER_C_HOT,
+    st_over_f=DEFAULT_ST_OVER_F,
+    f_c_over_f_h=DEFAULT_F_C_OVER_F_H,
+    d_r=DEFAULT_D_R,
+    t=DEFAULT_T,
+    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+    gamma=DEFAULT_GAMMA,
+    pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
+    molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
+    a_r=DEFAULT_A_R,
+    dp_max=DEFAULT_DP_MAX,
+):
+    """Return (m_hex, line_fuel_only, line_fuel_hex) for combined plots. No markers."""
+    sigma_r = d_r * a_r if a_r is not None else None
+    pressure_drop_ratio = calculate_pressure_drop_ratio(
+        pressure_drop_assumption,
+        c_cold_over_c_hot,
+        t,
+        d_r,
+        molar_mass_ratio,
+        sigma_r,
+        p_cold_in_over_p_hot_in,
+    )
+    a_over_a_ref_opt_line, ao_opt_line, ntu_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ao_for_each_a_over_a_ref(
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r,
+        pressure_drop_ratio,
+        t,
+        p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in,
+        gamma,
+        dp_max,
+    )
+    if len(a_over_a_ref_opt_line) == 0:
+        return None
+    mission_hours = 2
+    lhv_kwh_per_kg = 12.0
+    eta_turb = 0.88
+    eta_ov = 0.434
+    mdot_hot_ref = 2.3
+    cp_hot = 1.07
+    Th_in_ref = 898
+    Tc_in_ref = 588
+    Q_max = mdot_hot_ref * cp_hot * (Th_in_ref - Tc_in_ref)
+    factor_fuel = mission_hours / lhv_kwh_per_kg * eta_turb / eta_ov * Q_max
+    m_hex = a_over_a_ref_opt_line * m_hex_ref
+    line_fuel_only = dq_o_m_over_qmax_opt_line * factor_fuel
+    line_fuel_hex = dq_o_m_over_qmax_opt_line * factor_fuel + m_hex_ref * a_over_a_ref_opt_line
+    return (m_hex, line_fuel_only, line_fuel_hex)
+
+
 def run_plot(
     c_cold_over_c_hot=DEFAULT_C_COLD_OVER_C_HOT,
     st_over_f=DEFAULT_ST_OVER_F,
@@ -482,10 +537,20 @@ def run_plot(
         dp_max,
     )
     dm_ref_design = dq_ref * factor_fuel + m_hex_ref * a_over_a_ref_ref
+    # ax.scatter(
+    #     m_hex_ref_design,
+    #     dm_ref_design,
+    #     color="black",
+    #     s=25,
+    #     zorder=5,
+    #     marker="+",
+    #     linewidths=0.7,
+    # )
+    # Red cross at x=13.3, sum of saving -32.4 (to see)
     ax.scatter(
-        m_hex_ref_design,
-        dm_ref_design,
-        color="black",
+        13.3,
+        -32.4,
+        color="red",
         s=25,
         zorder=5,
         marker="+",
@@ -657,6 +722,9 @@ def run_plot(
     BASELINE_EPS = 0.6
     BASELINE_DP_H = 0.06
     BASELINE_DP_C = 0.04
+    # common_fact = 2.24 * 1070 * (898-588)*0.84/0.405 # at baseline
+    # common_fact = 2.12 * 1070 * (885-588) * 0.84 / 0.427
+
     TF_EPS = 128
     TF_DP_H = 173
     TF_DP_C = 169
@@ -774,7 +842,7 @@ def run_plot(
 
     ax.set_xlabel(r"Heat Exchanger (HEx) Core Mass $m_{\mathrm{HEx}}$ (kg)")
     # ax.set_ylabel(r"$\Delta Q_0^M / Q_{\mathrm{max}}$")
-    ax.set_ylabel(r"Change in Mass $\Delta m$ (kg)")
+    ax.set_ylabel(r"Change in Take-off Mass $\Delta m$ (kg)")
     # ax.set_title(r"HEx $\Delta Q_0^M / Q_{\mathrm{max}}$ vs $A/A_{\mathrm{ref}}$")
     # ax.set_title(r"Practical Design Example")
     # Reorder legend so "trade-factor validation" appears first
@@ -783,7 +851,16 @@ def run_plot(
         idx = labels.index("trade-factor validation")
         handles = [handles[idx]] + [h for i, h in enumerate(handles) if i != idx]
         labels = [labels[idx]] + [l for i, l in enumerate(labels) if i != idx]
-    ax.legend(handles, labels, loc="upper right", frameon=True, edgecolor="black", facecolor="white", framealpha=1.0, fancybox=False)
+    ax.legend(
+        handles,
+        labels,
+        loc="upper right",
+        frameon=True,
+        edgecolor="black",
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=False,
+    )
     ax.grid(True, alpha=0.3)
 
     ax.set_xlim(0, 60)
