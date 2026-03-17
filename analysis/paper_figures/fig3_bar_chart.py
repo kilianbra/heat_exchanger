@@ -630,7 +630,7 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
 
 
 if __name__ == "__main__":
-    DO_PRINT = False  # Set True to print availability breakdown to terminal
+    DO_PRINT = True  # Set True to print availability breakdown to terminal
     SHOW_INTERACTIVE = False  # False to skip plt.show(), only save
     data = run(do_print=DO_PRINT)
     if SHOW_INTERACTIVE:
