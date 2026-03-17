@@ -358,7 +358,7 @@ def get_line_data(
     a_r=DEFAULT_A_R,
     dp_max=DEFAULT_DP_MAX,
 ):
-    """Return (m_hex, line_fuel_only, line_fuel_hex) for combined plots. No markers."""
+    """Return dict with line data and design arrays for combined plots. No markers."""
     sigma_r = d_r * a_r if a_r is not None else None
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption,
@@ -396,7 +396,27 @@ def get_line_data(
     m_hex = a_over_a_ref_opt_line * m_hex_ref
     line_fuel_only = dq_o_m_over_qmax_opt_line * factor_fuel
     line_fuel_hex = dq_o_m_over_qmax_opt_line * factor_fuel + m_hex_ref * a_over_a_ref_opt_line
-    return (m_hex, line_fuel_only, line_fuel_hex)
+    # Fixed mass optimum (black circle): at A/A_ref=1, interpolate ao, ntu from sweep
+    a_over_a_ref_ref = _a_over_a_ref(1.0, NTU_MATCH)
+    m_hex_ref_design = a_over_a_ref_ref * m_hex_ref
+    ao_fixed = float(np.interp(m_hex_ref_design, m_hex, ao_opt_line))
+    ntu_fixed = float(np.interp(m_hex_ref_design, m_hex, ntu_opt_line))
+    return {
+        "m_hex": m_hex,
+        "line_fuel_only": line_fuel_only,
+        "line_fuel_hex": line_fuel_hex,
+        "a_over_a_ref": a_over_a_ref_opt_line,
+        "ao": ao_opt_line,
+        "ntu": ntu_opt_line,
+        "dq_o_m_over_qmax": dq_o_m_over_qmax_opt_line,
+        "factor_fuel": factor_fuel,
+        "pressure_drop_ratio": pressure_drop_ratio,
+        "id_min": int(np.argmin(line_fuel_hex)),
+        "a_r_fixed": a_over_a_ref_ref,
+        "ao_fixed": ao_fixed,
+        "ntu_fixed": ntu_fixed,
+        "m_hex_fixed": m_hex_ref_design,
+    }
 
 
 def run_plot(

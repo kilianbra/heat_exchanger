@@ -663,7 +663,24 @@ def get_line_data():
     line_bc = res_bc["obj"]
     m_hex_bc = res_bc["a"] * m_hex_ref
     line_bc_mdot = res["bc_mdot_dqom"]["obj"]
-    return (m_hex_opt, line1, line3, m_hex_bc, line_bc, line_bc_mdot)
+    id_min_red = int(np.argmin(line3))
+    return {
+        "m_hex_opt": m_hex_opt,
+        "line1": line1,
+        "line3": line3,
+        "m_hex_bc": m_hex_bc,
+        "line_bc": line_bc,
+        "line_bc_mdot": line_bc_mdot,
+        "red": red_r,
+        "factor_fuel": factor_fuel,
+        "mdot_baseline": mdot_baseline,
+        "pressure_drop_ratio": pressure_drop_ratio,
+        "mdot_at_ref": mdot_at_ref,
+        "T_hot_in_ref": T_hot_in_ref,
+        "P_shaft_ref": P_shaft_ref,
+        "eff_b": eff_b,
+        "id_min_red": id_min_red,
+    }
 
 
 def run_plot(base_name="fig9_w_cycle_model"):
