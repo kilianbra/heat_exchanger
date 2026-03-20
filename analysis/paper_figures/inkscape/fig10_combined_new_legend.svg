@@ -7,7 +7,7 @@
    id="svg652"
    sodipodi:docname="fig10_combined_new_legend.svg"
    inkscape:version="1.2.1 (9c6d41e410, 2022-07-14)"
-   inkscape:export-filename="..\..\..\..\Reports_latex_github\ASME_2026\mypaper_draft\Figures\fig10_combined_new_legend.png"
+   inkscape:export-filename="..\..\..\..\Reports_latex_github\ASME_2026\mypaper_draft\Figures\fig10_combined_new_legend.pdf"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -29,13 +29,13 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="pt"
      showgrid="false"
-     inkscape:zoom="6.2970832"
-     inkscape:cx="159.5183"
-     inkscape:cy="96.949648"
-     inkscape:window-width="3200"
-     inkscape:window-height="1711"
-     inkscape:window-x="1791"
-     inkscape:window-y="737"
+     inkscape:zoom="1.5742708"
+     inkscape:cx="-0.31760736"
+     inkscape:cy="181.35381"
+     inkscape:window-width="1920"
+     inkscape:window-height="991"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg652" />
   <metadata
@@ -1129,7 +1129,7 @@
   </g>
   <g
      id="line2d_32"
-     transform="translate(-12.855155,14.062554)">
+     transform="translate(-12.855155,29.062554)">
     <path
        d="m 151.6498,16.88 h 8.75956 12.70456"
        style="fill:none;stroke:#000000;stroke-width:1.5;stroke-dasharray:5.55, 2.4;stroke-dashoffset:0"
@@ -1139,28 +1139,28 @@
   <text
      xml:space="preserve"
      style="font-size:8px;fill:#ffffff;fill-opacity:0.656;stroke-width:0.467717"
-     x="134.87981"
+     x="133.37981"
      y="20.852365"
      id="text1942"><tspan
        sodipodi:role="line"
        id="tspan1940"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';fill:#000000;fill-opacity:1;stroke-width:0.467717"
-       x="134.87981"
+       x="133.37981"
        y="20.852365">Fuel only</tspan></text>
   <text
      xml:space="preserve"
      style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';fill:#000000;fill-opacity:1;stroke-width:0.467717"
-     x="167.46761"
+     x="170.46761"
      y="20.852365"
      id="text2754"><tspan
        sodipodi:role="line"
        id="tspan2752"
        style="stroke-width:0.467717"
-       x="167.46761"
-       y="20.852365">Fuel + HEx</tspan></text>
+       x="170.46761"
+       y="20.852365">Fuel  HEx</tspan></text>
   <g
      id="line2d_33"
-     transform="translate(113.15738,-16.732218)">
+     transform="translate(113.15738,-1.732218)">
     <path
        d="m 61.084271,47.62 9.283401,0.119103 h 10.620261"
        style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linecap:square"
@@ -1169,7 +1169,7 @@
   </g>
   <g
      id="line2d_34"
-     transform="translate(54.080596,6.3081954)">
+     transform="translate(54.080596,-5.691805)">
     <path
        d="m 84.714049,37.79051 8.759559,0.05955 h 12.653662"
        style="fill:none;stroke:#ff0000;stroke-width:1.5;stroke-dasharray:5.55, 2.4;stroke-dashoffset:0"
@@ -1178,7 +1178,7 @@
   </g>
   <g
      id="line2d_35"
-     transform="translate(21.933242,-6.7152606)">
+     transform="translate(21.933242,-18.715261)">
     <path
        d="m 152.40936,50.84375 h 8 11.69219"
        style="fill:none;stroke:#ff0000;stroke-width:1.5;stroke-linecap:square"
@@ -1189,24 +1189,24 @@
      xml:space="preserve"
      style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.00002px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';fill:#000000;fill-opacity:1;stroke-width:0.467717"
      x="65.203125"
-     y="46.072323"
+     y="34.072323"
      id="text2793"><tspan
        sodipodi:role="line"
        id="tspan2791"
        style="stroke-width:0.467717"
        x="65.203125"
-       y="46.072323">Fully coupled cycle </tspan></text>
+       y="34.072323">Fully coupled cycle </tspan></text>
   <text
      xml:space="preserve"
      style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.00002px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';fill:#000000;fill-opacity:1;stroke-width:0.467717"
      x="65.199219"
-     y="32.856621"
+     y="47.856621"
      id="text2797"><tspan
        sodipodi:role="line"
        id="tspan2795"
        style="stroke-width:0.467717"
        x="65.199219"
-       y="32.856621">Practical availability</tspan></text>
+       y="47.856621">Practical availability</tspan></text>
   <text
      xml:space="preserve"
      style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:8.00002px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke-width:0.999997;stroke-dasharray:none"
@@ -1415,5 +1415,16 @@
      id="text7418"><tspan
        sodipodi:role="line"
        id="tspan7416"
-       style="stroke-width:1"></tspan></text>
+       style="stroke-width:1" /></text>
+  <text
+     xml:space="preserve"
+     style="font-size:8.00002px;font-family:'Times New Roman';-inkscape-font-specification:'Times New Roman, ';text-align:center;text-anchor:middle;fill:#000000;stroke-width:0.999997"
+     x="186.65976"
+     y="21.42454"
+     id="text729"><tspan
+       sodipodi:role="line"
+       id="tspan727"
+       style="stroke-width:1"
+       x="186.65976"
+       y="21.42454">+</tspan></text>
 </svg>
