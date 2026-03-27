@@ -2,11 +2,9 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-import xflow
-from scipy.signal import find_peaks
-from xflow import calculate_pressure_drop_ratio, create_plot
-
 from plot_colors import MARKER_SIZE_LATEX
+import xflow
+from xflow import calculate_pressure_drop_ratio, create_plot
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
@@ -28,19 +26,21 @@ DEFAULT_DP_MAX = 0.2
 PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
 PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
-# A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
-NTU_MATCH = 1.479
-
 # Framework parameters (match fig8/9, T_ratios from xflow 106-109)
 # DEFAULT_T = 898 / 588
 DEFAULT_T = 907 / 588
-DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
-DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
+# DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
+DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_MOLAR_MASS_RATIO = 1.0
 # DEFAULT_A_R = 1.0
 DEFAULT_A_R = 0.92
+
+# A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
+NTU_MATCH = 1.479
 
 
 def save_figures(
@@ -50,20 +50,20 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig5b_lengthening",
+    base_name="fig6c_lengthening",
     plot_triple_g2=None,
     t=DEFAULT_T,
-    t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
     gamma=DEFAULT_GAMMA,
     pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
-    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
     plot_area_ratio_ref=False,
     plot_ref_plus=False,
 ):
     """
-    Save figures as SVG, TIFF, and HD PNG for classical framework with multiple g^2 values.
+    Save figures as SVG, TIFF, and HD PNG for practical framework with multiple g^2 values.
 
     Parameters:
         plot_triple_g2: List of g^2 values to plot (e.g., [1e-5, 2e-5, 5e-5])
@@ -91,14 +91,14 @@ def save_figures(
     pressure_drop_ratio = calculate_pressure_drop_ratio(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
-    print(f"Pressure drop ratio (inlet_density): (dp_c/p_cin)/(dp_h/p_hin) = {pressure_drop_ratio:.6f}")
 
     # Ensure SHOW_CUBIC is False for this figure
     xflow.SHOW_CUBIC = False
+
     fig = plt.figure(figsize=(9 / 2.54, 7 / 2.54))  # IF DOUBLE COLUMN FIGURE, USE THIS
     fig = plt.figure(figsize=((6) / 2.54, 7 / 2.54))  # IF TRIPPLE COLUMN FIGURE, USE THIS
     ax = plt.subplot(111)
-    ax_twin = ax.twinx()  # Created but will be hidden for classical framework
+    ax_twin = ax.twinx()  # Created but will be hidden for practical framework
 
     _, line_list, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
@@ -111,11 +111,11 @@ def save_figures(
         ax=ax,
         ax_twin=ax_twin,
         plot_triple_g2=plot_triple_g2,
-        framework="classical",
+        framework="practical",
         t=t,
-        t_dead_over_t_cold_in=t_dead_over_t_cold_in,
+        t_dead_over_t_cold_in=1.0,
         p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
-        p_dead_over_p_hot_in=1.0,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
         gamma=gamma,
         pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
@@ -147,7 +147,7 @@ def save_figures(
         ax.set_xticks([0, 2, 4, 6, 8, 10])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
         ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
-        # Add + marker at reference design (A/A_ref=1) on classical availability line (Mach 0.11 only)
+        # Add + marker at reference design (A/A_ref=1) on practical availability line (Mach 0.11 only)
         if plot_ref_plus and line_list and len(line_list) > 2:
             x_ref = 1.0
             line_m011 = line_list[2]  # [0]=M0.04, [1]=M0.06, [2]=M0.11
@@ -164,7 +164,7 @@ def save_figures(
         ax.set_xticks([0, 5, 10, 15])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-        # Add + marker at reference design (NTU=NTU_MATCH) on classical availability line (Mach 0.11 only)
+        # Add + marker at reference design (NTU=NTU_MATCH) on practical availability line (Mach 0.11 only)
         if plot_ref_plus and line_list and len(line_list) > 2:
             x_ref = NTU_MATCH
             line_m011 = line_list[2]
@@ -175,7 +175,7 @@ def save_figures(
                     x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX,
                     linewidths=1, color="black", zorder=5
                 )
-    ax.set_ylim(-0.1, 0)
+    ax.set_ylim(0, 0.5)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
     # Remove existing legend and recreate using line_list order (matches newfig1: highest g^2 at top)
@@ -190,62 +190,52 @@ def save_figures(
 
     # Add new legend matching newfig1 style with custom labels and title
     if line_list:
-        # Add optimum point markers (maximum after first trough, since we plot availability).
-        # Skip if optimum is at lowest NTU (index 0) - not a real optimum, e.g. highest Mach case.
-        opt_xy = []
+        # Add optimum point markers (minimum) for each line
         for line in line_list:
             x_data = line.get_xdata()
             y_data = line.get_ydata()
+            # Filter out invalid/masked data
             valid_mask = np.isfinite(x_data) & np.isfinite(y_data)
             if np.any(valid_mask):
                 x_plot = x_data[valid_mask]
                 y_plot = y_data[valid_mask]
-                troughs, _ = find_peaks(-y_plot)
-                if len(troughs) > 0:
-                    first_trough = troughs[0]
-                    y_opt_idx = first_trough + np.argmax(y_plot[first_trough:])
-                else:
-                    y_opt_idx = np.argmax(y_plot)
-                # Skip if optimum is at first (lowest NTU) point - boundary artefact
-                if y_opt_idx == 0:
-                    continue
-                x_opt, y_opt = x_plot[y_opt_idx], y_plot[y_opt_idx]
-                opt_xy.append((x_opt, y_opt))
+                # Find maximum (optimum = max availability)
+                arg_y_max = np.argmax(y_plot)
                 ax.scatter(
-                    x_opt,
-                    y_opt,
+                    x_plot[arg_y_max],
+                    y_plot[arg_y_max],
                     color="white",
                     marker="o",
                     zorder=5,
-                    s=MARKER_SIZE_LATEX,
                     facecolor="black",
+                    s=50,
                 )
-        # Arrows from "optimal designs" label to the valid optimum points; text in empty space above -0.025
-        if len(opt_xy) >= 2:
-            x_text = 5 / NTU_MATCH if plot_area_ratio_ref else 5
-            x_text2 = 6.8 / NTU_MATCH if plot_area_ratio_ref else 6.8
-            y_text = -0.012  # In empty space above -0.025, within ylim (-0.1, 0)
-            arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=12)
-            ax.annotate(
-                "optimal designs",
-                xy=opt_xy[0],
-                xytext=(x_text, y_text),
-                fontsize=font_size,
-                ha="left",
-                arrowprops=arrow_kw,
-            )
-            ax.annotate(
-                "",
-                xy=opt_xy[1],
-                xytext=(x_text2, y_text),
-                arrowprops=arrow_kw,
-            )
 
     if not plot_area_ratio_ref:
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
+    ax.set_ylabel(
+        r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])"
+    )
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
+
+    # Top-center label with arrow indicating increasing length
+    ax.text(
+        0.5,
+        0.98,
+        "increasing length",
+        transform=ax.transAxes,
+        va="top",
+        ha="center",
+        fontsize=font_size,
+    )
+    ax.annotate(
+        "",
+        xy=(0.7, 0.92),
+        xytext=(0.3, 0.92),
+        xycoords=ax.transAxes,
+        arrowprops=dict(arrowstyle="->", linewidth=0.75),
+    )
 
     # Save as SVG
     fig.savefig(
@@ -292,8 +282,8 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig5b_A_A_ref.svg etc.
-    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig5b_NTU_w_plus.svg when NTU axis
+    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig6c_A_A_ref.svg etc.
+    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig6c_NTU_w_plus.svg when NTU axis
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -301,13 +291,13 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig5b_lengthening",
+        base_name="fig6c_lengthening",
         plot_triple_g2=PLOT_TRIPLE_G2,
         t=DEFAULT_T,
-        t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+        p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
         gamma=DEFAULT_GAMMA,
         pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
-        p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
         molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
         a_r=DEFAULT_A_R,
         plot_area_ratio_ref=PLOT_AREA_RATIO_REF,

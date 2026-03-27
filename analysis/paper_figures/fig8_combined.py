@@ -1,15 +1,25 @@
 """
-Combined plot: black and red lines from fig9 + two lines from fig8, all on one plot with no markers.
+Paper fig8 (combined): black and red lines from fig9_w_cycle_model + black lines from
+fig8_no_cycle_model, on one plot with no markers. Saves as fig8_combined.* in Figs_current.
 """
 
 import os
+import sys
+from pathlib import Path
+
+try:
+    import fig8_no_cycle_model
+    import fig9_w_cycle_model
+except ImportError:
+    _old_scripts = Path(__file__).resolve().parent / "Old_figs" / "old_scripts"
+    if _old_scripts.is_dir():
+        sys.path.insert(0, str(_old_scripts))
+    import fig8_no_cycle_model
+    import fig9_w_cycle_model
 
 import matplotlib.pyplot as plt
 import numpy as np
 from tabulate import tabulate
-
-import fig8_no_cycle_model
-import fig9_w_cycle_model
 
 save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
 
@@ -184,13 +194,13 @@ def _print_design_comparison(data8, data9):
     ]
 
     print("\n" + "=" * 100)
-    print("  FIG10 DESIGN COMPARISON: Reference | Fixed mass opt | Practical optimum | Cycle optimum")
+    print("  FIG8 (combined) DESIGN COMPARISON: Reference | Fixed mass opt | Practical optimum | Cycle optimum")
     print("=" * 100)
     print(tabulate(rows, headers=["", "Reference", "Fixed mass opt", "Practical opt", "Cycle opt"], tablefmt="simple", stralign="right"))
     print("=" * 100 + "\n")
 
 
-def run_plot(base_name="fig10_combined"):
+def run_plot(base_name="fig8_combined"):
     """Plot all lines from fig8 and fig9 together, no markers."""
     # Get fig8 data (no cycle model: fuel only dashed, fuel+HEx solid)
     data8 = fig8_no_cycle_model.get_line_data()
@@ -292,4 +302,4 @@ def run_plot(base_name="fig10_combined"):
 
 
 if __name__ == "__main__":
-    run_plot(base_name="fig10_combined")
+    run_plot(base_name="fig8_combined")

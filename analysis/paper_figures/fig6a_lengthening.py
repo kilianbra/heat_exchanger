@@ -38,7 +38,7 @@ def save_figures(
     d_r,
     g2_h,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig5a_lengthening",
+    base_name="fig6a_lengthening",
     plot_triple_g2=None,
     plot_area_ratio_ref=False,
     plot_ref_plus=False,
@@ -252,8 +252,8 @@ def save_figures(
 
 
 if __name__ == "__main__":
-    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig5a_A_A_ref.svg etc.
-    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig5a_NTU_w_plus.svg when NTU axis
+    PLOT_AREA_RATIO_REF = False  # Set False for standard NTU x-axis; True saves fig6a_A_A_ref.svg etc.
+    PLOT_REF_PLUS = True  # Set True to add + at reference design; saves fig6a_NTU_w_plus.svg when NTU axis
     save_figures(
         DEFAULT_C_COLD_OVER_C_HOT,
         DEFAULT_ST_OVER_F,
@@ -261,7 +261,7 @@ if __name__ == "__main__":
         DEFAULT_D_R,
         DEFAULT_G2_H,
         dp_max=DEFAULT_DP_MAX,
-        base_name="fig5a_lengthening",
+        base_name="fig6a_lengthening",
         plot_triple_g2=PLOT_TRIPLE_G2,
         plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
         plot_ref_plus=PLOT_REF_PLUS,

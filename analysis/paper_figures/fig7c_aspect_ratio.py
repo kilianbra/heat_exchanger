@@ -63,7 +63,7 @@ def save_figures(
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
-    Matches fig5c style (labels, markers, legend box, no title).
+    Matches fig6c lengthening style (labels, markers, legend box, no title).
     """
     font_size = 8
     plt.rcParams.update(
@@ -90,7 +90,7 @@ def save_figures(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
-    # Match fig5c figure size (triple column 6 cm)
+    # Match fig6c lengthening figure size (triple column 6 cm)
     fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
 
@@ -166,7 +166,7 @@ def save_figures(
     )
     ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=3, linewidth=1.5)
 
-    # Optimal marker: circle, black, s=50, no double edge (match fig5c)
+    # Optimal marker: circle, black, s=50, no double edge (match fig6c)
     idx_optimum = np.argmax(y_with_dp)  # Max availability after negation
     x_optimum = ntu_with_dp[idx_optimum]
     ntu_optimum_actual = ntu_with_dp_orig[idx_optimum]
@@ -202,7 +202,7 @@ def save_figures(
     ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
-    # Legend: thermal creation and viscous dissipation (same colors as fig3)
+    # Legend: thermal creation and viscous dissipation (same colors as fig4 bar charts)
     patch_thermal = mpatches.Patch(
         facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal"
     )

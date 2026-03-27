@@ -68,7 +68,7 @@ def save_figures(
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing classical unavailable energy breakdown.
-    Matches fig5b style (labels, markers, legend box, no title).
+    Matches fig6b lengthening style (labels, markers, legend box, no title).
     """
     font_size = 8
     plt.rcParams.update(
@@ -95,7 +95,7 @@ def save_figures(
         pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
     )
 
-    # Match fig5b figure size (triple column)
+    # Match fig6b lengthening figure size (triple column)
     fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
 
@@ -230,7 +230,7 @@ def save_figures(
     )
     patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous")
 
-    # Legend box style to match fig5b (frameon, facecolor white, edge black, fancybox=False)
+    # Legend box style to match fig6b (frameon, facecolor white, edge black, fancybox=False)
     ax.legend(
         handles=[patch_thermal, patch_viscous],
         loc="lower left",

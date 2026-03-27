@@ -1,5 +1,5 @@
 """
-Shared color scheme for fig3, fig7b, fig7c.
+Shared color scheme for fig4 (bar charts), fig7b, fig7c.
 """
 
 # Marker size to match LaTeX document symbols $+$ $\bullet$ $\star$ (~6pt)
