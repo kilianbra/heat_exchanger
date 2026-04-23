@@ -8,6 +8,9 @@ when T_hot/T_cold = 2 (fig6 does not set dead state; override via constant below
 
 eps_M in outputs = practical availability increase = -practical_unavailable_creation_hex
 (normalized by Q_max), same sign convention as fig4_bar_chart.
+
+NTU at the dp limit can exceed the fig6 display cap (15); this script uses FIGX_NTU_GLOBAL_MAX
+so low-Mach classical optima are not truncated.
 """
 
 from __future__ import annotations
@@ -22,8 +25,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import xflow
+from matplotlib.ticker import MultipleLocator
 from matplotlib.transforms import blended_transform_factory
 from scipy.optimize import minimize_scalar
+from scipy.signal import find_peaks
 from xflow import (
     calculate_capacity_ratios,
     calculate_pressure_drop_ratio,
@@ -52,7 +57,8 @@ DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1
 DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
 DEFAULT_GAMMA = 1.4
-NTU_GLOBAL_MAX = 15.0
+# fig6 contour capped NTU for display; low-Mach optima need much larger NTU before hitting dp limits.
+FIGX_NTU_GLOBAL_MAX = 1000.0
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"
 DEFAULT_MOLAR_MASS_RATIO = 1.0
 DEFAULT_A_R = 0.1
@@ -65,6 +71,23 @@ MACH_MAX_DEFAULT = 0.2
 
 # Lower end of NTU search domain (>0; excludes NTU=0 global artefact for classical).
 NTU_DOMAIN_LO = 0.1
+
+# Print classical coarse-search diagnostics below this Mach (helps trace missed interior peaks).
+MACH_DEBUG_CLASSICAL = 0.04
+
+# Mach refinement: add linspace from first M where error <= this fraction (-1 %) to mach_max.
+REFINE_MACH_ERROR_FRAC = -0.01
+
+# Y-axis label for practical availability (normalized), aligned with paper notation.
+YLABEL_PRACTICAL_AVAIL = r"$\sum_i \Delta W_{A,i}^M\,/\,\dot{Q}_{\mathrm{max}}$ [-]"
+
+# Reference baseline on ε–Δp perf plot (design point).
+PERF_BASELINE_MACH = 0.11
+PERF_BASELINE_EPS = 0.60
+PERF_BASELINE_DP_HOT = 0.06
+
+# Perf figure y-axis: hot Δp first, then comma and space, then ε (both [-]).
+YLABEL_PERF = r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ , \qquad $\varepsilon$ [-]"
 
 
 def _sanitize_pressure_drop_name(assumption: str) -> str:
@@ -91,9 +114,9 @@ def ntu_max_valid(
         1.0 / st_over_f_h * C_min_over_C_hot + 1.0 / f_c_over_f_h * 1.0 / st_over_f_c * d_r * C_min_over_C_cold
     )
     if dp_coeff <= 0:
-        return NTU_GLOBAL_MAX
+        return FIGX_NTU_GLOBAL_MAX
     dp_max_eff = dp_max if pressure_drop_ratio <= 1.0 else dp_max / pressure_drop_ratio
-    return min(dp_max_eff / dp_coeff, NTU_GLOBAL_MAX)
+    return min(dp_max_eff / dp_coeff, FIGX_NTU_GLOBAL_MAX)
 
 
 def _ntu_coarse_grid(ntu_max: float, n_points: int) -> np.ndarray:
@@ -327,6 +350,28 @@ def classical_interior_local_optimum_ntu(ctx: MachOptContext, n_coarse: int) -> 
 
     vm = _vector_metrics(ctx, grid)
     peak = _interior_local_max_ntu(vm["ntu"], vm["classical_avail"])
+    if ctx.mach < MACH_DEBUG_CLASSICAL:
+        valid = vm["valid"]
+        ntu_v = vm["ntu"][valid]
+        y_v = vm["classical_avail"][valid]
+        last_valid_ntu = float(ntu_v.max()) if len(ntu_v) else float("nan")
+        print(
+            f"[classical debug] M={ctx.mach:.4f}  NTU search [{lo:.6g}, {hi:.6g}]  "
+            f"coarse grid n={len(grid)}  NTU grid [{grid.min():.6g}, {grid.max():.6g}]  "
+            f"n_valid={int(valid.sum())}  last_valid_NTU={last_valid_ntu:.6g}"
+        )
+        if len(y_v) >= 3:
+            y_fin = np.where(np.isfinite(y_v), y_v, -np.inf)
+            prom = max(np.ptp(y_fin[np.isfinite(y_v)]), 1e-15) * 1e-5
+            peaks, _props = find_peaks(y_fin, prominence=prom)
+            print(
+                f"[classical debug] find_peaks: n_peaks={len(peaks)}  "
+                f"peak_NTUs={ntu_v[peaks].tolist() if len(peaks) else []}  "
+                f"peak_vals={y_v[peaks].tolist() if len(peaks) else []}"
+            )
+        else:
+            print("[classical debug] find_peaks: skipped (too few valid points)")
+        print(f"[classical debug] interior_local_max_ntu -> {peak}")
     if peak is None:
         return None, None
 
@@ -449,12 +494,15 @@ def sweep_mach(
         )
 
     df = pd.DataFrame(rows)
+    df = df.sort_values("mach", kind="mergesort").reset_index(drop=True)
     pair = _last_transition_pair_from_df(df)
     if pair is not None:
         m_last, m_first_bad = pair
+        m_lim_mean = 0.5 * (m_last + m_first_bad)
         print(
             "Classical interior local optimum lost (increasing Mach): "
-            f"last Mach where found = {m_last}, first Mach where not found = {m_first_bad}"
+            f"last Mach where found = {m_last}, first Mach where not found = {m_first_bad}, "
+            f"M_lim (plot) = mean bracket = {m_lim_mean:.6f}"
         )
     else:
         print(
@@ -471,27 +519,82 @@ def _cache_path(config: dict) -> Path:
     return CACHE_DIR / f"figX_mach_opt_{safe}_{h}.parquet"
 
 
+def _first_mach_where_error_at_most(df: pd.DataFrame, err_frac: float) -> float | None:
+    """Smallest Mach (in increasing order) with classical opt and error <= err_frac (e.g. -0.01 = -1 %)."""
+    d = df.sort_values("mach", kind="mergesort")
+    for _, row in d.iterrows():
+        if not bool(row["has_classical_interior_opt"]):
+            continue
+        e = row["error_eps_m_ratio_minus_1"]
+        if not np.isfinite(e):
+            continue
+        if float(e) <= err_frac:
+            return float(row["mach"])
+    return None
+
+
+def _merge_refined_mach_values(
+    coarse_mach: np.ndarray,
+    df_coarse: pd.DataFrame,
+    n_mach_refine: int,
+    mach_max: float,
+    err_frac: float = REFINE_MACH_ERROR_FRAC,
+) -> np.ndarray:
+    """
+    Add linspace(m_start, mach_max, n_mach_refine) where m_start is the first Mach with error <= err_frac
+    (starts refinement earlier than the classical-transition bracket). If no such point, fall back to
+    linspace between last classical-success and first classical-fail Mach.
+    """
+    if n_mach_refine < 2:
+        return coarse_mach
+    m_start = _first_mach_where_error_at_most(df_coarse, err_frac)
+    if m_start is not None and m_start < mach_max:
+        fine = np.linspace(m_start, float(mach_max), n_mach_refine)
+    else:
+        pair = _last_transition_pair_from_df(df_coarse)
+        if pair is None:
+            return coarse_mach
+        m_lo, m_hi = pair
+        fine = np.linspace(m_lo, m_hi, n_mach_refine)
+    return np.unique(np.sort(np.concatenate([coarse_mach, fine])))
+
+
 def run_sweep_cached(
     mach_min: float,
     mach_max: float,
     n_mach: int,
     *,
+    n_mach_refine: int = 20,
     force_recompute: bool = False,
     **sweep_kw,
 ) -> pd.DataFrame:
-    mach_values = np.linspace(mach_min, mach_max, n_mach)
-    config = {
-        "mach_min": mach_min,
-        "mach_max": mach_max,
-        "n_mach": n_mach,
-        **{k: sweep_kw[k] for k in sorted(sweep_kw)},
-    }
+    coarse_mach = np.linspace(mach_min, mach_max, n_mach)
+    config = _sweep_cache_config(mach_min, mach_max, n_mach, n_mach_refine, sweep_kw)
     path = _cache_path(config)
     if not force_recompute and path.exists():
         print(f"Loaded cached sweep from {path.name}")
         return pd.read_parquet(path)
     t0 = time.perf_counter()
-    df = sweep_mach(mach_values, **sweep_kw)
+    df_coarse = sweep_mach(coarse_mach, **sweep_kw)
+    all_mach = _merge_refined_mach_values(
+        coarse_mach, df_coarse, n_mach_refine, mach_max=mach_max, err_frac=REFINE_MACH_ERROR_FRAC
+    )
+    if len(all_mach) == len(coarse_mach) and np.allclose(all_mach, coarse_mach):
+        df = df_coarse
+    else:
+        m0 = _first_mach_where_error_at_most(df_coarse, REFINE_MACH_ERROR_FRAC)
+        if m0 is not None and m0 < mach_max:
+            print(
+                f"Refining Mach grid from first M with error <= {100 * REFINE_MACH_ERROR_FRAC:.0f}% "
+                f"(M >= {m0:.4f}) to M_max: {len(coarse_mach)} coarse + "
+                f"{len(all_mach) - len(coarse_mach)} added -> {len(all_mach)} total Mach values"
+            )
+        else:
+            print(
+                f"Refining Mach grid (transition bracket fallback): {len(coarse_mach)} coarse + "
+                f"{len(all_mach) - len(coarse_mach)} added -> {len(all_mach)} total Mach values"
+            )
+        df = sweep_mach(all_mach, **sweep_kw)
     df.to_parquet(path, index=False)
     print(f"Saved sweep cache {path.name} ({time.perf_counter() - t0:.2f}s)")
     return df
@@ -513,9 +616,12 @@ def _last_transition_pair_from_df(df: pd.DataFrame) -> tuple[float, float] | Non
 
 
 def _m_lim_from_df(df: pd.DataFrame) -> float | None:
-    """M_lim = Mach of first False after last contiguous True region (last transition)."""
+    """Plotted M_lim: mean of last Mach with classical interior opt and first Mach without (same bracket)."""
     p = _last_transition_pair_from_df(df)
-    return None if p is None else p[1]
+    if p is None:
+        return None
+    m_ok, m_bad = p
+    return 0.5 * (m_ok + m_bad)
 
 
 def _apply_plot_style():
@@ -530,130 +636,146 @@ def _apply_plot_style():
     )
 
 
-def plot_figures(df: pd.DataFrame, base_name: str = "figX_Mach_opt") -> None:
+def _set_mach_axis(ax, *, xmax: float) -> None:
+    ax.set_xlim(0.0, xmax)
+    ax.xaxis.set_major_locator(MultipleLocator(0.02))
+
+
+def _sweep_cache_config(
+    mach_min: float,
+    mach_max: float,
+    n_mach: int,
+    n_mach_refine: int,
+    sweep_kw: dict,
+) -> dict:
+    return {
+        "mach_min": mach_min,
+        "mach_max": mach_max,
+        "n_mach": n_mach,
+        "n_mach_refine": n_mach_refine,
+        "mach_refine_error_frac": REFINE_MACH_ERROR_FRAC,
+        "figx_ntu_global_max": FIGX_NTU_GLOBAL_MAX,
+        **{k: sweep_kw[k] for k in sorted(sweep_kw)},
+    }
+
+
+def plot_figure_perf(
+    df: pd.DataFrame,
+    base_name: str = "figX_Mach_opt",
+    *,
+    perf_lines: bool = False,
+) -> None:
+    """ε and hot-side Δp/p_in (fig X perf): scatter (default) or solid/dashed lines if ``perf_lines``."""
     _apply_plot_style()
     m_lim = _m_lim_from_df(df)
     mach = df["mach"].values
 
-    # --- 1) Error ---
-    fig1, ax1 = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
-    mask_err = df["has_classical_interior_opt"] & np.isfinite(df["error_eps_m_ratio_minus_1"])
-    ax1.plot(mach[mask_err], df.loc[mask_err, "error_eps_m_ratio_minus_1"], color="k", lw=1.0)
-    ax1.set_xlabel(r"Hot inlet Mach number $M_\mathrm{in}$ [-]")
-    ax1.set_ylabel(r"$\varepsilon_{M,\mathrm{cl}} / \varepsilon_{M,\mathrm{pr}} - 1$")
-    ax1.axhline(0.0, color="0.7", lw=0.5, ls=":")
-    if m_lim is not None:
-        ax1.axvline(m_lim, color="0.5", ls="--", lw=0.6)
-        trans = blended_transform_factory(ax1.transData, ax1.transAxes)
-        ax1.text(
-            m_lim,
-            -0.22,
-            f"$M_\\mathrm{{lim}}={m_lim:.2f}$",
-            transform=trans,
-            va="top",
-            ha="center",
-            fontsize=7,
-            color="0.3",
-        )
-    plt.tight_layout()
-    for fmt in ("svg", "pdf", "png"):
-        p = FIG_OUTPUT_DIR / f"{base_name}_error.{fmt}"
-        fig1.savefig(p, dpi=300, bbox_inches="tight", facecolor="white")
-        print(f"Saved {p.name}")
-    plt.close(fig1)
-
-    # --- 2) eps_M practical metric at both NTUs ---
-    fig2, ax2 = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
-    ax2.plot(mach, df["eps_m_practical_opt"], color="k", ls="-", lw=1.0, label=r"$\varepsilon_M$ at practical opt.")
-    mc = df["has_classical_interior_opt"]
-    ax2.plot(
-        mach[mc],
-        df.loc[mc, "eps_m_at_classical_opt"],
-        color="k",
-        ls="--",
-        lw=1.0,
-        label=r"$\varepsilon_M$ at classical local opt.",
-    )
-    ax2.set_xlabel(r"$M_\mathrm{in}$ [-]")
-    ax2.set_ylabel(r"Practical availability increase $\varepsilon_M$ [-]")
-    if m_lim is not None:
-        ax2.axvline(m_lim, color="0.5", ls="--", lw=0.6)
-        trans2 = blended_transform_factory(ax2.transData, ax2.transAxes)
-        ax2.text(
-            m_lim,
-            -0.22,
-            f"$M_\\mathrm{{lim}}={m_lim:.2f}$",
-            transform=trans2,
-            va="top",
-            ha="center",
-            fontsize=7,
-            color="0.3",
-        )
-    ax2.legend(frameon=False, loc="best", fontsize=7)
-    plt.tight_layout()
-    for fmt in ("svg", "pdf", "png"):
-        p = FIG_OUTPUT_DIR / f"{base_name}_epsM.{fmt}"
-        fig2.savefig(p, dpi=300, bbox_inches="tight", facecolor="white")
-        print(f"Saved {p.name}")
-    plt.close(fig2)
-
-    # --- 3) epsilon + dp (practical solid, classical dashed) ---
     fig3, ax3 = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
     c_eps = (0.85, 0.2, 0.2)
     c_dph = (0.2, 0.65, 0.35)
-    c_dpc = (0.25, 0.45, 0.85)
+    s_sc = 7.0
+    s_plus = 55.0
 
-    ax3.plot(mach, df["epsilon_practical_opt"], color=c_eps, ls="-", lw=1.0, label=r"$\varepsilon$ practical")
-    ax3.plot(mach, df["epsilon_classical_opt"], color=c_eps, ls="--", lw=1.0, label=r"$\varepsilon$ classical")
-    ax3.plot(
-        mach,
-        df["dp_hot_practical_opt"],
+    eps_p = df["epsilon_practical_opt"].to_numpy()
+    eps_c = df["epsilon_classical_opt"].to_numpy()
+    dph_p = df["dp_hot_practical_opt"].to_numpy()
+    dph_c = df["dp_hot_classical_opt"].to_numpy()
+    mask_c_plot = ~((np.abs(eps_c) < 1e-14) & (np.abs(dph_c) < 1e-14))
+
+    if perf_lines:
+        eps_c_line = eps_c.astype(float).copy()
+        dph_c_line = dph_c.astype(float).copy()
+        bad = (np.abs(eps_c) < 1e-14) & (np.abs(dph_c) < 1e-14)
+        eps_c_line[bad] = np.nan
+        dph_c_line[bad] = np.nan
+        ax3.plot(mach, eps_p, color=c_eps, ls="-", lw=1.0, label=r"$\varepsilon$ practical", zorder=3)
+        ax3.plot(mach, eps_c_line, color=c_eps, ls="--", lw=1.0, label=r"$\varepsilon$ classical", zorder=3)
+        ax3.plot(
+            mach,
+            dph_p,
+            color=c_dph,
+            ls="-",
+            lw=1.0,
+            label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ practical",
+            zorder=3,
+        )
+        ax3.plot(
+            mach,
+            dph_c_line,
+            color=c_dph,
+            ls="--",
+            lw=1.0,
+            label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ classical",
+            zorder=3,
+        )
+    else:
+        ax3.scatter(mach, eps_p, color=c_eps, s=s_sc, marker="o", label=r"$\varepsilon$ practical", zorder=3)
+        ax3.scatter(
+            mach[mask_c_plot],
+            eps_c[mask_c_plot],
+            facecolors="none",
+            edgecolors=c_eps,
+            s=s_sc,
+            marker="o",
+            linewidths=0.55,
+            label=r"$\varepsilon$ classical",
+            zorder=3,
+        )
+        ax3.scatter(
+            mach,
+            dph_p,
+            color=c_dph,
+            s=s_sc,
+            marker="s",
+            label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ practical",
+            zorder=3,
+        )
+        ax3.scatter(
+            mach[mask_c_plot],
+            dph_c[mask_c_plot],
+            facecolors="none",
+            edgecolors=c_dph,
+            s=s_sc,
+            marker="s",
+            linewidths=0.55,
+            label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ classical",
+            zorder=3,
+        )
+
+    ax3.scatter(
+        [PERF_BASELINE_MACH],
+        [PERF_BASELINE_EPS],
+        color=c_eps,
+        s=s_plus,
+        marker="+",
+        linewidths=1.1,
+        label=r"baseline $\varepsilon$",
+        zorder=5,
+    )
+    ax3.scatter(
+        [PERF_BASELINE_MACH],
+        [PERF_BASELINE_DP_HOT],
         color=c_dph,
-        ls="-",
-        lw=1.0,
-        label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ practical",
-    )
-    ax3.plot(
-        mach,
-        df["dp_hot_classical_opt"],
-        color=c_dph,
-        ls="--",
-        lw=1.0,
-        label=r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ classical",
-    )
-    ax3.plot(
-        mach,
-        df["dp_cold_practical_opt"],
-        color=c_dpc,
-        ls="-",
-        lw=1.0,
-        label=r"$(\Delta p/p_\mathrm{in})_\mathrm{cold}$ practical",
-    )
-    ax3.plot(
-        mach,
-        df["dp_cold_classical_opt"],
-        color=c_dpc,
-        ls="--",
-        lw=1.0,
-        label=r"$(\Delta p/p_\mathrm{in})_\mathrm{cold}$ classical",
+        s=s_plus,
+        marker="+",
+        linewidths=1.1,
+        label=r"baseline $(\Delta p/p_\mathrm{in})_\mathrm{hot}$",
+        zorder=5,
     )
 
     ax3.set_xlabel(r"$M_\mathrm{in}$ [-]")
-    ax3.set_ylabel(r"$\varepsilon$, $\Delta p / p_\mathrm{in}$ [-]")
+    ax3.set_ylabel(YLABEL_PERF)
+    ax3.set_ylim(0.0, 1.0)
+    _set_mach_axis(ax3, xmax=0.20)
+    ax3.set_title(
+        r"Cold-side drop neglected "
+        r"$\left((\Delta p/p_{\mathrm{in}})_{\mathrm{cold}} \ll (\Delta p/p_{\mathrm{in}})_{\mathrm{hot}}\right)$",
+        fontsize=7,
+    )
     if m_lim is not None:
         ax3.axvline(m_lim, color="0.5", ls="--", lw=0.6)
-        trans3 = blended_transform_factory(ax3.transData, ax3.transAxes)
-        ax3.text(
-            m_lim,
-            -0.32,
-            f"$M_\\mathrm{{lim}}={m_lim:.2f}$",
-            transform=trans3,
-            va="top",
-            ha="center",
-            fontsize=7,
-            color="0.3",
-        )
-    ax3.legend(frameon=False, loc="best", fontsize=6, ncol=1)
+        _m_lim_text_below(ax3, m_lim, -0.28)
+    ax3.legend(frameon=False, loc="center left", fontsize=6, ncol=1)
     plt.tight_layout()
     for fmt in ("svg", "pdf", "png"):
         p = FIG_OUTPUT_DIR / f"{base_name}_perf.{fmt}"
@@ -662,14 +784,106 @@ def plot_figures(df: pd.DataFrame, base_name: str = "figX_Mach_opt") -> None:
     plt.close(fig3)
 
 
+def _m_lim_text_below(ax, m_lim: float, y_axes: float, *, fmt: str = ".3f") -> None:
+    trans = blended_transform_factory(ax.transData, ax.transAxes)
+    ax.text(
+        m_lim,
+        y_axes,
+        f"$M_\\mathrm{{lim}}={m_lim:{fmt}}$",
+        transform=trans,
+        va="top",
+        ha="center",
+        fontsize=7,
+        color="0.3",
+    )
+
+
+def plot_figures(df: pd.DataFrame, base_name: str = "figX_Mach_opt", *, perf_lines: bool = False) -> None:
+    _apply_plot_style()
+    m_lim = _m_lim_from_df(df)
+    mach = df["mach"].values
+
+    # --- 1) Error (fractional error as percent; classical undershoots → negative, show 0 down to −8 %) ---
+    fig1, ax1 = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
+    mask_err = df["has_classical_interior_opt"] & np.isfinite(df["error_eps_m_ratio_minus_1"])
+    err_pct = 100.0 * df.loc[mask_err, "error_eps_m_ratio_minus_1"].to_numpy()
+    ax1.plot(mach[mask_err], err_pct, color="k", lw=1.0)
+    ax1.set_xlabel(r"Hot inlet Mach number $M_\mathrm{in}$ [-]")
+    ax1.set_ylabel(r"$\varepsilon_{M,\mathrm{cl}} / \varepsilon_{M,\mathrm{pr}} - 1$ [%]")
+    ax1.set_ylim(-8.0, 0.0)
+    _set_mach_axis(ax1, xmax=0.14)
+    ax1.axhline(0.0, color="0.7", lw=0.5, ls=":")
+    if m_lim is not None:
+        ax1.axvline(m_lim, color="0.5", ls="--", lw=0.6)
+        if 0.0 <= m_lim <= 0.14:
+            _m_lim_text_below(ax1, m_lim, -0.22)
+    plt.tight_layout()
+    for fmt in ("svg", "pdf", "png"):
+        p = FIG_OUTPUT_DIR / f"{base_name}_error.{fmt}"
+        fig1.savefig(p, dpi=300, bbox_inches="tight", facecolor="white")
+        print(f"Saved {p.name}")
+    plt.close(fig1)
+
+    # --- 2) Normalized practical availability at both optima ---
+    fig2, ax2 = plt.subplots(figsize=(9 / 2.54, 7 / 2.54))
+    mc = df["has_classical_interior_opt"].to_numpy()
+    ax2.plot(mach, df["eps_m_practical_opt"], color="k", ls="-", lw=1.0, label="practical availability")
+    ax2.plot(
+        mach[mc],
+        df.loc[mc, "eps_m_at_classical_opt"],
+        color="k",
+        ls="--",
+        lw=1.0,
+        label="classical availability",
+    )
+    ax2.set_xlabel(r"$M_\mathrm{in}$ [-]")
+    ax2.set_ylabel(YLABEL_PRACTICAL_AVAIL)
+    ax2.set_ylim(0.0, 0.50)
+    _set_mach_axis(ax2, xmax=0.20)
+    if m_lim is not None:
+        ax2.axvline(m_lim, color="0.5", ls="--", lw=0.6)
+        _m_lim_text_below(ax2, m_lim, -0.22)
+    leg2 = ax2.legend(
+        frameon=False,
+        loc="best",
+        fontsize=7,
+        title="Optimal at given Mach from",
+    )
+    leg2.get_title().set_fontsize(7)
+    plt.tight_layout()
+    for fmt in ("svg", "pdf", "png"):
+        p = FIG_OUTPUT_DIR / f"{base_name}_epsM.{fmt}"
+        fig2.savefig(p, dpi=300, bbox_inches="tight", facecolor="white")
+        print(f"Saved {p.name}")
+    plt.close(fig2)
+
+    plot_figure_perf(df, base_name=base_name, perf_lines=perf_lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Mach sweep: practical vs classical NTU optima (fig X).")
     parser.add_argument("--mach-min", type=float, default=MACH_MIN_DEFAULT)
     parser.add_argument("--mach-max", type=float, default=MACH_MAX_DEFAULT)
     parser.add_argument("--n-mach", type=int, default=40)
+    parser.add_argument(
+        "--n-mach-refine",
+        type=int,
+        default=20,
+        help="Extra Mach samples on refinement span (from first M with error<=-1%% to M_max, else transition bracket; use 0 or 1 to skip).",
+    )
     parser.add_argument("--n-coarse", type=int, default=120, help="Coarse NTU points per Mach for classical local peak.")
     parser.add_argument("--force-recompute", action="store_true")
     parser.add_argument("--no-plot", action="store_true")
+    parser.add_argument(
+        "--perf-only",
+        action="store_true",
+        help="Load cached sweep and regenerate only the ε–Δp perf figure (figX_Mach_opt_perf.*).",
+    )
+    parser.add_argument(
+        "--perf-lines",
+        action="store_true",
+        help="Perf figure: line plot (solid practical, dashed classical) instead of scatter.",
+    )
     args = parser.parse_args()
 
     sweep_kw = {
@@ -689,10 +903,29 @@ def main():
         "a_r": DEFAULT_A_R,
     }
 
+    if args.perf_only:
+        config = _sweep_cache_config(
+            args.mach_min,
+            args.mach_max,
+            args.n_mach,
+            args.n_mach_refine,
+            sweep_kw,
+        )
+        path = _cache_path(config)
+        if not path.exists():
+            raise SystemExit(
+                f"No sweep cache at {path}. Run without --perf-only first (same CLI defaults for Mach grid)."
+            )
+        df = pd.read_parquet(path)
+        print(f"Loaded {path.name} for perf-only plot")
+        plot_figure_perf(df, perf_lines=args.perf_lines)
+        return df
+
     df = run_sweep_cached(
         args.mach_min,
         args.mach_max,
         args.n_mach,
+        n_mach_refine=args.n_mach_refine,
         force_recompute=args.force_recompute,
         **sweep_kw,
     )
@@ -701,10 +934,17 @@ def main():
     frac_ok = df["has_classical_interior_opt"].mean()
     print(f"Fraction of Mach with classical interior opt: {frac_ok:.2%}")
     if mlim is not None:
-        print(f"M_lim (first Mach without classical interior local opt): {mlim:.4f}")
+        br = _last_transition_pair_from_df(df)
+        if br is not None:
+            print(
+                f"M_lim (plotted, mean of bracket): {mlim:.3f} "
+                f"(last success {br[0]:.4f}, first fail {br[1]:.4f})"
+            )
+        else:
+            print(f"M_lim (plotted): {mlim:.3f}")
 
     if not args.no_plot:
-        plot_figures(df)
+        plot_figures(df, perf_lines=args.perf_lines)
 
     return df
 
