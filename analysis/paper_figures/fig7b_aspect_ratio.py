@@ -65,6 +65,10 @@ def save_figures(
     a_r=DEFAULT_A_R,
     ntu_optimum=None,
     plot_area_ratio_ref=False,
+    ylim=None,
+    xytext_baseline=None,
+    xytext_optimal=None,
+    top_axis_label=None,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing classical unavailable energy breakdown.
@@ -191,8 +195,14 @@ def save_figures(
     # Annotations with arrows: baseline design, optimal design (text within ylim)
     arrow_kw_opt = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
     arrow_kw_ref = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
-    xytext_ref = (0.25, -0.075) if plot_area_ratio_ref else (0.15, -0.075)
-    xytext_opt = (0.25, -0.06) if plot_area_ratio_ref else (0.10, -0.06)
+    if xytext_baseline is None:
+        xytext_ref = (0.25, -0.075) if plot_area_ratio_ref else (0.15, -0.075)
+    else:
+        xytext_ref = xytext_baseline
+    if xytext_optimal is None:
+        xytext_opt = (0.25, -0.06) if plot_area_ratio_ref else (0.10, -0.06)
+    else:
+        xytext_opt = xytext_optimal
     ax.annotate(
         "baseline design",
         xy=(x_pressure, y_pressure),
@@ -220,8 +230,12 @@ def save_figures(
         ax.set_xlim(0, 2.0)
         ax.xaxis.set_major_locator(MultipleLocator(0.5))
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylim(-0.1, 0)
-    ax.set_yticks([-0.1, -0.08, -0.06, -0.04, -0.02, 0])
+    if ylim is None:
+        ax.set_ylim(-0.1, 0)
+        ax.set_yticks([-0.1, -0.08, -0.06, -0.04, -0.02, 0])
+    else:
+        ax.set_ylim(*ylim)
+        ax.set_yticks([-0.2, -0.1, 0, 0.1, 0.2, 0.3])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
     ax.set_ylabel(r"Change in Availability ($\sum_{i} \; \Delta \dot{W}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])")
 
@@ -245,6 +259,24 @@ def save_figures(
     plt.tight_layout(pad=0.5)
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     fig.subplots_adjust(left=0.25)
+
+    if top_axis_label is not None:
+        ax.text(
+            0.5,
+            0.98,
+            top_axis_label,
+            transform=ax.transAxes,
+            va="top",
+            ha="center",
+            fontsize=font_size,
+        )
+        ax.annotate(
+            "",
+            xy=(0.7, 0.92),
+            xytext=(0.3, 0.92),
+            xycoords=ax.transAxes,
+            arrowprops=dict(arrowstyle="->", linewidth=0.75),
+        )
 
     fig.savefig(
         os.path.join(save_dir, f"{base_name}.svg"),

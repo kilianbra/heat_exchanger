@@ -60,6 +60,10 @@ def save_figures(
     molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
     a_r=DEFAULT_A_R,
     plot_area_ratio_ref=False,
+    ylim=None,
+    xytext_baseline=None,
+    xytext_optimal=None,
+    show_top_axis_label=True,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
@@ -185,6 +189,26 @@ def save_figures(
     y_pressure = y_with_dp[idx_pressure]
     ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
 
+    arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
+    if xytext_baseline is not None:
+        ax.annotate(
+            "baseline design",
+            xy=(x_pressure, y_pressure),
+            xytext=xytext_baseline,
+            fontsize=font_size,
+            ha="left",
+            arrowprops=arrow_kw,
+        )
+    if xytext_optimal is not None:
+        ax.annotate(
+            "optimal design",
+            xy=(x_optimum, y_optimum),
+            xytext=xytext_optimal,
+            fontsize=font_size,
+            ha="left",
+            arrowprops=arrow_kw,
+        )
+
     ax.set_title("")
     if plot_area_ratio_ref:
         ax.set_xlim(0.2, 1.2)
@@ -194,12 +218,15 @@ def save_figures(
         ax.set_xlim(0, 2.0)
         ax.xaxis.set_major_locator(MultipleLocator(0.5))
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-    ax.set_ylim(-0.1, 0.3)
+    if ylim is None:
+        ax.set_ylim(-0.1, 0.3)
+        ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
+    else:
+        ax.set_ylim(*ylim)
+        ax.set_yticks([-0.2, -0.1, 0, 0.1, 0.2, 0.3])
     ax.set_ylabel(
         r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])"
     )
-
-    ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
 
     # Legend: thermal creation and viscous dissipation (same colors as fig4 bar charts)
@@ -222,23 +249,23 @@ def save_figures(
     ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
     fig.subplots_adjust(left=0.25)  # Reduce left whitespace
 
-    # Top-center label with arrow indicating increasing Mach
-    ax.text(
-        0.5,
-        0.98,
-        "increasing Mach",
-        transform=ax.transAxes,
-        va="top",
-        ha="center",
-        fontsize=font_size,
-    )
-    ax.annotate(
-        "",
-        xy=(0.7, 0.92),
-        xytext=(0.3, 0.92),
-        xycoords=ax.transAxes,
-        arrowprops=dict(arrowstyle="->", linewidth=0.75),
-    )
+    if show_top_axis_label:
+        ax.text(
+            0.5,
+            0.98,
+            "increasing Mach",
+            transform=ax.transAxes,
+            va="top",
+            ha="center",
+            fontsize=font_size,
+        )
+        ax.annotate(
+            "",
+            xy=(0.7, 0.92),
+            xytext=(0.3, 0.92),
+            xycoords=ax.transAxes,
+            arrowprops=dict(arrowstyle="->", linewidth=0.75),
+        )
 
     fig.savefig(
         os.path.join(save_dir, f"{base_name}.svg"),
