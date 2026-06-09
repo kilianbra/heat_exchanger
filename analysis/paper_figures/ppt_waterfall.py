@@ -189,6 +189,7 @@ def fig_delta_waterfall(
     y_limits: tuple[float, float] | None = None,
     format_step_label: Callable[[float], str] = format_step_label_fraction,
     format_net_label: Callable[[float], str] = format_net_label_fraction,
+    step_label_texts: list[str] | None = None,
 ) -> plt.Figure:
     fig, ax = plt.subplots(figsize=figsize, dpi=150)
     fig.patch.set_facecolor("white")
@@ -202,14 +203,22 @@ def fig_delta_waterfall(
     y_hi = 0.0
 
     step_labels: list[tuple[BarSpec, str]] = []
+    if step_label_texts is not None and len(step_label_texts) != len(waterfall_steps):
+        raise ValueError(
+            f"step_label_texts length {len(step_label_texts)} != waterfall steps {len(waterfall_steps)}"
+        )
 
-    for (delta, color), x in zip(waterfall_steps, xs[:-1], strict=True):
+    for i, ((delta, color), x) in enumerate(zip(waterfall_steps, xs[:-1], strict=True)):
         bottom, height = delta_bar_geom(cumul, delta)
         spec = BarSpec(x=x, bottom=bottom, height=height, width=BAR_WIDTH, color=color)
         if prev is not None:
             _draw_connector(ax, prev, spec, y=cumul)
         _draw_bar(ax, spec)
-        step_labels.append((spec, format_step_label(delta)))
+        if step_label_texts is not None:
+            label = step_label_texts[i]
+        else:
+            label = format_step_label(delta)
+        step_labels.append((spec, label))
         y_lo = min(y_lo, _bar_bottom(spec))
         y_hi = max(y_hi, _bar_top(spec))
         cumul += delta
@@ -242,7 +251,8 @@ def fig_delta_waterfall(
         if y_limits is None:
             y1 += label_off
         for spec, text in step_labels:
-            _draw_bar_label(ax, spec, text, label_off)
+            if text:
+                _draw_bar_label(ax, spec, text, label_off)
         _draw_bar_label(ax, net_spec, format_net_label(net_sum), label_off)
 
     style_axes_arrows_yticks(
