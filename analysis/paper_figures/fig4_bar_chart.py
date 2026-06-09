@@ -572,7 +572,10 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     """
     d = data if isinstance(data, dict) else run(do_print=do_print)
     if save_dir is None:
-        save_dir = Path(__file__).resolve().parent / "Figs_current"
+        from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+
+        ensure_fig_dirs()
+        save_dir = FINAL_CONF_PAPER
     save_dir = Path(save_dir)
 
     plt.rcParams.update(

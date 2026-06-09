@@ -7,7 +7,10 @@ from xflow import create_plot
 
 from plot_colors import MARKER_SIZE_LATEX
 
-save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+
+ensure_fig_dirs()
+save_dir = FINAL_CONF_PAPER
 
 # A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
 NTU_MATCH = 1.479

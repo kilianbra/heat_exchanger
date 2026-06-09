@@ -1,8 +1,9 @@
 """
 Re-run fig7b/c aspect-ratio (Ao/Aoref) plots with shared y-axis: -20% to 30%.
-Saves as fig7b_homog_yaxis and fig7c_homog_yaxis in Figs_current/.
+Saves as fig7b_homog_yaxis and fig7c_homog_yaxis in Figs_current/explore_ideas/.
 """
 
+from fig_paths import EXPLORE_IDEAS
 from fig7b_aspect_ratio import (
     DEFAULT_A_R,
     DEFAULT_C_COLD_OVER_C_HOT,
@@ -52,10 +53,12 @@ if __name__ == "__main__":
         base_name="fig7b_homog_yaxis",
         xytext_baseline=HOMOG_XYTEXT_BASELINE,
         top_axis_label="reducing diffusion",
+        save_dir_override=EXPLORE_IDEAS,
     )
     save_fig7c(
         **_COMMON,
         base_name="fig7c_homog_yaxis",
         xytext_optimal=HOMOG_XYTEXT_OPTIMAL,
         show_top_axis_label=False,
+        save_dir_override=EXPLORE_IDEAS,
     )

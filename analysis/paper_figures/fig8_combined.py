@@ -1,6 +1,6 @@
 """
 Paper fig8 (combined): black and red lines from fig9_w_cycle_model + black lines from
-fig8_no_cycle_model, on one plot with no markers. Saves as fig8_combined.* in Figs_current.
+fig8_no_cycle_model, on one plot with no markers. Saves as fig8_combined.* in Figs_current/final_conf_paper/.
 """
 
 import os
@@ -21,7 +21,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tabulate import tabulate
 
-save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+
+ensure_fig_dirs()
+save_dir = FINAL_CONF_PAPER
 
 # fig8/fig9 shared
 m_hex_ref = 13.3

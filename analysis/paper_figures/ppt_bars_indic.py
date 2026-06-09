@@ -193,8 +193,10 @@ def _fig_waterfall_bars() -> plt.Figure:
 
 
 def main() -> None:
-    out_dir = Path(__file__).resolve().parent / "Figs_current"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from fig_paths import WHITTLE_ASME_PRACTICE, ensure_fig_dirs
+
+    ensure_fig_dirs()
+    out_dir = WHITTLE_ASME_PRACTICE
 
     fig1 = _fig_one_gray_bar()
     p1 = out_dir / "ppt_bar_1gray.png"

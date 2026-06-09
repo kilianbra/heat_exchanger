@@ -148,8 +148,10 @@ def _compute_full_cycle_green_vs_opt_deltas() -> tuple[FullCycleOptVsRefDeltas, 
 
 
 def main() -> None:
-    out_dir = Path(__file__).resolve().parent / "Figs_current"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from fig_paths import WHITTLE_ASME_PRACTICE, ensure_fig_dirs
+
+    ensure_fig_dirs()
+    out_dir = WHITTLE_ASME_PRACTICE
 
     deltas, ref, opt = _compute_opt_vs_ref_deltas()
 

@@ -217,8 +217,10 @@ def _save_figure(fig: plt.Figure, out_dir: Path, stem: str) -> None:
 
 
 def main() -> None:
-    out_dir = Path(__file__).resolve().parent / "Figs_current"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from fig_paths import WHITTLE_ASME_PRACTICE, ensure_fig_dirs
+
+    ensure_fig_dirs()
+    out_dir = WHITTLE_ASME_PRACTICE
 
     ref_bd, matched_bd, fig9 = fetch_fig9_waterfall_pair()
     bootstrap = _fig9_bootstrap(fig9)

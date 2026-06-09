@@ -41,10 +41,12 @@ from heat_exchanger.epsilon_ntu import epsilon_ntu
 xflow.SHOW_CUBIC = False
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-FIG_OUTPUT_DIR = SCRIPT_DIR / "Figs_current"
+from fig_paths import EXPLORE_IDEAS, ensure_fig_dirs
+
+FIG_OUTPUT_DIR = EXPLORE_IDEAS
 CACHE_DIR = SCRIPT_DIR / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
-FIG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+ensure_fig_dirs()
 
 # --- Match fig6_smith_chart defaults ---
 DEFAULT_C_COLD_OVER_C_HOT = 1.0

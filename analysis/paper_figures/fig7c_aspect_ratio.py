@@ -9,7 +9,10 @@ from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdo
 
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
-save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+
+ensure_fig_dirs()
+save_dir = FINAL_CONF_PAPER
 
 # Defaults (match fig8/9, ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
@@ -64,11 +67,14 @@ def save_figures(
     xytext_baseline=None,
     xytext_optimal=None,
     show_top_axis_label=True,
+    save_dir_override=None,
 ):
     """
     Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
     Matches fig6c lengthening style (labels, markers, legend box, no title).
     """
+    out_dir = save_dir_override if save_dir_override is not None else save_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
     font_size = 8
     plt.rcParams.update(
         {
@@ -268,7 +274,7 @@ def save_figures(
         )
 
     fig.savefig(
-        os.path.join(save_dir, f"{base_name}.svg"),
+        os.path.join(out_dir, f"{base_name}.svg"),
         dpi=300,
         facecolor="white",
         format="svg",
@@ -276,7 +282,7 @@ def save_figures(
         pad_inches=0,
     )
     fig.savefig(
-        os.path.join(save_dir, f"{base_name}.tiff"),
+        os.path.join(out_dir, f"{base_name}.tiff"),
         dpi=300,
         facecolor="white",
         format="tiff",
@@ -284,7 +290,7 @@ def save_figures(
         pad_inches=0,
     )
     fig.savefig(
-        os.path.join(save_dir, f"{base_name}.png"),
+        os.path.join(out_dir, f"{base_name}.png"),
         dpi=300,
         facecolor="white",
         format="png",
@@ -292,7 +298,7 @@ def save_figures(
         pad_inches=0,
     )
     fig.savefig(
-        os.path.join(save_dir, f"{base_name}.pdf"),
+        os.path.join(out_dir, f"{base_name}.pdf"),
         dpi=300,
         facecolor="white",
         format="pdf",

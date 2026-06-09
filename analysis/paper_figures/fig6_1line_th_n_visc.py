@@ -1,7 +1,7 @@
 """
 Figure 6 variants: Mach = 0.11 only, fig6a–c axis bounds, thermal/viscous breakdown on b and c (fig7 style).
 
-Outputs (SVG, TIFF, PNG, PDF) in Figs_current/:
+Outputs (SVG, TIFF, PNG, PDF) in Figs_current/explore_ideas/:
   fig6a_oneMach_th_n_visc
   fig6b_oneMach_th_n_visc
   fig6c_oneMach_th_n_visc
@@ -18,7 +18,10 @@ from xflow import calculate_epsilon_ntu_curve, calculate_pressure_drop_ratio, pl
 
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
-save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+from fig_paths import EXPLORE_IDEAS, ensure_fig_dirs
+
+ensure_fig_dirs()
+save_dir = EXPLORE_IDEAS
 
 # Defaults (match fig6/fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0

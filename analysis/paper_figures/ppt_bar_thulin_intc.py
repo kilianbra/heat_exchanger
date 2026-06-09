@@ -4,7 +4,7 @@ Thulin intercooling comparison: literature waterfall deltas.
 comp_second_cycle.png — secondary cycle vs bypass-cooling baseline.
 comp_nacelle.png — nacelle cycle relative to secondary cycle (component-wise delta).
 
-Writes PNGs to Figs_current/.
+Writes PNGs to Figs_current/explore_ideas/.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ YLABEL = "Classical availability destruction\n/ Fuel Exergy"
 FIGSIZE_10BAR = (7.6, 2.8)
 Y_TICK_STEP = 0.005  # fraction; 0.5 pp on axis
 
-OUT_DIR_NAME = "Figs_current"
 STEM_NACELLE = "comp_nacelle"
 STEM_SECOND_CYCLE = "comp_second_cycle"
 
@@ -208,8 +207,10 @@ def _save_figure(fig: plt.Figure, out_dir: Path, stem: str) -> Path:
 
 
 def main() -> None:
-    out_dir = Path(__file__).resolve().parent / OUT_DIR_NAME
-    out_dir.mkdir(parents=True, exist_ok=True)
+    from fig_paths import EXPLORE_IDEAS, ensure_fig_dirs
+
+    ensure_fig_dirs()
+    out_dir = EXPLORE_IDEAS
 
     fig_nacelle = _fig_nacelle_vs_secondary(NACELLE_VS_SECOND)
     _save_figure(fig_nacelle, out_dir, STEM_NACELLE)

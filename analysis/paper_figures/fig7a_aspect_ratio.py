@@ -8,7 +8,10 @@ from xflow import calculate_pressure_drop_ratio, create_plot
 
 from plot_colors import MARKER_SIZE_LATEX
 
-save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_current")
+from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+
+ensure_fig_dirs()
+save_dir = FINAL_CONF_PAPER
 
 # Defaults (match fig8/9)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
