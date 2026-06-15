@@ -8,8 +8,8 @@
    version="1.1"
    id="svg206"
    inkscape:version="1.2.1 (9c6d41e410, 2022-07-14)"
-   sodipodi:docname="GT_recup_sketch.svg"
-   inkscape:export-filename="GT_recup_sketch.png"
+   sodipodi:docname="cooled_turbine_schematic.svg"
+   inkscape:export-filename="cooled_turb_schem.png"
    inkscape:export-xdpi="500"
    inkscape:export-ydpi="500"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -28,8 +28,8 @@
      inkscape:document-units="mm"
      showgrid="false"
      inkscape:zoom="11.313709"
-     inkscape:cx="198.03409"
-     inkscape:cy="136.25064"
+     inkscape:cx="237.76465"
+     inkscape:cy="130.90314"
      inkscape:window-width="2880"
      inkscape:window-height="1514"
      inkscape:window-x="-11"
@@ -76,6 +76,25 @@
          d="M 2.885,0 -1.44,2.5 v -5 z"
          id="path9211-6-1-2" />
     </marker>
+    <marker
+       style="overflow:visible"
+       id="marker9213-9-8-2-9"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="TriangleStart"
+       markerWidth="2.3239999"
+       markerHeight="2.6867051"
+       viewBox="0 0 5.3244081 6.1553851"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="xMidYMid"
+       markerUnits="strokeWidth">
+      <path
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:0.5pt"
+         d="M 2.885,0 -1.44,2.5 v -5 z"
+         id="path9211-6-1-2-3" />
+    </marker>
   </defs>
   <g
      inkscape:label="Layer 1"
@@ -116,6 +135,12 @@
        id="path8992-3-1-9"
        sodipodi:nodetypes="cc"
        inkscape:label="arrow_hi" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#0000ff;stroke-width:0.5;stroke-dasharray:none;stroke-opacity:1;marker-mid:url(#marker9213-9-8-2-9);marker-end:url(#marker9213-9-8-2-9)"
+       d="m 62.955336,32.963 v 1.29986"
+       id="path8992-3-1-9-5"
+       sodipodi:nodetypes="cc"
+       inkscape:label="arrow_hi" />
     <rect
        style="opacity:1;fill:#ffffff;stroke:none;stroke-width:0.2;paint-order:markers stroke fill"
        id="rect2563"
@@ -130,8 +155,9 @@
        sodipodi:nodetypes="cc"
        inkscape:label="stream_turb_exh" />
     <path
-       style="opacity:1;fill:#ffffff;stroke:#0000ff;stroke-width:0.5;paint-order:markers stroke fill;stroke-dasharray:none"
-       d="m 56.243531,32.191827 h 6.711805 v 2.583278"
-       id="path3227" />
+       style="opacity:1;fill:none;stroke:#0000ff;stroke-width:0.5;stroke-dasharray:none;paint-order:markers stroke fill"
+       d="m 56.243531,32.191827 h 6.711805 l 0,2.145062"
+       id="path3227"
+       sodipodi:nodetypes="ccc" />
   </g>
 </svg>
