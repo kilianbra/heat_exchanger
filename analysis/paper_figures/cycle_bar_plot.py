@@ -64,6 +64,24 @@ def cycle_plot_title(bd: CycleWaterfallBreakdown, recup: RecuperatorInputs | Non
     )
 
 
+def lengthening_waterfall_title(case_label: str, pt, recup: RecuperatorInputs, bd: CycleWaterfallBreakdown) -> str:
+    """Title for lengthening coupled waterfall: geometry, Mach, HEx, and eta (two lines)."""
+    eta_pct = bd.eta_cycle * 100
+    line1 = (
+        f"{case_label}  "
+        rf"$A/A_{{\mathrm{{ref}}}}={pt.a_over_a_ref:.3f}$, "
+        rf"$\mathrm{{NTU}}={pt.ntu:.3f}$, "
+        rf"$M={pt.mach_in:.4f}$"
+    )
+    line2 = (
+        rf"$\varepsilon={recup.eps * 100:.2f}\,\%$, "
+        rf"$\Delta p/p_{{hi}}={recup.dp_hot_frac * 100:.2f}\,\%$, "
+        rf"$\Delta p/p_{{ci}}={recup.dp_cold_frac * 100:.2f}\,\%$, "
+        rf"$\eta_{{cycle}}={eta_pct:.2f}\,\%$"
+    )
+    return f"{line1}\n{line2}"
+
+
 def _x_layout(n_slots: int) -> tuple[list[float], float]:
     """Bar centres and xmax (with trailing buffer) for n_slots bars."""
     x_slot = [X_FIRST + i * BAR_GAP for i in range(n_slots)]
@@ -286,11 +304,15 @@ def fig_cycle_waterfall(
     _draw_xlabel(ax, total_x, bar_labels[-1], y_lo)
 
     if title is not None:
-        ax.set_title(title, fontsize=TITLE_FS, pad=6)
+        title_pad = 10 if "\n" in title else 6
+        ax.set_title(title, fontsize=TITLE_FS, pad=title_pad)
 
     _style_axes_arrows(ax, y_lo=y_lo, y_hi=y_hi, x_max=x_max)
     ax.set_aspect("auto")
-    fig.subplots_adjust(**SUBPLOT_ADJ)
+    subplot_adj = dict(SUBPLOT_ADJ)
+    if title is not None and "\n" in title:
+        subplot_adj["top"] = 0.82
+    fig.subplots_adjust(**subplot_adj)
     return fig
 
 

@@ -173,8 +173,8 @@ def waterfall_from_solution(sol: CycleSolution) -> CycleWaterfallBreakdown:
         phi_turb_isen_kw=phi_turb_isen_kw,
         w_net_J_per_kg=sol.w_net_J_per_kg,
         mdot_kg_per_s=sol.mdot_kg_per_s,
-        p_shaft_kw=sol.P_shaft_W / 1e3,
-        eta_cycle=sol.P_shaft_W / 1e3 / q_in_kw,
+        p_shaft_kw=sol.mdot_kg_per_s * sol.w_net_J_per_kg / 1e3,
+        eta_cycle=(sol.mdot_kg_per_s * sol.w_net_J_per_kg / 1e3) / q_in_kw if q_in_kw > 0 else 0.0,
     )
 
 

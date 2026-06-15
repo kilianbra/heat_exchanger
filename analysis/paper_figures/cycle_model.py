@@ -129,12 +129,16 @@ def solve_open_cycle(assumptions: CycleAssumptions | None = None) -> CycleSoluti
 def solve_recuperated_cycle(
     recup: RecuperatorInputs,
     assumptions: CycleAssumptions | None = None,
+    *,
+    mdot_kg_per_s: float | None = None,
 ) -> CycleSolution | None:
     """
     Recuperated cycle with specified effectiveness and dp fractions.
 
     Station order: ambient, comp_out, recup_cold_out, comb_out, turb_out, recup_hot_out.
     Returns None if net work is non-positive.
+
+    If mdot_kg_per_s is set, use that mass flow (cycle_fxd_mdot); otherwise mdot = P_shaft / w_net.
     """
     a = assumptions or CycleAssumptions()
     cp = a.cp_J_per_kgK
@@ -167,7 +171,7 @@ def solve_recuperated_cycle(
         return None
 
     eta = w_net / q_fuel
-    mdot = a.P_net_shaft_W / w_net
+    mdot = mdot_kg_per_s if mdot_kg_per_s is not None else a.P_net_shaft_W / w_net
 
     stations = (
         CycleStation("ambient", T0, p0),
