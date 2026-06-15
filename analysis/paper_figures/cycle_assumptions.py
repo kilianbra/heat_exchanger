@@ -45,3 +45,18 @@ class RecuperatorInputs:
 
 # Default case used across conf PPT plots (matches fig9_w_cycle_model).
 DEFAULT_CYCLE = CycleAssumptions()
+
+# Recuperator cases for conf PPT bar charts (eps, dp_h/p_hi, dp_c/p_ci).
+REC_REF = RecuperatorInputs(eps=0.5966, dp_hot_frac=0.0626, dp_cold_frac=0.0429)
+REC_FIX = RecuperatorInputs(eps=0.5376, dp_hot_frac=0.0191, dp_cold_frac=0.0131)
+REC_GLOB = RecuperatorInputs(eps=0.6246, dp_hot_frac=0.0199, dp_cold_frac=0.0136)
+
+# (output stem, case label for printout)
+RECUP_PPT_CASES: tuple[tuple[str, str, RecuperatorInputs], ...] = (
+    ("rec_ref", "Reference", REC_REF),
+    ("rec_fix", "Fixed mass opt", REC_FIX),
+    ("rec_glob", "Opt aircraft mass", REC_GLOB),
+)
+
+# Backward-compatible alias.
+DEFAULT_RECUP = REC_REF

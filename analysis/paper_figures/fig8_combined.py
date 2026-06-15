@@ -32,27 +32,46 @@ NTU_MATCH = 1.479
 
 
 def _print_design_comparison(data8, data9):
-    """Print four-column comparison: reference, fixed mass opt, practical optimum, cycle optimum."""
+    """Print five-column comparison: reference, fixed-mass pract opt, fixed-mass cyc opt, practical optimum, cycle optimum.
+
+    Column layout
+    -------------
+    Reference | Fixed Mass (vary Ao)                  | Vary Mass (vary A for opt Ao)
+              |  fix BC (pract)  | vary BC & mdot (cyc)|  fix BC (pract)  | vary BC & mdot (cyc)
+
+    "fix BC"        = practical model: boundary conditions (T_hot_in, mdot) held at reference values.
+    "vary BC & mdot"= cycle model: T_hot_in and mdot solved self-consistently at constant shaft power.
+    "Fixed Mass"    = A/A_ref fixed at reference value; only Ao is optimised.
+    "Vary Mass"     = both A/A_ref and Ao are free; global optimum over mass.
+    """
     # --- Reference design: ao=1, NTU=NTU_MATCH ---
     ao_ref = 1.0
     ntu_ref = NTU_MATCH
     a_r_ref = fig8_no_cycle_model._a_over_a_ref(ao_ref, ntu_ref)
     m_hex_ref_design = a_r_ref * m_hex_ref
 
-    # --- Fixed mass optimum (fig8 black circle): A/A_ref=1, optimal ao at that mass ---
+    # --- Fixed mass, fix BC optimum (fig8 black circle): A/A_ref=1, optimal Ao from practical model ---
     a_r_fixed = data8["a_r_fixed"]
     ao_fixed = data8["ao_fixed"]
     ntu_fixed = data8["ntu_fixed"]
     m_hex_fixed = data8["m_hex_fixed"]
 
-    # --- Practical optimum (fig8 black star) ---
+    # --- Fixed mass, vary BC & mdot optimum: A/A_ref=1, optimal Ao from cycle model.
+    #     "ao_var_bc_cyc" = optimal Ao at reference mass when BCs vary with cycle (T_hot_in, mdot
+    #     solved self-consistently). Found by interpolating the red-line optimal-Ao array at a_r_ref.
+    ao_var_bc_cyc = float(np.interp(a_r_ref, data9["red"]["a"], data9["red"]["ao"]))
+    ntu_var_bc_cyc = float(np.interp(a_r_ref, data9["red"]["a"], data9["red"]["ntu"]))
+    a_r_var_bc_cyc = a_r_ref   # same mass as reference / fixed-mass practical opt
+    m_hex_var_bc_cyc = m_hex_ref_design
+
+    # --- Vary mass, fix BC optimum (fig8 black star): global min of practical fuel+HEx line ---
     id_prac = data8["id_min"]
     a_r_prac = data8["a_over_a_ref"][id_prac]
     ao_prac = data8["ao"][id_prac]
     ntu_prac = data8["ntu"][id_prac]
     m_hex_prac = data8["m_hex"][id_prac]
 
-    # --- Cycle optimum (fig9 red square) ---
+    # --- Vary mass, vary BC & mdot optimum (fig9 red square): global min of cycle fuel+HEx+engine line ---
     id_cyc = data9["id_min_red"]
     a_r_cyc = data9["red"]["a"][id_cyc]
     ao_cyc = data9["red"]["ao"][id_cyc]
@@ -61,15 +80,21 @@ def _print_design_comparison(data8, data9):
 
     # Build table: inputs
     rows = [
-        ["--- INPUTS ---", "", "", "", ""],
-        ["A/A_ref", f"{a_r_ref:.4f}", f"{a_r_fixed:.4f}", f"{a_r_prac:.4f}", f"{a_r_cyc:.4f}"],
-        ["Ao/Ao_ref", f"{ao_ref:.4f}", f"{ao_fixed:.4f}", f"{ao_prac:.4f}", f"{ao_cyc:.4f}"],
-        ["m_hex (kg)", f"{m_hex_ref_design:.3f}", f"{m_hex_fixed:.3f}", f"{m_hex_prac:.3f}", f"{m_hex_cyc:.3f}"],
+        ["--- INPUTS ---", "", "", "", "", ""],
+        ["A/A_ref",    f"{a_r_ref:.4f}",         f"{a_r_fixed:.4f}",      f"{a_r_var_bc_cyc:.4f}",   f"{a_r_prac:.4f}",   f"{a_r_cyc:.4f}"],
+        ["Ao/Ao_ref",  f"{ao_ref:.4f}",           f"{ao_fixed:.4f}",       f"{ao_var_bc_cyc:.4f}",    f"{ao_prac:.4f}",    f"{ao_cyc:.4f}"],
+        ["m_hex (kg)", f"{m_hex_ref_design:.3f}", f"{m_hex_fixed:.3f}",    f"{m_hex_var_bc_cyc:.3f}", f"{m_hex_prac:.3f}", f"{m_hex_cyc:.3f}"],
     ]
 
     # Practical model outputs for each design (dQ^M/Qmax, eps, dp_h, dp_c, M_in, delta_fuel_approx)
     factor_fuel_fig9 = data9["factor_fuel"]
-    designs = [("ref", ao_ref, ntu_ref), ("fixed", ao_fixed, ntu_fixed), ("prac", ao_prac, ntu_prac), ("cyc", ao_cyc, ntu_cyc)]
+    designs = [
+        ("ref",        ao_ref,        ntu_ref),
+        ("fixed",      ao_fixed,      ntu_fixed),
+        ("var_bc_cyc", ao_var_bc_cyc, ntu_var_bc_cyc),
+        ("prac",       ao_prac,       ntu_prac),
+        ("cyc",        ao_cyc,        ntu_cyc),
+    ]
     for name, ao, ntu in designs:
         dq_qmax = fig8_no_cycle_model._practical_at_ao_ntu(
             ao,
@@ -102,6 +127,9 @@ def _print_design_comparison(data8, data9):
         elif name == "fixed":
             dq_fixed, eps_fixed, dp_h_fixed, dp_c_fixed = dq_qmax, eps, dp_h, dp_c
             M_in_fixed, delta_fuel_fixed = M_in_prac, delta_fuel_prac
+        elif name == "var_bc_cyc":
+            dq_var_bc_cyc, eps_var_bc_cyc, dp_h_var_bc_cyc, dp_c_var_bc_cyc = dq_qmax, eps, dp_h, dp_c
+            M_in_var_bc_cyc, delta_fuel_var_bc_cyc = M_in_prac, delta_fuel_prac
         elif name == "prac":
             dq_prac, eps_prac, dp_h_prac, dp_c_prac = dq_qmax, eps, dp_h, dp_c
             M_in_prac_val, delta_fuel_prac_val = M_in_prac, delta_fuel_prac
@@ -110,26 +138,26 @@ def _print_design_comparison(data8, data9):
             M_in_cyc_prac, delta_fuel_cyc_prac = M_in_prac, delta_fuel_prac
 
     rows += [
-        ["--- PRACTICAL MODEL (dQ^M) ---", "", "", "", ""],
-        [r"Sum_i dW_Ai/Qmax", f"{dq_ref:.4f}", f"{dq_fixed:.4f}", f"{dq_prac:.4f}", f"{dq_cyc:.4f}"],
-        ["eps", f"{eps_ref:.4f}", f"{eps_fixed:.4f}", f"{eps_prac:.4f}", f"{eps_cyc:.4f}"],
-        ["dp_h (%)", f"{dp_h_ref:.2f}", f"{dp_h_fixed:.2f}", f"{dp_h_prac:.2f}", f"{dp_h_cyc:.2f}"],
-        ["dp_c (%)", f"{dp_c_ref:.2f}", f"{dp_c_fixed:.2f}", f"{dp_c_prac:.2f}", f"{dp_c_cyc:.2f}"],
-        ["M_inh", f"{M_in_ref:.4f}", f"{M_in_fixed:.4f}", f"{M_in_prac_val:.4f}", f"{M_in_cyc_prac:.4f}"],
-        [r"delta_m_f approx (kg)", f"{delta_fuel_ref:.2f}", f"{delta_fuel_fixed:.2f}", f"{delta_fuel_prac_val:.2f}", f"{delta_fuel_cyc_prac:.2f}"],
+        ["--- PRACTICAL MODEL (dQ^M) ---", "", "", "", "", ""],
+        [r"Sum_i dW_Ai/Qmax", f"{dq_ref:.4f}",    f"{dq_fixed:.4f}",    f"{dq_var_bc_cyc:.4f}",    f"{dq_prac:.4f}",    f"{dq_cyc:.4f}"],
+        ["eps",               f"{eps_ref:.4f}",   f"{eps_fixed:.4f}",   f"{eps_var_bc_cyc:.4f}",   f"{eps_prac:.4f}",   f"{eps_cyc:.4f}"],
+        ["dp_h (%)",          f"{dp_h_ref:.2f}",  f"{dp_h_fixed:.2f}",  f"{dp_h_var_bc_cyc:.2f}",  f"{dp_h_prac:.2f}",  f"{dp_h_cyc:.2f}"],
+        ["dp_c (%)",          f"{dp_c_ref:.2f}",  f"{dp_c_fixed:.2f}",  f"{dp_c_var_bc_cyc:.2f}",  f"{dp_c_prac:.2f}",  f"{dp_c_cyc:.2f}"],
+        ["M_inh",             f"{M_in_ref:.4f}",  f"{M_in_fixed:.4f}",  f"{M_in_var_bc_cyc:.4f}",  f"{M_in_prac_val:.4f}",  f"{M_in_cyc_prac:.4f}"],
+        [r"delta_m_f approx (kg)", f"{delta_fuel_ref:.2f}", f"{delta_fuel_fixed:.2f}", f"{delta_fuel_var_bc_cyc:.2f}", f"{delta_fuel_prac_val:.2f}", f"{delta_fuel_cyc_prac:.2f}"],
     ]
 
-    # Cycle model outputs for each design
-    mdot_ref, mdot_fixed, mdot_prac, mdot_cyc = np.nan, np.nan, np.nan, np.nan
-    T_hot_in_ref, T_hot_in_fixed, T_hot_in_prac, T_hot_in_cyc = np.nan, np.nan, np.nan, np.nan
-    Qmax_ref, Qmax_fixed, Qmax_prac, Qmax_cyc = np.nan, np.nan, np.nan, np.nan
-    eps_cyc_ref = eps_cyc_fixed = eps_cyc_prac = eps_cyc_cyc = np.nan
-    dp_h_cyc_ref = dp_h_cyc_fixed = dp_h_cyc_prac = dp_h_cyc_cyc = np.nan
-    dp_c_cyc_ref = dp_c_cyc_fixed = dp_c_cyc_prac = dp_c_cyc_cyc = np.nan
-    M_in_cyc_ref = M_in_cyc_fixed = M_in_cyc_prac = M_in_cyc_cyc = np.nan
-    delta_fuel_cyc_ref = delta_fuel_cyc_fixed = delta_fuel_cyc_prac = delta_fuel_cyc_cyc = np.nan
-    delta_engine_ref = delta_engine_fixed = delta_engine_prac = delta_engine_cyc = np.nan
-    total_ref = total_fixed = total_prac = total_cyc = np.nan
+    # Cycle model outputs for each design (solved self-consistently at constant shaft power)
+    mdot_ref, mdot_fixed, mdot_var_bc_cyc, mdot_prac, mdot_cyc = np.nan, np.nan, np.nan, np.nan, np.nan
+    T_hot_in_ref, T_hot_in_fixed, T_hot_in_var_bc_cyc, T_hot_in_prac, T_hot_in_cyc = np.nan, np.nan, np.nan, np.nan, np.nan
+    Qmax_ref, Qmax_fixed, Qmax_var_bc_cyc, Qmax_prac, Qmax_cyc = np.nan, np.nan, np.nan, np.nan, np.nan
+    eps_cyc_ref = eps_cyc_fixed = eps_cyc_var_bc_cyc = eps_cyc_prac = eps_cyc_cyc = np.nan
+    dp_h_cyc_ref = dp_h_cyc_fixed = dp_h_cyc_var_bc_cyc = dp_h_cyc_prac = dp_h_cyc_cyc = np.nan
+    dp_c_cyc_ref = dp_c_cyc_fixed = dp_c_cyc_var_bc_cyc = dp_c_cyc_prac = dp_c_cyc_cyc = np.nan
+    M_in_cyc_ref = M_in_cyc_fixed = M_in_cyc_var_bc_cyc = M_in_cyc_prac = M_in_cyc_cyc = np.nan
+    delta_fuel_cyc_ref = delta_fuel_cyc_fixed = delta_fuel_cyc_var_bc_cyc = delta_fuel_cyc_prac = delta_fuel_cyc_cyc = np.nan
+    delta_engine_ref = delta_engine_fixed = delta_engine_var_bc_cyc = delta_engine_prac = delta_engine_cyc = np.nan
+    total_ref = total_fixed = total_var_bc_cyc = total_prac = total_cyc = np.nan
 
     mdot_baseline = data9["mdot_baseline"]
     eff_b = data9["eff_b"]
@@ -141,7 +169,13 @@ def _print_design_comparison(data8, data9):
     LHV_J_per_kg = fig9_w_cycle_model.LHV_J_per_kg
     kg_dry = fig9_w_cycle_model.kg_dry_engine_per_kg_per_s_of_air
 
-    for label, ao, ntu in [("ref", ao_ref, ntu_ref), ("fixed", ao_fixed, ntu_fixed), ("prac", ao_prac, ntu_prac), ("cyc", ao_cyc, ntu_cyc)]:
+    for label, ao, ntu in [
+        ("ref",        ao_ref,        ntu_ref),
+        ("fixed",      ao_fixed,      ntu_fixed),
+        ("var_bc_cyc", ao_var_bc_cyc, ntu_var_bc_cyc),
+        ("prac",       ao_prac,       ntu_prac),
+        ("cyc",        ao_cyc,        ntu_cyc),
+    ]:
         out = fig9_w_cycle_model.solve_mdot_at_constant_power(
             ao, ntu, pressure_drop_ratio_fig9, mdot_at_ref, T_hot_in_ref_val, P_shaft
         )
@@ -151,7 +185,13 @@ def _print_design_comparison(data8, data9):
             mdot_fuel_baseline = P_shaft / (LHV_J_per_kg * eff_b / 100)
             delta_fuel_cyc = (mdot_fuel - mdot_fuel_baseline) * mission_seconds
             delta_engine = (mdot - mdot_baseline) * kg_dry
-            a_r_d = a_r_ref if label == "ref" else (a_r_fixed if label == "fixed" else (a_r_prac if label == "prac" else a_r_cyc))
+            a_r_d = (
+                a_r_ref        if label == "ref"        else
+                a_r_fixed      if label == "fixed"      else
+                a_r_var_bc_cyc if label == "var_bc_cyc" else
+                a_r_prac       if label == "prac"       else
+                a_r_cyc
+            )
             m_hex_d = a_r_d * m_hex_ref
             total = delta_fuel_cyc + m_hex_d + delta_engine
 
@@ -169,6 +209,10 @@ def _print_design_comparison(data8, data9):
                 mdot_fixed, T_hot_in_fixed, Qmax_fixed = mdot, T_hot_in, Qmax
                 eps_cyc_fixed, dp_h_cyc_fixed, dp_c_cyc_fixed, M_in_cyc_fixed = eps_cyc, dp_h_cyc, dp_c_cyc, M_in_cyc
                 delta_fuel_cyc_fixed, delta_engine_fixed, total_fixed = delta_fuel_cyc, delta_engine, total
+            elif label == "var_bc_cyc":
+                mdot_var_bc_cyc, T_hot_in_var_bc_cyc, Qmax_var_bc_cyc = mdot, T_hot_in, Qmax
+                eps_cyc_var_bc_cyc, dp_h_cyc_var_bc_cyc, dp_c_cyc_var_bc_cyc, M_in_cyc_var_bc_cyc = eps_cyc, dp_h_cyc, dp_c_cyc, M_in_cyc
+                delta_fuel_cyc_var_bc_cyc, delta_engine_var_bc_cyc, total_var_bc_cyc = delta_fuel_cyc, delta_engine, total
             elif label == "prac":
                 mdot_prac, T_hot_in_prac, Qmax_prac = mdot, T_hot_in, Qmax
                 eps_cyc_prac, dp_h_cyc_prac, dp_c_cyc_prac, M_in_cyc_prac = eps_cyc, dp_h_cyc, dp_c_cyc, M_in_cyc
@@ -183,24 +227,27 @@ def _print_design_comparison(data8, data9):
 
     # dp_h, dp_c from cycle model are fractions; convert to % for display
     rows += [
-        ["--- CYCLE MODEL ---", "", "", "", ""],
-        ["mdot (kg/s)", _fmt(mdot_ref, ".4f"), _fmt(mdot_fixed, ".4f"), _fmt(mdot_prac, ".4f"), _fmt(mdot_cyc, ".4f")],
-        ["T_hot_in (K)", _fmt(T_hot_in_ref, ".1f"), _fmt(T_hot_in_fixed, ".1f"), _fmt(T_hot_in_prac, ".1f"), _fmt(T_hot_in_cyc, ".1f")],
-        ["Q_max (kW)", _fmt(Qmax_ref / 1e3, ".1f"), _fmt(Qmax_fixed / 1e3, ".1f"), _fmt(Qmax_prac / 1e3, ".1f"), _fmt(Qmax_cyc / 1e3, ".1f")],
-        ["eps", _fmt(eps_cyc_ref, ".4f"), _fmt(eps_cyc_fixed, ".4f"), _fmt(eps_cyc_prac, ".4f"), _fmt(eps_cyc_cyc, ".4f")],
-        ["dp_h (%)", _fmt(dp_h_cyc_ref * 100), _fmt(dp_h_cyc_fixed * 100), _fmt(dp_h_cyc_prac * 100), _fmt(dp_h_cyc_cyc * 100)],
-        ["dp_c (%)", _fmt(dp_c_cyc_ref * 100), _fmt(dp_c_cyc_fixed * 100), _fmt(dp_c_cyc_prac * 100), _fmt(dp_c_cyc_cyc * 100)],
-        ["M_inh", _fmt(M_in_cyc_ref, ".4f"), _fmt(M_in_cyc_fixed, ".4f"), _fmt(M_in_cyc_prac, ".4f"), _fmt(M_in_cyc_cyc, ".4f")],
-        [r"delta_m_f from cycle (kg)", _fmt(delta_fuel_cyc_ref), _fmt(delta_fuel_cyc_fixed), _fmt(delta_fuel_cyc_prac), _fmt(delta_fuel_cyc_cyc)],
-        ["delta_m_engine (kg)", _fmt(delta_engine_ref), _fmt(delta_engine_fixed), _fmt(delta_engine_prac), _fmt(delta_engine_cyc)],
-        ["TOTAL (solid line) (kg)", _fmt(total_ref), _fmt(total_fixed), _fmt(total_prac), _fmt(total_cyc)],
+        ["--- CYCLE MODEL ---", "", "", "", "", ""],
+        ["mdot (kg/s)",              _fmt(mdot_ref, ".4f"),        _fmt(mdot_fixed, ".4f"),        _fmt(mdot_var_bc_cyc, ".4f"),        _fmt(mdot_prac, ".4f"),        _fmt(mdot_cyc, ".4f")],
+        ["T_hot_in (K)",             _fmt(T_hot_in_ref, ".1f"),    _fmt(T_hot_in_fixed, ".1f"),    _fmt(T_hot_in_var_bc_cyc, ".1f"),    _fmt(T_hot_in_prac, ".1f"),    _fmt(T_hot_in_cyc, ".1f")],
+        ["Q_max (kW)",               _fmt(Qmax_ref / 1e3, ".1f"), _fmt(Qmax_fixed / 1e3, ".1f"), _fmt(Qmax_var_bc_cyc / 1e3, ".1f"), _fmt(Qmax_prac / 1e3, ".1f"), _fmt(Qmax_cyc / 1e3, ".1f")],
+        ["eps",                      _fmt(eps_cyc_ref, ".4f"),     _fmt(eps_cyc_fixed, ".4f"),     _fmt(eps_cyc_var_bc_cyc, ".4f"),     _fmt(eps_cyc_prac, ".4f"),     _fmt(eps_cyc_cyc, ".4f")],
+        ["dp_h (%)",                 _fmt(dp_h_cyc_ref * 100),     _fmt(dp_h_cyc_fixed * 100),     _fmt(dp_h_cyc_var_bc_cyc * 100),     _fmt(dp_h_cyc_prac * 100),     _fmt(dp_h_cyc_cyc * 100)],
+        ["dp_c (%)",                 _fmt(dp_c_cyc_ref * 100),     _fmt(dp_c_cyc_fixed * 100),     _fmt(dp_c_cyc_var_bc_cyc * 100),     _fmt(dp_c_cyc_prac * 100),     _fmt(dp_c_cyc_cyc * 100)],
+        ["M_inh",                    _fmt(M_in_cyc_ref, ".4f"),    _fmt(M_in_cyc_fixed, ".4f"),    _fmt(M_in_cyc_var_bc_cyc, ".4f"),    _fmt(M_in_cyc_prac, ".4f"),    _fmt(M_in_cyc_cyc, ".4f")],
+        [r"delta_m_f from cycle (kg)", _fmt(delta_fuel_cyc_ref),   _fmt(delta_fuel_cyc_fixed),     _fmt(delta_fuel_cyc_var_bc_cyc),     _fmt(delta_fuel_cyc_prac),     _fmt(delta_fuel_cyc_cyc)],
+        ["delta_m_engine (kg)",      _fmt(delta_engine_ref),       _fmt(delta_engine_fixed),       _fmt(delta_engine_var_bc_cyc),       _fmt(delta_engine_prac),       _fmt(delta_engine_cyc)],
+        ["TOTAL (solid line) (kg)",  _fmt(total_ref),              _fmt(total_fixed),              _fmt(total_var_bc_cyc),              _fmt(total_prac),              _fmt(total_cyc)],
     ]
 
-    print("\n" + "=" * 100)
-    print("  FIG8 (combined) DESIGN COMPARISON: Reference | Fixed mass opt | Practical optimum | Cycle optimum")
-    print("=" * 100)
-    print(tabulate(rows, headers=["", "Reference", "Fixed mass opt", "Practical opt", "Cycle opt"], tablefmt="simple", stralign="right"))
-    print("=" * 100 + "\n")
+    print("\n" + "=" * 115)
+    print("  FIG8 (combined) DESIGN COMPARISON")
+    print()
+    print("                    Reference |  --Fixed Mass (vary Ao)--  |  --Vary Mass (vary A for opt Ao)--")
+    print("                              |   fix BC  | vary BC & mdot |   fix BC  |    vary BC & mdot")
+    print("=" * 115)
+    print(tabulate(rows, headers=["", "Reference", "fix BC", "vary BC & mdot", "fix BC", "vary BC & mdot"], tablefmt="simple", stralign="right"))
+    print("=" * 115 + "\n")
 
 
 def run_plot(base_name="fig8_combined"):
