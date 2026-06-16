@@ -43,6 +43,33 @@ class RecuperatorInputs:
     dp_cold_frac: float
 
 
+@dataclass(frozen=True)
+class RecupHexGeometry:
+    """HEx geometry ratios from fig9 coupled optimum (reference Ao/Ao_ref = 1, A/A_ref = 1)."""
+
+    a_over_a_ref: float
+    ao_over_ao_ref: float
+
+    @property
+    def ao_ref_over_ao(self) -> float:
+        return 1.0 / self.ao_over_ao_ref
+
+
+@dataclass(frozen=True)
+class RecupPptCase:
+    """One recuperated conf-PPT bar chart case."""
+
+    stem: str
+    label: str
+    recup: RecuperatorInputs
+    geom: RecupHexGeometry
+
+
+def mach_ratio_first_order(mdot_kg_per_s: float, mdot_ref_kg_per_s: float, ao_ref_over_ao: float) -> float:
+    """M/M_ref to first order, ignoring sqrt(T_hot_in/T_ref) from cycle coupling."""
+    return (mdot_kg_per_s / mdot_ref_kg_per_s) * ao_ref_over_ao
+
+
 # Default case used across conf PPT plots (matches fig9_w_cycle_model).
 DEFAULT_CYCLE = CycleAssumptions()
 
@@ -51,11 +78,15 @@ REC_REF = RecuperatorInputs(eps=0.5966, dp_hot_frac=0.0626, dp_cold_frac=0.0429)
 REC_FIX = RecuperatorInputs(eps=0.5376, dp_hot_frac=0.0191, dp_cold_frac=0.0131)
 REC_GLOB = RecuperatorInputs(eps=0.6246, dp_hot_frac=0.0199, dp_cold_frac=0.0136)
 
-# (output stem, case label for printout)
-RECUP_PPT_CASES: tuple[tuple[str, str, RecuperatorInputs], ...] = (
-    ("rec_ref", "Reference", REC_REF),
-    ("rec_fix", "Fixed mass opt", REC_FIX),
-    ("rec_glob", "Opt aircraft mass", REC_GLOB),
+# Geometry from fig9 red-line coupled optima (get_line_data).
+GEOM_REF = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.0)
+GEOM_FIX = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.5061)  # fixed mass, A/A_ref = 1
+GEOM_GLOB = RecupHexGeometry(a_over_a_ref=1.5708, ao_over_ao_ref=1.7667)  # global aircraft-mass opt
+
+RECUP_PPT_CASES: tuple[RecupPptCase, ...] = (
+    RecupPptCase("rec_ref", "Reference", REC_REF, GEOM_REF),
+    RecupPptCase("rec_fix", "Fixed mass opt", REC_FIX, GEOM_FIX),
+    RecupPptCase("rec_glob", "Opt aircraft mass", REC_GLOB, GEOM_GLOB),
 )
 
 # Backward-compatible alias.

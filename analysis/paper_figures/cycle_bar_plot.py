@@ -8,7 +8,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from cycle_assumptions import RecuperatorInputs
+from cycle_assumptions import RecuperatorInputs, RecupHexGeometry, mach_ratio_first_order
 from cycle_waterfall import CycleWaterfallBreakdown
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, color_with_alpha
 
@@ -31,7 +31,7 @@ VALUE_PAD = 0.012
 FIG_HEIGHT = 2.8
 FIG_WIDTH_RECUP = 3.8
 Y_LIMIT_BUFFER_FRAC = 0.10
-SUBPLOT_ADJ = dict(left=0.18, right=0.95, bottom=0.20, top=0.86)
+SUBPLOT_ADJ = dict(left=0.18, right=0.95, bottom=0.20, top=0.82)
 YLABEL = "Practical availability [kW]"
 
 LABELS_NOREC = [
@@ -51,17 +51,53 @@ LABELS_RECUP = [
 REFERENCE_N_SLOTS = len(LABELS_RECUP)
 
 
-def cycle_plot_title(bd: CycleWaterfallBreakdown, recup: RecuperatorInputs | None = None) -> str:
-    """LaTeX title with recuperator parameters (if any) and cycle efficiency."""
+def cycle_plot_title(
+    bd: CycleWaterfallBreakdown,
+    recup: RecuperatorInputs | None = None,
+    *,
+    geom: RecupHexGeometry | None = None,
+    mdot_ref_kg_per_s: float | None = None,
+    case_label: str | None = None,
+) -> str:
+    """Multi-line LaTeX title: case label; optional geometry; HEx and cycle parameters."""
     eta_pct = bd.eta_cycle * 100
-    if recup is None:
-        return rf"$\eta_{{cycle}} = {eta_pct:.2f}\,\%$"
-    return (
+    mdot = bd.mdot_kg_per_s
+    hex_line = (
         rf"$\varepsilon = {recup.eps * 100:.2f}\,\%$, "
         rf"$\Delta p/p_{{hi}} = {recup.dp_hot_frac * 100:.2f}\,\%$, "
         rf"$\Delta p/p_{{ci}} = {recup.dp_cold_frac * 100:.2f}\,\%$, "
         rf"$\eta_{{cycle}} = {eta_pct:.2f}\,\%$"
+    ) if recup is not None else (
+        rf"$\eta_{{cycle}} = {eta_pct:.2f}\,\%$, "
+        rf"$\dot{{m}} = {mdot:.3f}\,\mathrm{{kg/s}}$, "
+        rf"$\dot{{W}}_{{net}} = {bd.w_net_J_per_kg / 1e3:.1f}\,\mathrm{{kJ/kg}}$"
     )
+
+    if recup is None:
+        line1 = case_label if case_label else "Open cycle"
+        return f"{line1}\n{hex_line}"
+
+    line1 = case_label if case_label else "Recuperated cycle"
+    lines = [line1]
+
+    if geom is not None:
+        ao_ref_over_ao = geom.ao_ref_over_ao
+        geo_parts: list[str] = []
+        if abs(geom.a_over_a_ref - 1.0) > 1e-4:
+            geo_parts.extend([
+                rf"$A/A_{{\mathrm{{ref}}}} = {geom.a_over_a_ref:.3f}$",
+                rf"$A_{{o,\mathrm{{ref}}}}/A_o = {ao_ref_over_ao:.3f}$",
+            ])
+            if mdot_ref_kg_per_s is not None:
+                m_ratio = mach_ratio_first_order(mdot, mdot_ref_kg_per_s, ao_ref_over_ao)
+                geo_parts.append(rf"$M/M_{{\mathrm{{ref}}}} = {m_ratio:.3f}$")
+        elif abs(geom.ao_over_ao_ref - 1.0) > 1e-4:
+            geo_parts.append(rf"$A_{{o,\mathrm{{ref}}}}/A_o = {ao_ref_over_ao:.3f}$")
+        if geo_parts:
+            lines.append(", ".join(geo_parts))
+
+    lines.append(hex_line)
+    return "\n".join(lines)
 
 
 def lengthening_waterfall_title(case_label: str, pt, recup: RecuperatorInputs, bd: CycleWaterfallBreakdown) -> str:
@@ -153,8 +189,8 @@ def _shared_y_limits() -> tuple[float, float]:
     open_bd = waterfall_from_solution(solve_open_cycle(DEFAULT_CYCLE))
     peaks.append(_peak_kw(open_bd, open_cycle_steps(open_bd)))
 
-    for _, _, recup in RECUP_PPT_CASES:
-        rec_sol = solve_recuperated_cycle(recup, DEFAULT_CYCLE)
+    for case in RECUP_PPT_CASES:
+        rec_sol = solve_recuperated_cycle(case.recup, DEFAULT_CYCLE)
         if rec_sol is not None:
             rec_bd = waterfall_from_solution(rec_sol)
             peaks.append(_peak_kw(rec_bd, recuperated_cycle_steps(rec_bd)))

@@ -28,7 +28,7 @@ def main() -> None:
         bd,
         steps=open_cycle_steps(bd),
         bar_labels=LABELS_NOREC,
-        title=cycle_plot_title(bd),
+        title=cycle_plot_title(bd, case_label="Open cycle (no recuperator)"),
     )
     save_cycle_bar(fig, CONF_PPT_PLOTS, "cycle_norec_bar")
     plt.close(fig)
