@@ -196,7 +196,7 @@ def save_figures(
         idx_opt = np.argmin(np.abs(ntu_with_dp_orig - ntu_optimum))
         x_opt = ntu_with_dp[idx_opt]
         y_opt = y_with_dp[idx_opt]
-        ax.scatter(x_opt, y_opt, marker="o", facecolor="black", edgecolor="white", zorder=5, s=MARKER_SIZE_LATEX)
+        # ax.scatter(x_opt, y_opt, marker="o", facecolor="black", edgecolor="white", zorder=5, s=MARKER_SIZE_LATEX)
 
     # Annotations with arrows: baseline design, optimal design (text within ylim)
     arrow_kw_opt = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
@@ -218,14 +218,15 @@ def save_figures(
         arrowprops=arrow_kw_ref,
     )
     if ntu_optimum is not None:
-        ax.annotate(
-            "optimal design",
-            xy=(x_opt, y_opt),
-            xytext=xytext_opt,
-            fontsize=font_size,
-            ha="left",
-            arrowprops=arrow_kw_opt,
-        )
+        pass
+        # ax.annotate(
+        #    "optimal design",
+        #    xy=(x_opt, y_opt),
+        #    xytext=xytext_opt,
+        #    fontsize=font_size,
+        #    ha="left",
+        #    arrowprops=arrow_kw_opt,
+        # )
 
     ax.set_title("")
     if plot_area_ratio_ref:

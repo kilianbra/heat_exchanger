@@ -8,10 +8,10 @@ from xflow import calculate_pressure_drop_ratio, create_plot
 
 from plot_colors import MARKER_SIZE_LATEX
 
-from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+from fig_paths import FINAL_CONF_PAPER, JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
-save_dir = FINAL_CONF_PAPER
+save_dir = JOURNAL_PLOTS
 
 # Defaults (match fig8/9)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
@@ -174,9 +174,9 @@ def save_figures(
     idx_ref = (np.abs(x_eps - NTU_REF)).argmin()
     ax.scatter(NTU_REF, y_eps[idx_ref], marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=10)
     idx_opt = (np.abs(x_eps - NTU_OPT)).argmin()
-    ax.scatter(
-        NTU_OPT, y_eps[idx_opt], marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
-    )
+    # ax.scatter(
+    #    NTU_OPT, y_eps[idx_opt], marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
+    # )
 
     # Same markers on right-axis (pressure drop) lines only (hot and cold, not other artists)
     for line in lines_dp:
@@ -187,12 +187,13 @@ def save_figures(
         ax_twin.scatter(NTU_REF, y_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=10)
         idx_opt = (np.abs(x_data - NTU_OPT)).argmin()
         y_opt = y_data[idx_opt]
-        ax_twin.scatter(
-            NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
-        )
+        # ax_twin.scatter(
+        #    NTU_OPT, y_opt, marker="o", color="white", zorder=10, s=MARKER_SIZE_LATEX, facecolor="black", edgecolor="white"
+        # )
 
     if plot_area_ratio_ref:
         base_name = base_name.replace("_aspect_ratio", "_Ao_Aoref")
+
         # Transform x from NTU to Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
         def _ao_ref_over_ao(ntu):
             return (np.asarray(ntu) / NTU_MATCH) ** AO_REF_OVER_AO_EXP

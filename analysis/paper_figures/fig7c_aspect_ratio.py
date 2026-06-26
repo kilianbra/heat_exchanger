@@ -181,7 +181,7 @@ def save_figures(
     x_optimum = ntu_with_dp[idx_optimum]
     ntu_optimum_actual = ntu_with_dp_orig[idx_optimum]
     y_optimum = y_with_dp[idx_optimum]
-    ax.scatter(x_optimum, y_optimum, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
+    # ax.scatter(x_optimum, y_optimum, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
 
     print(f"Optimum NTU: {ntu_optimum_actual:.4f}")
 
@@ -206,14 +206,15 @@ def save_figures(
             arrowprops=arrow_kw,
         )
     if xytext_optimal is not None:
-        ax.annotate(
-            "optimal design",
-            xy=(x_optimum, y_optimum),
-            xytext=xytext_optimal,
-            fontsize=font_size,
-            ha="left",
-            arrowprops=arrow_kw,
-        )
+        pass
+        # ax.annotate(
+        #    "optimal design",
+        #    xy=(x_optimum, y_optimum),
+        #    xytext=xytext_optimal,
+        #    fontsize=font_size,
+        #    ha="left",
+        #    arrowprops=arrow_kw,
+        # )
 
     ax.set_title("")
     if plot_area_ratio_ref:
@@ -259,7 +260,7 @@ def save_figures(
         ax.text(
             0.5,
             0.98,
-            "increasing Mach",
+            "increasing velocity",
             transform=ax.transAxes,
             va="top",
             ha="center",

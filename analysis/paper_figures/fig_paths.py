@@ -10,6 +10,7 @@ FINAL_CONF_PAPER = FIGS_CURRENT / "final_conf_paper"
 EXPLORE_IDEAS = FIGS_CURRENT / "explore_ideas"
 WHITTLE_ASME_PRACTICE = FIGS_CURRENT / "whittle_asme_practice"
 CONF_PPT_PLOTS = FIGS_CURRENT / "conf_ppt_plots"
+JOURNAL_PLOTS = FIGS_CURRENT / "final_journal_paper"
 
 
 def ensure_fig_dirs() -> None:

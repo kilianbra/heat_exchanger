@@ -18,10 +18,10 @@ from xflow import calculate_epsilon_ntu_curve, calculate_pressure_drop_ratio, pl
 
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
-from fig_paths import EXPLORE_IDEAS, ensure_fig_dirs
+from fig_paths import EXPLORE_IDEAS, JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
-save_dir = EXPLORE_IDEAS
+save_dir = JOURNAL_PLOTS
 
 # Defaults (match fig6/fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
@@ -86,8 +86,8 @@ def _set_ntu_axis(ax):
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
 
 
-def _save_figure(fig, base_name):
-    for ext, fmt in [("svg", "svg"), ("tiff", "tiff"), ("png", "png"), ("pdf", "pdf")]:
+def _save_figure(fig, base_name):  # ("tiff", "tiff"),
+    for ext, fmt in [("svg", "svg"), ("png", "png"), ("pdf", "pdf")]:
         fig.savefig(
             os.path.join(save_dir, f"{base_name}.{ext}"),
             dpi=300,
@@ -97,7 +97,7 @@ def _save_figure(fig, base_name):
             pad_inches=0,
         )
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
+    print(f"Saved figures: {base_name}.svg, {base_name}.png, {base_name}.pdf")
 
 
 def save_fig6a(
@@ -307,7 +307,7 @@ def _save_availability_breakdown(
         )
 
     # Optimum marker (practical only; classical omits circle)
-    if framework == "practical":
+    if False:  # framework == "practical":
         idx_opt = np.argmax(y_with_dp)
         x_opt = ntu_with_dp_orig[idx_opt]
         y_opt = y_with_dp[idx_opt]
