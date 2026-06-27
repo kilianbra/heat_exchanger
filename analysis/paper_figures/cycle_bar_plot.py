@@ -88,6 +88,9 @@ WORK_WATERFALL_SLOTS = len(LABELS_WORK_WATERFALL_RECUP)
 PLACEHOLDER_BAR_FRAC = 0.018
 HEAT_INPUT_YLABEL = "Heat [kW]"
 HEAT_WORK_YLABEL = "Work [kW]"
+JOURNAL_HEAT_INPUT_YLABEL = "Heat input [kW]"
+JOURNAL_HEAT_WORK_YLABEL = "Mechanical work [kW]"
+LabelStyle = Literal["default", "journal"]
 HEAT_WORK_OUT_STEM = "bar_heat_work"
 NRG_PRAC_AV_OUT_STEM = "bar_nrg_prac_av"
 ENERGY_YLABEL = "Energy [kW]"
@@ -527,10 +530,32 @@ def _placeholder_bar_spec(x: float, y_lo: float, y_hi: float) -> _BarSpec:
     )
 
 
-def _draw_placeholder_bar(ax: plt.Axes, slot: _WaterfallDrawSlot, *, y_lo: float, y_hi: float) -> _BarSpec:
+def _journal_work_xlabel_entries(bd: CycleWaterfallBreakdown, x_slot: list[float]) -> list[tuple[float, str]]:
+    """Journal x-axis labels: Comb.; grouped Recuperator; Comp. & Turb.; W_net."""
+    entries: list[tuple[float, str]] = [(x_slot[0], "Comb.")]
+    if bd.recuperated:
+        entries.append(((x_slot[1] + x_slot[2]) / 2, "Recuperator"))
+    entries.extend(
+        [
+            (x_slot[3], "Comp.\n& Turb."),
+            (x_slot[4], r"$\dot{W}_{net}$"),
+        ]
+    )
+    return entries
+
+
+def _draw_placeholder_bar(
+    ax: plt.Axes,
+    slot: _WaterfallDrawSlot,
+    *,
+    y_lo: float,
+    y_hi: float,
+    draw_xlabel: bool = True,
+) -> _BarSpec:
     spec = _placeholder_bar_spec(slot.x, y_lo, y_hi)
     _draw_bar(ax, spec)
-    _draw_xlabel(ax, slot.x, slot.label, y_lo)
+    if draw_xlabel:
+        _draw_xlabel(ax, slot.x, slot.label, y_lo)
     return spec
 
 
@@ -660,6 +685,7 @@ def _draw_heat_input_axis(
     *,
     y_lo: float,
     y_hi: float,
+    label_style: LabelStyle = "default",
 ) -> None:
     """Combustor heat rate Q_in [kW] on a compact single-bar axis."""
     x, heat_x_max = _heat_input_axis_limits()
@@ -667,12 +693,13 @@ def _draw_heat_input_axis(
     _draw_bar(ax, spec)
     _draw_value_label(ax, spec, f"{bd.Q_in_kw:.0f}", y_lo)
     _draw_xlabel(ax, x, r"$\dot{Q}_{in}$", y_lo)
+    heat_ylabel = JOURNAL_HEAT_INPUT_YLABEL if label_style == "journal" else HEAT_INPUT_YLABEL
     _style_axes_arrows(
         ax,
         y_lo=y_lo,
         y_hi=y_hi,
         x_max=heat_x_max,
-        ylabel=HEAT_INPUT_YLABEL,
+        ylabel=heat_ylabel,
     )
 
 
@@ -685,10 +712,16 @@ def _draw_work_waterfall(
     y_lo: float,
     y_hi: float,
     qin_one_decimal: bool = False,
+    label_style: LabelStyle = "default",
 ) -> None:
     """Original availability waterfall on the work axis."""
     work_x_max, _, _ = _reference_axis_x_max()
     draw_slots = _work_waterfall_draw_slots(bd, steps, bar_labels, qin_one_decimal=qin_one_decimal)
+    journal_xlabels = (
+        _journal_work_xlabel_entries(bd, _reference_x_slot(WORK_WATERFALL_SLOTS))
+        if label_style == "journal"
+        else None
+    )
 
     cumul = 0.0
     prev: _BarSpec | None = None
@@ -700,11 +733,18 @@ def _draw_work_waterfall(
                 _draw_connector(ax, prev, total_spec, y=cumul)
             _draw_bar(ax, total_spec)
             _draw_value_label(ax, total_spec, f"{bd.p_shaft_kw:.0f}", y_lo)
-            _draw_xlabel(ax, slot.x, slot.label, y_lo)
+            if journal_xlabels is None:
+                _draw_xlabel(ax, slot.x, slot.label, y_lo)
             continue
 
         if slot.step is None:
-            _draw_placeholder_bar(ax, slot, y_lo=y_lo, y_hi=y_hi)
+            _draw_placeholder_bar(
+                ax,
+                slot,
+                y_lo=y_lo,
+                y_hi=y_hi,
+                draw_xlabel=journal_xlabels is None,
+            )
             continue
 
         bottom, height = _delta_bar_geom(cumul, slot.step.delta_kw)
@@ -717,11 +757,17 @@ def _draw_work_waterfall(
             one_decimal=slot.qin_one_decimal,
         )
         _draw_value_label(ax, spec, lbl, y_lo)
-        _draw_xlabel(ax, slot.x, slot.label, y_lo)
+        if journal_xlabels is None:
+            _draw_xlabel(ax, slot.x, slot.label, y_lo)
         cumul += slot.step.delta_kw
         prev = spec
 
-    _style_axes_arrows(ax, y_lo=y_lo, y_hi=y_hi, x_max=work_x_max, ylabel=HEAT_WORK_YLABEL)
+    if journal_xlabels is not None:
+        for x, label in journal_xlabels:
+            _draw_xlabel(ax, x, label, y_lo)
+
+    work_ylabel = JOURNAL_HEAT_WORK_YLABEL if label_style == "journal" else HEAT_WORK_YLABEL
+    _style_axes_arrows(ax, y_lo=y_lo, y_hi=y_hi, x_max=work_x_max, ylabel=work_ylabel)
     _add_waterfall_legend(ax)
 
 
@@ -929,7 +975,9 @@ def fig_cycle_heat_work(
     bd: CycleWaterfallBreakdown,
     *,
     title: str | None = None,
+    show_title: bool = True,
     qin_one_decimal: bool = False,
+    label_style: LabelStyle = "default",
 ) -> plt.Figure:
     """Heat input Q_in [kW] (left) + availability waterfall (right)."""
     steps, bar_labels = work_waterfall_for_breakdown(bd)
@@ -949,7 +997,7 @@ def fig_cycle_heat_work(
     ax_heat.set_facecolor("white")
     ax_work.set_facecolor("white")
 
-    _draw_heat_input_axis(ax_heat, bd, y_lo=y_lo, y_hi=y_hi)
+    _draw_heat_input_axis(ax_heat, bd, y_lo=y_lo, y_hi=y_hi, label_style=label_style)
     _draw_work_waterfall(
         ax_work,
         bd,
@@ -958,25 +1006,40 @@ def fig_cycle_heat_work(
         y_lo=y_lo,
         y_hi=y_hi,
         qin_one_decimal=qin_one_decimal,
+        label_style=label_style,
     )
 
-    if title is not None:
+    if show_title and title is not None:
         _set_heat_work_figure_title(fig, title)
 
     subplot_adj = dict(SUBPLOT_ADJ_HEAT_WORK)
-    if title is not None:
+    if show_title and title is not None:
         subplot_adj["top"] = 0.74
+    else:
+        subplot_adj["top"] = 0.92
     fig.subplots_adjust(**subplot_adj)
     return fig
 
 
-def save_heat_work_bar(fig: plt.Figure, out_dir: Path, stem_suffix: str) -> Path:
+def save_heat_work_bar(
+    fig: plt.Figure,
+    out_dir: Path,
+    stem_suffix: str,
+    *,
+    formats: tuple[str, ...] = ("png",),
+) -> Path:
     from datetime import datetime
 
-    path = (out_dir / f"{HEAT_WORK_OUT_STEM}_{stem_suffix}.png").resolve()
-    fig.savefig(path, dpi=300, facecolor="white")
-    print(f"Wrote {path}  ({datetime.fromtimestamp(path.stat().st_mtime):%Y-%m-%d %H:%M:%S})")
-    return path
+    stem = f"{HEAT_WORK_OUT_STEM}_{stem_suffix}"
+    last_path: Path | None = None
+    for fmt in formats:
+        path = (out_dir / f"{stem}.{fmt}").resolve()
+        fig.savefig(path, dpi=300, facecolor="white", format=fmt)
+        print(f"Wrote {path}  ({datetime.fromtimestamp(path.stat().st_mtime):%Y-%m-%d %H:%M:%S})")
+        last_path = path
+    if last_path is None:
+        raise ValueError("formats must contain at least one entry")
+    return last_path
 
 
 def save_nrg_prac_av_bar(fig: plt.Figure, out_dir: Path, stem_suffix: str) -> Path:

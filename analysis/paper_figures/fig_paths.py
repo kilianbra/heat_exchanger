@@ -14,5 +14,11 @@ JOURNAL_PLOTS = FIGS_CURRENT / "final_journal_paper"
 
 
 def ensure_fig_dirs() -> None:
-    for path in (FINAL_CONF_PAPER, EXPLORE_IDEAS, WHITTLE_ASME_PRACTICE, CONF_PPT_PLOTS):
+    for path in (
+        FINAL_CONF_PAPER,
+        EXPLORE_IDEAS,
+        WHITTLE_ASME_PRACTICE,
+        CONF_PPT_PLOTS,
+        JOURNAL_PLOTS,
+    ):
         path.mkdir(parents=True, exist_ok=True)
