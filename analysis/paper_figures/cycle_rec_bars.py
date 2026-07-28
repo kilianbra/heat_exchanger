@@ -48,6 +48,15 @@ def plot_rec_bar(case: RecupPptCase, mdot_ref_kg_per_s: float) -> None:
             f"dp_c={case.recup.dp_cold_frac:.2%}"
         ),
     )
+    hi = sol.hex_hot_inlet()
+    ci = sol.hex_cold_inlet()
+    print(
+        f"  HEx hot in (turb out):  T = {hi.T_K:.2f} K,  p = {hi.p_Pa / 1e5:.4f} bar"
+    )
+    print(
+        f"  HEx cold in (comp out): T = {ci.T_K:.2f} K,  p = {ci.p_Pa / 1e5:.4f} bar"
+    )
+    print(f"  t = T_h,in/T_c,in = {hi.T_K / ci.T_K:.4f}")
     _print_geometry(bd, case, mdot_ref_kg_per_s)
 
     fig = fig_cycle_waterfall(

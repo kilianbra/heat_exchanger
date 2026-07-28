@@ -194,6 +194,7 @@ class MachOptContext:
             molar_mass_ratio,
             sigma_r,
             p_cold_in_over_p_hot_in,
+            f_c_over_f_h=f_c_over_f_h,
         )
         self.C_min_over_C_hot, self.C_min_over_C_cold, _ = calculate_capacity_ratios(c_cold_over_c_hot)
         if c_cold_over_c_hot <= 1.0:

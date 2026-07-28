@@ -102,7 +102,14 @@ def save_figures(
 
     sigma_r = d_r * a_r if a_r is not None else None
     pressure_drop_ratio = calculate_pressure_drop_ratio(
-        pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
+        pressure_drop_assumption,
+        c_cold_over_c_hot,
+        t,
+        d_r,
+        molar_mass_ratio,
+        sigma_r,
+        p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
     )
 
     # Match fig6b lengthening figure size (triple column)

@@ -368,6 +368,7 @@ def get_line_data(
         molar_mass_ratio,
         sigma_r,
         p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
     )
     a_over_a_ref_opt_line, ao_opt_line, ntu_opt_line, dq_o_m_over_qmax_opt_line = _optimal_ao_for_each_a_over_a_ref(
         c_cold_over_c_hot,
@@ -444,6 +445,7 @@ def run_plot(
         molar_mass_ratio,
         sigma_r,
         p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
     )
 
     # Vertical-slice optimization: for each A/A_ref, find the best ao (and NTU).

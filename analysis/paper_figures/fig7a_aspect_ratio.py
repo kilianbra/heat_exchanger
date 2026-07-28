@@ -87,7 +87,14 @@ def save_figures(
     # Calculate pressure drop ratio based on assumption
     sigma_r = d_r * a_r if a_r is not None else None
     pressure_drop_ratio = calculate_pressure_drop_ratio(
-        pressure_drop_assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
+        pressure_drop_assumption,
+        c_cold_over_c_hot,
+        t,
+        d_r,
+        molar_mass_ratio,
+        sigma_r,
+        p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
     )
 
     # Create figure with single subplot (match fig2a: triple column 7.1 cm width)

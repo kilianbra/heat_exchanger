@@ -240,6 +240,7 @@ def _fig9_pressure_drop_ratio(fig9) -> float:
         fig9.DEFAULT_MOLAR_MASS_RATIO,
         sigma_r,
         fig9.DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        f_c_over_f_h=fig9.DEFAULT_F_C_OVER_F_H,
     )
 
 
@@ -660,6 +661,7 @@ def baseline_point():
         MOLAR_MASS_RATIO,
         sigma_r,
         p_cold_in_over_p_hot_in,
+        f_c_over_f_h=F_C_OVER_F_H,
     )
     dp_hot = float(DP_HOT_OF_INLET)
     dp_cold = float(pressure_drop_ratio * dp_hot)

@@ -613,6 +613,7 @@ def get_line_data():
         DEFAULT_MOLAR_MASS_RATIO,
         sigma_r_hot,
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        f_c_over_f_h=DEFAULT_F_C_OVER_F_H,
     )
     g2h_ref = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
     eps_ref, dp_hot_ref, dp_cold_ref = _get_eps_dp_from_g2h(
@@ -694,6 +695,7 @@ def run_plot(base_name="fig9_w_cycle_model"):
         DEFAULT_MOLAR_MASS_RATIO,
         sigma_r_hot,
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        f_c_over_f_h=DEFAULT_F_C_OVER_F_H,
     )
 
     # Reference design: ao_r_ref=1, NTU_MATCH. Get T_hot_in_ref and verify eps, dp.

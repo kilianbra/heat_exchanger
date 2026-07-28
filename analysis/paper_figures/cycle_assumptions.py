@@ -74,7 +74,9 @@ def mach_ratio_first_order(mdot_kg_per_s: float, mdot_ref_kg_per_s: float, ao_re
 DEFAULT_CYCLE = CycleAssumptions()
 
 # Recuperator cases for conf PPT bar charts (eps, dp_h/p_hi, dp_c/p_ci).
-REC_REF = RecuperatorInputs(eps=0.5966, dp_hot_frac=0.0626, dp_cold_frac=0.0429)
+# REC_REF: fixed-BC reference from xflow at NTU_MATCH with f_c/f_h=1, M_h=0.1362
+#   -> dp_h≈6.00%, dp_c≈4.11% (both pressure drops enter turbine exit = HEx hot inlet T).
+REC_REF = RecuperatorInputs(eps=0.5966, dp_hot_frac=0.0600, dp_cold_frac=0.0411)
 REC_FIX = RecuperatorInputs(eps=0.5376, dp_hot_frac=0.0191, dp_cold_frac=0.0131)
 REC_GLOB = RecuperatorInputs(eps=0.6246, dp_hot_frac=0.0199, dp_cold_frac=0.0136)
 

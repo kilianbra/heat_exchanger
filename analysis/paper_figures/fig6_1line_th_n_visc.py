@@ -66,7 +66,7 @@ def _setup_rcparams():
     )
 
 
-def _pressure_drop_ratio(c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r):
+def _pressure_drop_ratio(c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r, f_c_over_f_h=DEFAULT_F_C_OVER_F_H):
     sigma_r = d_r * a_r if a_r is not None else None
     return calculate_pressure_drop_ratio(
         DEFAULT_PRESSURE_DROP_ASSUMPTION,
@@ -76,6 +76,7 @@ def _pressure_drop_ratio(c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r
         DEFAULT_MOLAR_MASS_RATIO,
         sigma_r,
         p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
     )
 
 
@@ -191,7 +192,9 @@ def _save_availability_breakdown(
     _setup_rcparams()
     xflow.SHOW_CUBIC = False
 
-    pressure_drop_ratio = _pressure_drop_ratio(c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r)
+    pressure_drop_ratio = _pressure_drop_ratio(
+        c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r, f_c_over_f_h=f_c_over_f_h
+    )
 
     fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)

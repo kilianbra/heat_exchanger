@@ -104,7 +104,9 @@ match defaults:
         DEFAULT_D_R = 0.25
         # g2h = 2e-2
         # DEFAULT_G2_H = 0.5 * 1.4 * 0.12**2  # 2e-2  # M=0.12
-        DEFAULT_G2_H = 0.5 * 1.4 * 0.11**2  # Mh_in=0.11
+        # DEFAULT_G2_H = 0.5 * 1.4 * 0.11**2  # Mh_in=0.11, with f_c/f_h=0.25 (old inconsistent split)
+        # DEFAULT_G2_H = 0.5 * 1.4 * 0.139**2  # ~6.25%/4.28% at NTU_MATCH
+        DEFAULT_G2_H = 0.5 * 1.4 * 0.1362**2  # Mh_in=0.1362 with f_c/f_h=1 -> ~6.0%/4.1% at NTU_MATCH
         # DEFAULT_A_R = 1.0  # (module default)
         DEFAULT_A_R = 0.92
         DEFAULT_T = 907 / 588  # 1.7  # 980/576
@@ -117,7 +119,8 @@ match defaults:
         DEFAULT_NTU_MAX = 5.0
         SHOW_CUBIC = True
         # DEFAULT_F_C_OVER_F_H = 0.23
-        DEFAULT_F_C_OVER_F_H = 0.25
+        # DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+        DEFAULT_F_C_OVER_F_H = 1.0  # St_c/St_h = f_c/f_h; M_c ~ 0.056 at M_h=0.1362
     case "g2lim":
         DEFAULT_PRESSURE_DROP_ASSUMPTION = "dp_c<<dp_h"
         DEFAULT_C_COLD_OVER_C_HOT = 1.0
@@ -129,6 +132,18 @@ match defaults:
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 1.1
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 10.0
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.1
+
+# g2_h = 0.5 * gamma * M_in,h^2 — slider shows Mach, internals still use g2_h
+def g2_from_mach(mach, gamma=DEFAULT_GAMMA):
+    return 0.5 * gamma * mach**2
+
+
+def mach_from_g2(g2, gamma=DEFAULT_GAMMA):
+    return np.sqrt(2.0 * g2 / gamma)
+
+
+MACH_H_RANGE = (mach_from_g2(G2_H_RANGE[0]), mach_from_g2(G2_H_RANGE[1]))
+DEFAULT_MACH_H = float(mach_from_g2(DEFAULT_G2_H))
 
 # NTU sweep range
 NTU_SWEEP = np.linspace(0.1, DEFAULT_NTU_MAX, 200)
@@ -1170,7 +1185,14 @@ def plot_unavailable_energy_breakdown(
 
 
 def calculate_pressure_drop_ratio(
-    assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
+    assumption,
+    c_cold_over_c_hot,
+    t,
+    d_r,
+    molar_mass_ratio,
+    sigma_r,
+    p_cold_in_over_p_hot_in,
+    f_c_over_f_h=1.0,
 ):
     """
     Calculate pressure_drop_percent_ratio_cold_over_hot based on assumption.
@@ -1181,10 +1203,13 @@ def calculate_pressure_drop_ratio(
         t: T_hot_in / T_cold_in ratio
         d_r: d_r = sigma_r/A_r (cold/hot ratio)
         molar_mass_ratio: M_cold / M_hot (cold/hot)
-        sigma_r: sigma_r (cold/hot)
+        sigma_r: sigma_r = A_o,cold/A_o,hot (cold/hot free-flow area)
         p_cold_in_over_p_hot_in: p_cold_in / p_hot_in
+        f_c_over_f_h: f_c / f_h (and St_c/St_h when St/f is shared). Required for
+            inlet_density so Eq. 18's X_c/X_h = (f_c/f_h)*(A_r/sigma_r) is consistent.
+            Default 1.0 preserves legacy callers that omitted friction ratio.
 
-        assumes equal gammas for both fluids
+        assumes equal gammas for both fluids; (rho_in/rho)_mean = 1 on both sides.
 
     Returns:
         pressure_drop_percent_ratio_cold_over_hot: Ratio of (dp_cold/p_cold_in) / (dp_hot/p_hot_in)
@@ -1194,10 +1219,16 @@ def calculate_pressure_drop_ratio(
     elif assumption == "dp_c<<dp_h":
         return 0.0
     elif assumption == "inlet_density":
-        # dp_cold = dp_hot / (p_c_in_over_p_h_in / c_cold_over_c_hot * t_h_in_over_t_c_in * d_ratio * sigma_r / molar_mass_ratio)
-        # pressure_drop_percent_ratio_cold_over_hot = (dp_cold/p_cold_in) / (dp_hot/p_hot_in)
-        # = c_cold_over_c_hot^2 * molar_mass_ratio / (p_c_in_over_p_h_in^2 * t * d_r * sigma_r)
-        return c_cold_over_c_hot**2 * molar_mass_ratio / (p_cold_in_over_p_hot_in**2 * t * d_r * sigma_r**2)
+        # From dp_i/p_i = 0.5*gamma*M_i^2*(f_i*A_i/A_o,i) with equal mdot / ideal gas:
+        # (dp_c/p_c)/(dp_h/p_h) = (M_c/M_h)^2 * (f_c/f_h) * (A_r/sigma_r)
+        #   = f_c/f_h * C_r^2 * M_mol / (p_r^2 * t * d_r * sigma_r^2)
+        # because d_r = sigma_r/A_r implies 1/(d_r*sigma_r^2) = A_r/sigma_r^3.
+        return (
+            f_c_over_f_h
+            * c_cold_over_c_hot**2
+            * molar_mass_ratio
+            / (p_cold_in_over_p_hot_in**2 * t * d_r * sigma_r**2)
+        )
     else:
         return 0.0  # Default to option 2
 
@@ -1244,6 +1275,7 @@ if __name__ == "__main__":
         DEFAULT_MOLAR_MASS_RATIO,
         initial_sigma_r,
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        f_c_over_f_h=DEFAULT_F_C_OVER_F_H,
     )
 
     # Initial plot
@@ -1341,15 +1373,15 @@ if __name__ == "__main__":
     )
     y_pos -= slider_spacing
 
-    # g2_h slider (exponential)
-    slider_g2_h = ExpSlider(
+    # Hot inlet Mach slider (exponential); converted to g2_h = 0.5*gamma*M^2 for the model
+    slider_mach_h = ExpSlider(
         plt.axes([slider_left, y_pos, slider_width, slider_height]),
-        "g2_h",
-        G2_H_RANGE[0],
-        G2_H_RANGE[1],
-        valinit=DEFAULT_G2_H,
-        valstep=1e-5,
-        valfmt="%.1e",
+        r"$M_{\mathrm{in},h}$",
+        MACH_H_RANGE[0],
+        MACH_H_RANGE[1],
+        valinit=DEFAULT_MACH_H,
+        valstep=0.001,
+        valfmt="%.3f",
     )
     y_pos -= slider_spacing
 
@@ -1477,7 +1509,7 @@ if __name__ == "__main__":
         st_over_f = slider_st_over_f.val
         f_c_over_f_h = slider_f_c_over_f_h.val
         d_r = slider_d_r.val
-        g2_h = slider_g2_h.val
+        g2_h = g2_from_mach(slider_mach_h.val)
         # NTU max from default (can be overridden by defaults case)
         ntu_max = DEFAULT_NTU_MAX
 
@@ -1522,7 +1554,14 @@ if __name__ == "__main__":
         sigma_r = d_r * a_r
 
         pressure_drop_ratio = calculate_pressure_drop_ratio(
-            assumption, c_cold_over_c_hot, t, d_r, molar_mass_ratio, sigma_r, p_cold_in_over_p_hot_in
+            assumption,
+            c_cold_over_c_hot,
+            t,
+            d_r,
+            molar_mass_ratio,
+            sigma_r,
+            p_cold_in_over_p_hot_in,
+            f_c_over_f_h=f_c_over_f_h,
         )
         # When dp_c∝dp_h, override with user-set (dp_h/p_hin)/(dp_c/p_cin); ratio=1 gives same as before
         if assumption == "dp_c=dp_h":
@@ -1594,7 +1633,7 @@ if __name__ == "__main__":
     slider_st_over_f.on_changed(update_plot)
     slider_f_c_over_f_h.on_changed(update_plot)
     slider_d_r.on_changed(update_plot)
-    slider_g2_h.on_changed(update_plot)
+    slider_mach_h.on_changed(update_plot)
 
     # Connect conditional sliders
     slider_t_hot_over_t_cold.on_changed(update_plot)
