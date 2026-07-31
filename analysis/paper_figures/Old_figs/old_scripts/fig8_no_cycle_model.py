@@ -26,10 +26,11 @@ save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Figs_curren
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_GAMMA = 1.4
 # DEFAULT_MACH_IN = 0.1
-DEFAULT_MACH_IN = 0.11  # Mh_in
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 DEFAULT_ST_OVER_F = 0.4
-# DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
 DEFAULT_DP_MAX = 0.2
 DEFAULT_MOLAR_MASS_RATIO = 1.0
 # DEFAULT_A_R = 1.0

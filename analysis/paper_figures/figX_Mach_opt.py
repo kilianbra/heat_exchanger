@@ -84,9 +84,9 @@ REFINE_MACH_ERROR_FRAC = -0.01
 YLABEL_PRACTICAL_AVAIL = r"$\sum_i \Delta W_{A,i}^M\,/\,\dot{Q}_{\mathrm{max}}$ [-]"
 
 # Reference baseline on ε–Δp perf plot (design point).
-PERF_BASELINE_MACH = 0.11
-PERF_BASELINE_EPS = 0.60
-PERF_BASELINE_DP_HOT = 0.06
+PERF_BASELINE_MACH = 0.1362
+PERF_BASELINE_EPS = 0.5965943644840868
+PERF_BASELINE_DP_HOT = 0.06001218819723617
 
 # Perf figure y-axis: hot Δp first, then comma and space, then ε (both [-]).
 YLABEL_PERF = r"$(\Delta p/p_\mathrm{in})_\mathrm{hot}$ , \qquad $\varepsilon$ [-]"

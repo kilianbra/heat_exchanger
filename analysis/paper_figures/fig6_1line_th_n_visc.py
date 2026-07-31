@@ -1,5 +1,5 @@
 """
-Figure 6 variants: Mach = 0.11 only, fig6a–c axis bounds, thermal/viscous breakdown on b and c (fig7 style).
+Figure 6 variants: Mach = 0.1362 only, fig6a–c axis bounds, thermal/viscous breakdown on b and c (fig7 style).
 
 Outputs (SVG, TIFF, PNG, PDF) in Figs_current/explore_ideas/:
   fig6a_oneMach_th_n_visc
@@ -26,10 +26,12 @@ save_dir = JOURNAL_PLOTS
 # Defaults (match fig6/fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
 DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.11
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_DP_MAX = 0.2
 DEFAULT_NTU_MAX = 5.0

@@ -15,6 +15,8 @@ import numpy as np
 # _script_dir = Path(__file__).resolve().parent
 # if str(_script_dir) not in sys.path:
 #     sys.path.insert(0, str(_script_dir))
+from cycle_assumptions import REC_REF
+from plot_colors import COLOR_TOTAL, COLOR_THERMAL, COLOR_VISC_COLD, COLOR_VISC_HOT
 from xflow import classical_unavailable_creation_hex, practical_unavailable_creation_hex
 
 # Single-column figure size from newfig7 (9 cm x 7 cm)
@@ -25,7 +27,7 @@ FIG_SINGLE_COL = (9 / 2.54 / 2, 7 / 2.54)
 # Input parameters (stagnation values, Mach=0 → static = stagnation)
 # ---------------------------------------------------------------------------
 # T_HIN_STAG = 898.0  # K
-T_HIN_STAG = 907.0  # K  (T_ratio 907/588 from xflow)
+T_HIN_STAG = 908.0  # K  (T_ratio 907/588 from xflow)
 # P_HIN = 1.042  # bar
 P_HIN = 1.064  # bar  (P_hot_in_over_p_dead=1.064 from xflow)
 T_CIN_STAG = 588.0  # K
@@ -35,25 +37,22 @@ P0 = 1.0  # bar
 
 # MACH_H = 0.063
 # MACH_H = 0.15  # Mh_in from reference
-MACH_H = 0.11  # Mh_in from reference
-MACH_C = 0.05  # fixed by Mach_h / (d_r*A_r*SQRT(T_h_in/T_c_in) p_c_in/p_h_in)
+# MACH_H = 0.14  # Mh_in from reference
+MACH_H = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
+MACH_C = 0.05636810172462836  # M_h / (d_r*A_r*(p_c/p_h)*SQRT(T_h/T_c))
 
 GAMMA_H = 1.4
 GAMMA_C = 1.4
 CP_H = 1070.0  # J/(kg·K)
 CP_C = 1070.0  # J/(kg·K)
 
-# EPSILON = 0.65
-EPSILON = 0.6
-# DP_HOT_PCT = 0.04  # 36  # 3.6%
-DP_HOT_PCT = 0.06  # dp_h/pin
-# DP_COLD_PCT = 0.02  # 22  # 2.2%
-DP_COLD_PCT = 0.04  # dpc/pcin
+# EPSILON / dp from fig8/9 reference via cycle_assumptions.REC_REF
+EPSILON = REC_REF.eps
+DP_HOT_PCT = REC_REF.dp_hot_frac
+DP_COLD_PCT = REC_REF.dp_cold_frac
 
 # Waterfall chart: bigger = thicker bars, smaller gaps (try 1.2, 1.5, etc.)
 BAR_WIDTH_SCALE = 2.0
-
-from plot_colors import COLOR_TOTAL, COLOR_THERMAL, COLOR_VISC_COLD, COLOR_VISC_HOT
 
 
 def static_temperature_from_stagnation(T_stag, Mach, gamma):
@@ -572,10 +571,10 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     """
     d = data if isinstance(data, dict) else run(do_print=do_print)
     if save_dir is None:
-        from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+        from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
         ensure_fig_dirs()
-        save_dir = FINAL_CONF_PAPER
+        save_dir = JOURNAL_PLOTS
     save_dir = Path(save_dir)
 
     plt.rcParams.update(

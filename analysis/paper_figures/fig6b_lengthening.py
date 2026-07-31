@@ -8,27 +8,29 @@ from xflow import calculate_pressure_drop_ratio, create_plot
 
 from plot_colors import MARKER_SIZE_LATEX
 
-from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
-save_dir = FINAL_CONF_PAPER
+save_dir = JOURNAL_PLOTS
 
 # Default modeling assumptions (match fig8/9)
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
 DEFAULT_ST_OVER_F = 0.4
-# DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
 # DEFAULT_D_R = 0.257
 DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
 # DEFAULT_MACH_IN = 0.1
-DEFAULT_MACH_IN = 0.11  # Mh_in
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 
 DEFAULT_DP_MAX = 0.2
 
 # PLOT_TRIPLE_MACH = [0.04, 0.08, 0.17]
-PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
+# PLOT_TRIPLE_MACH = [0.11, 0.06, 0.04]
+PLOT_TRIPLE_MACH = [0.1362, 0.06, 0.04]
 PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
 # A = A_ref when NTU = NTU_MATCH; A/A_ref = NTU/NTU_MATCH
@@ -155,10 +157,10 @@ def save_figures(
         ax.set_xticks([0, 2, 4, 6, 8, 10])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.1f}"))
         ax.set_xlabel(r"Heat Transfer Area $A/A_\mathrm{ref}$ [-]")
-        # Add + marker at reference design (A/A_ref=1) on classical availability line (Mach 0.11 only)
+        # Add + marker at reference design (A/A_ref=1) on classical availability line (baseline Mach only)
         if plot_ref_plus and line_list and len(line_list) > 2:
             x_ref = 1.0
-            line_m011 = line_list[2]  # [0]=M0.04, [1]=M0.06, [2]=M0.11
+            line_m011 = line_list[2]  # [0]=M0.04, [1]=M0.06, [2]=M0.1362
             x_ln, y_ln = line_m011.get_xdata(), line_m011.get_ydata()
             if np.min(x_ln) <= x_ref <= np.max(x_ln):
                 y_at_ref = np.interp(x_ref, x_ln, y_ln)
@@ -169,7 +171,7 @@ def save_figures(
         ax.set_xticks([0, 5, 10, 15])
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{x:.0f}"))
         ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
-        # Add + marker at reference design (NTU=NTU_MATCH) on classical availability line (Mach 0.11 only)
+        # Add + marker at reference design (NTU=NTU_MATCH) on classical availability line (baseline Mach only)
         if plot_ref_plus and line_list and len(line_list) > 2:
             x_ref = NTU_MATCH
             line_m011 = line_list[2]

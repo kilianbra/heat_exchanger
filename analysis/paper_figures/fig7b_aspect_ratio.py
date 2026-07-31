@@ -9,10 +9,10 @@ from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdo
 
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
 
-from fig_paths import FINAL_CONF_PAPER, ensure_fig_dirs
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
-save_dir = FINAL_CONF_PAPER
+save_dir = JOURNAL_PLOTS
 
 # Defaults (match fig8/9, ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04)
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
@@ -21,11 +21,12 @@ DEFAULT_C_COLD_OVER_C_HOT = 1.0
 DEFAULT_D_R = 0.25
 DEFAULT_GAMMA = 1.4
 # DEFAULT_MACH_IN = 0.1
-DEFAULT_MACH_IN = 0.11  # Mh_in
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_ST_OVER_F = 0.4
-# DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
 # DEFAULT_T = 898 / 588
 DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
@@ -47,7 +48,7 @@ DEFAULT_DP_MAX = 0.2
 
 # Optimum NTU from practical framework (run fig7c first to get value)
 # NTU_OPTIMUM = 1.6482  # From fig7c with fig8/9 defaults (previous)
-NTU_OPTIMUM = 1.2513  # From fig7c with Mh_in=0.11, f_c/f_h=0.25
+NTU_OPTIMUM = 1.2513  # From fig7c; refresh after changing Mh_in / f_c/f_h
 
 
 def save_figures(

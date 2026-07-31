@@ -51,7 +51,7 @@ class FullCycleOptVsRefDeltas:
 
 def _fixed_bc_sweep_arrays() -> tuple[dict, object, object, object, object, object, float, float]:
     base = baseline_point()
-    g2_h = 0.5 * 1.4 * 0.11**2
+    g2_h = 0.5 * 1.4 * 0.1362**2
     ntu_v, eps_v, dp_h_v, dp_c_v, av_v, _ = _sweep_diffusion_fig7c(
         base["t_ratio_stag"],
         base["t_dead_over_t_cold_in"],

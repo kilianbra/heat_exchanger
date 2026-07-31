@@ -31,7 +31,7 @@ from xflow import (
 # --- Match fig6c / fig7c / fig8 geometric defaults ---
 C_COLD_OVER_C_HOT = 1.0
 ST_OVER_F = 0.4
-F_C_OVER_F_H = 0.25
+F_C_OVER_F_H = 1.0
 D_R = 0.25
 A_R = 0.92
 MOLAR_MASS_RATIO = 1.0
@@ -50,12 +50,12 @@ P0 = 1.0  # bar (dead)
 P_CIN = 10.0  # bar stagnation at cold inlet
 P_HIN = 1.1  # bar stagnation at hot inlet
 
-MACH_H = 0.11
-MACH_C = 0.05
+MACH_H = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
+MACH_C = 0.05636810172462836  # M_h / (d_r*A_r*(p_c/p_h)*SQRT(T_h/T_c))
 
 # --- Point calculation ---
 EPSILON_POINT = 0.6
-DP_HOT_OF_INLET = 0.06
+DP_HOT_OF_INLET = 0.06001218819723617  # xflow at NTU_MATCH with M_h=0.1362, f_c/f_h=1
 
 # --- Length sweep (fig 6c-style) ---
 NTU_MAX_LENGTH = 40.0

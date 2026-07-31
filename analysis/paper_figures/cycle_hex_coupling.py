@@ -24,11 +24,11 @@ from cycle_waterfall import CycleWaterfallBreakdown, waterfall_from_solution
 
 # Match fig6c / fig9 geometric defaults
 NTU_MATCH = 1.479
-MACH_INDUSTRIAL = 0.11
+MACH_INDUSTRIAL = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 GAMMA = 1.4
 C_COLD_OVER_C_HOT = 1.0
 ST_OVER_F = 0.4
-F_C_OVER_F_H = 0.25
+F_C_OVER_F_H = 1.0
 D_R = 0.25
 A_R = 0.92
 DP_MAX = 0.35

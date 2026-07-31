@@ -8,7 +8,7 @@ from xflow import calculate_pressure_drop_ratio, create_plot
 
 from plot_colors import MARKER_SIZE_LATEX
 
-from fig_paths import FINAL_CONF_PAPER, JOURNAL_PLOTS, ensure_fig_dirs
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -18,10 +18,12 @@ DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 DEFAULT_C_COLD_OVER_C_HOT = 1.0
 DEFAULT_D_R = 0.25  # 0.257
 DEFAULT_GAMMA = 1.4
-DEFAULT_MACH_IN = 0.11  # Mh_in
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
 DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_ST_OVER_F = 0.4
-DEFAULT_F_C_OVER_F_H = 0.25
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
 DEFAULT_T = 907 / 588  # 898 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064  # 9.0 / 1.04
@@ -173,7 +175,7 @@ def save_figures(
 
     # NTU reference and optimum values (match fig8/9)
     NTU_REF = NTU_MATCH
-    NTU_OPT = 1.2513  # From fig7c with Mh_in=0.11, f_c/f_h=0.25
+    NTU_OPT = 1.2513  # From fig7c; refresh after changing Mh_in / f_c/f_h
 
     # Markers: + for baseline design, o for optimal design
     x_eps = np.array(line_eps.get_xdata())

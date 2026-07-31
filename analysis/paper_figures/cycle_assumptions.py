@@ -74,16 +74,28 @@ def mach_ratio_first_order(mdot_kg_per_s: float, mdot_ref_kg_per_s: float, ao_re
 DEFAULT_CYCLE = CycleAssumptions()
 
 # Recuperator cases for conf PPT bar charts (eps, dp_h/p_hi, dp_c/p_ci).
-# REC_REF: fixed-BC reference from xflow at NTU_MATCH with f_c/f_h=1, M_h=0.1362
-#   -> dp_h≈6.00%, dp_c≈4.11% (both pressure drops enter turbine exit = HEx hot inlet T).
-REC_REF = RecuperatorInputs(eps=0.5966, dp_hot_frac=0.0600, dp_cold_frac=0.0411)
-REC_FIX = RecuperatorInputs(eps=0.5376, dp_hot_frac=0.0191, dp_cold_frac=0.0131)
-REC_GLOB = RecuperatorInputs(eps=0.6246, dp_hot_frac=0.0199, dp_cold_frac=0.0136)
+# Synced from fig8/9 cycle-model optima (sync_recup_from_fig89.py):
+#   REC_REF  = Ao=1, NTU_MATCH; REC_FIX = fixed-mass red-line; REC_GLOB = global red-line.
+REC_REF = RecuperatorInputs(
+    eps=0.5966115369100444,
+    dp_hot_frac=0.060016470412499995,
+    dp_cold_frac=0.04111904752658743,
+)
+REC_FIX = RecuperatorInputs(
+    eps=0.5409404130056944,
+    dp_hot_frac=0.019581924423951524,
+    dp_cold_frac=0.013416151858253966,
+)
+REC_GLOB = RecuperatorInputs(
+    eps=0.6245500040064985,
+    dp_hot_frac=0.019188820527661618,
+    dp_cold_frac=0.013146824827135108,
+)
 
 # Geometry from fig9 red-line coupled optima (get_line_data).
 GEOM_REF = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.0)
-GEOM_FIX = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.5061)  # fixed mass, A/A_ref = 1
-GEOM_GLOB = RecupHexGeometry(a_over_a_ref=1.5708, ao_over_ao_ref=1.7667)  # global aircraft-mass opt
+GEOM_FIX = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.4727272727272724)  # fixed mass, A/A_ref = 1
+GEOM_GLOB = RecupHexGeometry(a_over_a_ref=1.5708209918736236, ao_over_ao_ref=1.7666666666666664)  # global aircraft-mass opt
 
 RECUP_PPT_CASES: tuple[RecupPptCase, ...] = (
     RecupPptCase("rec_ref", "Reference", REC_REF, GEOM_REF),
