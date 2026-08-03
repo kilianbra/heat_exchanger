@@ -8,9 +8,9 @@ Y-axis: Change in mass (dQ_o^M-based fuel + HEx)
 import os
 
 import matplotlib.pyplot as plt
-from tabulate import tabulate
 import numpy as np
 import xflow
+from tabulate import tabulate
 from xflow import (
     calculate_capacity_ratios,
     calculate_pressure_drop_ratio,
@@ -45,7 +45,7 @@ if NEW_INPUT_SET:
     # DEFAULT_D_R = 0.257
     DEFAULT_D_R = 0.25
     # DEFAULT_T = 898 / 588  # = 1.527
-    DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
+    DEFAULT_T = 908 / 588  # T_ratios from xflow 106-109
     DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
     # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
     DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064

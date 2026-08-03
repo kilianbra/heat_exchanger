@@ -13,12 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-
 from plot_colors import COLOR_THERMAL
 from ppt_waterfall import (
+    fig_delta_waterfall,
     format_net_label_percent_points,
     format_step_label_percent_points,
-    fig_delta_waterfall,
 )
 
 GREEN_HEX = "#57724A"

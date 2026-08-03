@@ -6,7 +6,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import CycleAssumptions, RecuperatorInputs
 from cycle_bar_plot import LABELS_RECUP, fig_cycle_waterfall, recuperated_cycle_steps, save_cycle_bar
 from cycle_model import solve_recuperated_cycle

@@ -109,7 +109,7 @@ match defaults:
         DEFAULT_G2_H = 0.5 * 1.4 * 0.1362**2  # Mh_in=0.1362 with f_c/f_h=1 -> ~6.0%/4.1% at NTU_MATCH
         # DEFAULT_A_R = 1.0  # (module default)
         DEFAULT_A_R = 0.92
-        DEFAULT_T = 907 / 588  # 1.7  # 980/576
+        DEFAULT_T = 908 / 588  # 1.7  # 980/576
         DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588  # 0.52  # 300/576
         DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064  # 7.2
         DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064  # 1.03

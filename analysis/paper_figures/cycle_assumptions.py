@@ -79,23 +79,23 @@ DEFAULT_CYCLE = CycleAssumptions()
 REC_REF = RecuperatorInputs(
     eps=0.5966115369100444,
     dp_hot_frac=0.060016470412499995,
-    dp_cold_frac=0.04111904752658743,
+    dp_cold_frac=0.041073762231954636,
 )
 REC_FIX = RecuperatorInputs(
-    eps=0.5409404130056944,
-    dp_hot_frac=0.019581924423951524,
-    dp_cold_frac=0.013416151858253966,
+    eps=0.5509578768319346,
+    dp_hot_frac=0.023671045076330798,
+    dp_cold_frac=0.016199867645742015,
 )
 REC_GLOB = RecuperatorInputs(
-    eps=0.6245500040064985,
-    dp_hot_frac=0.019188820527661618,
-    dp_cold_frac=0.013146824827135108,
+    eps=0.6364271466920381,
+    dp_hot_frac=0.024377432184798563,
+    dp_cold_frac=0.016683301208854053,
 )
 
 # Geometry from fig9 red-line coupled optima (get_line_data).
 GEOM_REF = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.0)
-GEOM_FIX = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.4727272727272724)  # fixed mass, A/A_ref = 1
-GEOM_GLOB = RecupHexGeometry(a_over_a_ref=1.5708209918736236, ao_over_ao_ref=1.7666666666666664)  # global aircraft-mass opt
+GEOM_FIX = RecupHexGeometry(a_over_a_ref=1.0, ao_over_ao_ref=1.3747474747474746)  # fixed mass, A/A_ref = 1
+GEOM_GLOB = RecupHexGeometry(a_over_a_ref=1.5708209918736236, ao_over_ao_ref=1.6196969696969694)  # global aircraft-mass opt
 
 RECUP_PPT_CASES: tuple[RecupPptCase, ...] = (
     RecupPptCase("rec_ref", "Reference", REC_REF, GEOM_REF),

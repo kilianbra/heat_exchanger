@@ -5,8 +5,8 @@ Shared PPT-style waterfall bar charts: floating steps, connectors, arrow axes.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator

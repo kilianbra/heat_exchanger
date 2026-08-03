@@ -13,7 +13,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import DEFAULT_CYCLE, RECUP_PPT_CASES, RecupPptCase, mach_ratio_first_order
 from cycle_bar_plot import LABELS_RECUP, cycle_plot_title, fig_cycle_waterfall, recuperated_cycle_steps, save_cycle_bar
 from cycle_model import solve_recuperated_cycle

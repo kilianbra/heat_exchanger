@@ -72,10 +72,10 @@ def main():
     delta_h = np.clip(delta_h, 0.005, 0.99)
     delta_c = np.clip(delta_c, 0.005, 0.99)
 
-    orig = np.array([original_exact(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c)])
-    three = np.array([three_term_linearised(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c)])
-    exit_ = np.array([exit_pressure_approx(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c)])
-    exact2 = np.array([exact_two_term(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c)])
+    orig = np.array([original_exact(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c, strict=False)])
+    three = np.array([three_term_linearised(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c, strict=False)])
+    exit_ = np.array([exit_pressure_approx(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c, strict=False)])
+    exact2 = np.array([exact_two_term(e, dh, dc) for e, dh, dc in zip(eps, delta_h, delta_c, strict=False)])
 
     # Relative errors (avoid div by zero)
     tol = 1e-12
@@ -124,19 +124,19 @@ def main():
     n_small = np.sum(small)
     rel_small_three = err_three[small] / scale[small]
     rel_small_exit = err_exit[small] / scale[small]
-    print("4. Small pressure drops only (delta < 8%, n={}):".format(n_small))
-    print("   Three-term max rel error:  {:.2f}%".format(np.max(rel_small_three)*100))
-    print("   Exit-pressure max rel err:  {:.2f}%".format(np.max(rel_small_exit)*100))
+    print(f"4. Small pressure drops only (delta < 8%, n={n_small}):")
+    print(f"   Three-term max rel error:  {np.max(rel_small_three)*100:.2f}%")
+    print(f"   Exit-pressure max rel err:  {np.max(rel_small_exit)*100:.2f}%")
     print()
 
     # 5. Worst-case sample for each approximation
     idx_three = np.argmax(err_three)
     idx_exit = np.argmax(err_exit)
     print("5. Worst-case samples:")
-    print("   Three-term:  eps={:.3f}, dh={:.3f}, dc={:.3f} -> err={:.2e}"
-          .format(eps[idx_three], delta_h[idx_three], delta_c[idx_three], err_three[idx_three]))
-    print("   Exit-approx: eps={:.3f}, dh={:.3f}, dc={:.3f} -> err={:.2e}"
-          .format(eps[idx_exit], delta_h[idx_exit], delta_c[idx_exit], err_exit[idx_exit]))
+    print(f"   Three-term:  eps={eps[idx_three]:.3f}, dh={delta_h[idx_three]:.3f}, dc={delta_c[idx_three]:.3f} -> err={err_three[idx_three]:.2e}"
+          )
+    print(f"   Exit-approx: eps={eps[idx_exit]:.3f}, dh={delta_h[idx_exit]:.3f}, dc={delta_c[idx_exit]:.3f} -> err={err_exit[idx_exit]:.2e}"
+          )
 
 if __name__ == "__main__":
     main()

@@ -5,12 +5,9 @@ Delta bar charts: design comparisons (diff opt or matched vs reference baseline)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import matplotlib.pyplot as plt
-
-from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, color_with_alpha
-from ppt_waterfall import fig_delta_waterfall
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
 from ppt_values import (
     AO_REF_OVER_AO_DIFF_OPT,
     AO_REF_OVER_AO_MATCHED,
@@ -24,6 +21,7 @@ from ppt_values import (
     evaluate_fixed_bc_diffusion_at_aoref,
     fetch_fig9_waterfall_at_ao_ref_over_ao,
 )
+from ppt_waterfall import fig_delta_waterfall
 
 GRAY = "lightgray"
 GREEN_HEX = "#57724A"  # baseline reference total (ppt_bar_concl green)

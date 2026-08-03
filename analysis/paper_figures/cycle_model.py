@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from cycle_assumptions import CycleAssumptions, RecuperatorInputs
 
 

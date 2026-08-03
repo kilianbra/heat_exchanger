@@ -10,7 +10,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import DEFAULT_CYCLE
 from cycle_bar_plot import LABELS_NOREC, cycle_plot_title, fig_cycle_waterfall, open_cycle_steps, save_cycle_bar
 from cycle_model import solve_open_cycle

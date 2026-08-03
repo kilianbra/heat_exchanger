@@ -12,7 +12,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator
-
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, color_with_alpha
 from ppt_values import (
     AO_REF_OVER_AO_DIFF_OPT,

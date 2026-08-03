@@ -16,11 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from xflow import calculate_pressure_drop_ratio
-
 from cycle_assumptions import CycleAssumptions, RecuperatorInputs
 from cycle_model import CycleSolution, solve_recuperated_cycle
 from cycle_waterfall import CycleWaterfallBreakdown, waterfall_from_solution
+from xflow import calculate_pressure_drop_ratio
 
 # Match fig6c / fig9 geometric defaults
 NTU_MATCH = 1.479

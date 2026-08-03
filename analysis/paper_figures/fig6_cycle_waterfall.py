@@ -14,7 +14,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import DEFAULT_CYCLE, RecuperatorInputs
 from cycle_bar_plot import (
     LABELS_RECUP,
@@ -30,8 +29,8 @@ from cycle_hex_coupling import (
     evaluate_lengthening_fxd_power,
     find_eta_optimum,
     print_eta_optimum_summary,
-    print_local_pract_opt,
     print_lengthening_point,
+    print_local_pract_opt,
     sweep_lengthening_fxd_power,
 )
 from cycle_waterfall import print_waterfall

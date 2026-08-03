@@ -2,14 +2,12 @@ import os
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import numpy as np
 import xflow
-from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
-
-from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
-
 from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from matplotlib.ticker import MultipleLocator
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX, TITLE_FONTSIZE
+from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -28,7 +26,7 @@ DEFAULT_ST_OVER_F = 0.4
 # DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
 DEFAULT_F_C_OVER_F_H = 1.0
 # DEFAULT_T = 898 / 588
-DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
+DEFAULT_T = 908 / 588  # T_ratios from xflow 106-109
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
@@ -88,7 +86,7 @@ def save_figures(
             "font.serif": ["Times New Roman"],
             "font.size": font_size,
             "mathtext.fontset": "stix",
-            "axes.titlesize": font_size,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": font_size,
             "xtick.labelsize": font_size,
             "ytick.labelsize": font_size,

@@ -2,7 +2,8 @@
 Final Figure 4 (bar charts): Classical (exergy) and Practical (euergy) availability breakdown.
 
 Computes change in available energy at a single operating point.
-Terminal output optional; waterfall bar charts saved as fig4a_bar_c / fig4b_bar_p.
+Terminal output optional; Breakdown 2 shown as one side-by-side figure
+(Classical availability | Practical availability).
 """
 
 # import sys
@@ -16,7 +17,7 @@ import numpy as np
 # if str(_script_dir) not in sys.path:
 #     sys.path.insert(0, str(_script_dir))
 from cycle_assumptions import REC_REF
-from plot_colors import COLOR_TOTAL, COLOR_THERMAL, COLOR_VISC_COLD, COLOR_VISC_HOT
+from plot_colors import COLOR_THERMAL, COLOR_TOTAL, COLOR_VISC_COLD, COLOR_VISC_HOT
 from xflow import classical_unavailable_creation_hex, practical_unavailable_creation_hex
 
 # Single-column figure size from newfig7 (9 cm x 7 cm)
@@ -27,7 +28,7 @@ FIG_SINGLE_COL = (9 / 2.54 / 2, 7 / 2.54)
 # Input parameters (stagnation values, Mach=0 → static = stagnation)
 # ---------------------------------------------------------------------------
 # T_HIN_STAG = 898.0  # K
-T_HIN_STAG = 908.0  # K  (T_ratio 907/588 from xflow)
+T_HIN_STAG = 908.0  # K  (T_ratio 908/588 from xflow)
 # P_HIN = 1.042  # bar
 P_HIN = 1.064  # bar  (P_hot_in_over_p_dead=1.064 from xflow)
 T_CIN_STAG = 588.0  # K
@@ -563,26 +564,15 @@ def plot_waterfalls(data=None, do_print=False):
     plt.show()
 
 
-def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
-    """
-    Save Breakdown 2 as two separate figures: fig4a_bar_c (classical), fig4b_bar_p (practical).
-    No title; viscous labels written fully with (hot) / (cold) on second line.
-    Formats: .svg, .tiff, .png, and .pdf
-    """
-    d = data if isinstance(data, dict) else run(do_print=do_print)
-    if save_dir is None:
-        from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
-
-        ensure_fig_dirs()
-        save_dir = JOURNAL_PLOTS
-    save_dir = Path(save_dir)
+def _fig4_rcparams():
+    from plot_colors import TITLE_FONTSIZE
 
     plt.rcParams.update(
         {
             "font.family": "serif",
             "font.serif": ["Times New Roman"],
             "font.size": 8,
-            "axes.titlesize": 8,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": 8,
             "xtick.labelsize": 8,
             "ytick.labelsize": 8,
@@ -592,9 +582,26 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
         }
     )
 
-    YLIM_PRACTICAL = (-0.1, 0.3)
-    YLIM_CLASSICAL = YLIM_PRACTICAL
 
+def _default_save_dir(save_dir):
+    if save_dir is None:
+        from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+
+        ensure_fig_dirs()
+        save_dir = JOURNAL_PLOTS
+    return Path(save_dir)
+
+
+def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
+    """
+    Breakdown 2 as one side-by-side figure (classical | practical), with titles.
+    Saving commented out for now — plt.show() only.
+    """
+    d = data if isinstance(data, dict) else run(do_print=do_print)
+    save_dir = _default_save_dir(save_dir)
+    _fig4_rcparams()
+
+    YLIM = (-0.1, 0.3)
     has_inter_class = abs(d["delta_rest_av_class"]) > 1e-10
     labels_class = (
         [lb for i, lb in enumerate(LABELS_BREAKDOWN2_CLASSICAL) if i != 3]
@@ -604,9 +611,8 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
     labels_prac = list(LABELS_BREAKDOWN2_PRACTICAL)
 
     w, h = FIG_SINGLE_COL
+    fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(2 * w, h))
 
-    # Figure 4a: Classical
-    fig_a, ax_a = plt.subplots(figsize=(w, h))
     _plot_waterfall_breakdown2(
         ax_a,
         d["av_class_total"],
@@ -619,17 +625,11 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
         framework="classical",
         for_save=True,
     )
-    ax_a.set_title("")
-    ax_a.set_ylim(YLIM_CLASSICAL)
+    ax_a.set_title("Classical availability (exergy)")
+    # ax_a.set_title("Recuperated engine")
+    ax_a.set_ylim(YLIM)
     _style_y_axis_post(ax_a, "classical")
-    fig_a.tight_layout(pad=0.5)
-    ax_a.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
-    for ext in ["svg", "tiff", "png", "pdf"]:
-        fig_a.savefig(Path(save_dir) / f"fig4a_bar_c.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
-    plt.close(fig_a)
 
-    # Figure 4b: Practical (lump thermal + coupling into single bar, labeled "Thermal")
-    fig_b, ax_b = plt.subplots(figsize=(w, h))
     _plot_waterfall_breakdown2(
         ax_b,
         d["av_prac_total"],
@@ -642,22 +642,24 @@ def save_breakdown2_figures(data=None, do_print=False, save_dir=None):
         framework="practical",
         for_save=True,
     )
-    ax_b.set_title("")
-    ax_b.set_ylim(YLIM_PRACTICAL)
+    # ax_b.set_title("Heat exchanger core")
+    ax_b.set_title("Practical availability (euergy)")
+    ax_b.set_ylim(YLIM)
     _style_y_axis_post(ax_b, "practical")
-    fig_b.tight_layout(pad=0.5)
-    ax_b.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
-    for ext in ["svg", "tiff", "png", "pdf"]:
-        fig_b.savefig(Path(save_dir) / f"fig4b_bar_p.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
-    plt.close(fig_b)
 
-    print(f"Saved fig4a_bar_c and fig4b_bar_p (.svg, .tiff, .png, .pdf) to {save_dir}")
+    fig.tight_layout(pad=0.5)
+    ax_a.yaxis.labelpad = -6
+    ax_b.yaxis.labelpad = -6
+    # Pull left subplot in — tight_layout leaves extra room for the long ylabel
+    fig.subplots_adjust(left=0.15)
+
+    for ext in ["svg", "tiff", "png", "pdf"]:
+        fig.savefig(Path(save_dir) / f"fig4_bar.{ext}", dpi=300, facecolor="white", bbox_inches="tight")
+    print(f"Saved fig4_bar (.svg, .tiff, .png, .pdf) to {save_dir}")
+    # plt.show()
 
 
 if __name__ == "__main__":
     DO_PRINT = True  # Set True to print availability breakdown to terminal
-    SHOW_INTERACTIVE = False  # False to skip plt.show(), only save
     data = run(do_print=DO_PRINT)
-    if SHOW_INTERACTIVE:
-        plot_waterfalls(data)
     save_breakdown2_figures(data)

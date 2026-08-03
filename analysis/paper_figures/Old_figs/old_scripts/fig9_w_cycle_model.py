@@ -52,7 +52,7 @@ DEFAULT_ST_OVER_F = 0.4
 # DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
 DEFAULT_F_C_OVER_F_H = 1.0
 # DEFAULT_T = 898 / 588
-DEFAULT_T = 907 / 588  # T_ratios from xflow 106-109
+DEFAULT_T = 908 / 588  # T_ratios from xflow 106-109
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
@@ -97,6 +97,13 @@ eta_ov = 0.4045  #
 INCLUDE_DELTA_ENGINE = False
 # If True, black lines and black star are hidden in the plot (printouts always shown).
 HIDE_BLACK_LINES = True
+
+# --- Red-line engine mass (solid Fuel+HEx[+engine] curve) ---
+# If True: obj_red and line3 include delta_engine = (mdot - mdot_baseline)*kg_dry.
+# If False: fuel + HEx only (Ao optima re-solved without engine; matches fig8_red_only).
+# To restore the old fuel+HEx+engine red line, set True (or swap the commented assignment).
+INCLUDE_DELTA_ENGINE_RED = False
+# INCLUDE_DELTA_ENGINE_RED = True  # uncomment this (and comment False above) to put engine mass back
 FONT_SIZE = 8
 
 
@@ -377,7 +384,7 @@ def _optimal_ao_r_ref_for_each_a_r_ref(
     For each A/A_ref, sweeps Ao/Ao_ref calling the coupled cycle model ONCE per point.
     Simultaneously tracks optima for three objectives:
 
-      'red'        : cycle-efficiency fuel + m_hex + delta_engine  (always includes delta_engine)
+      'red'        : cycle-efficiency fuel + m_hex  [+ delta_engine if INCLUDE_DELTA_ENGINE_RED]
       'mdot_dqom'  : dQ^M (fixed DEFAULT BCs, actual Mach via actual mdot/T_hot_in)
                      * factor_fuel + m_hex  [+ delta_engine if include_delta_engine]
       'bc_mdot_dqom': dQ^M (actual BCs: t=T_hot_in/T_cold_in, p_ratios from dp_hot,
@@ -440,11 +447,13 @@ def _optimal_ao_r_ref_for_each_a_r_ref(
 
             delta_engine_val = (mdot - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
             de = delta_engine_val if include_delta_engine else 0.0
+            # Red objective: omit +delta_engine_val when INCLUDE_DELTA_ENGINE_RED is False.
+            de_red = delta_engine_val if INCLUDE_DELTA_ENGINE_RED else 0.0
 
-            # --- Red line (always includes delta_engine) ---
+            # --- Red line (cycle fuel + HEx [+ engine if INCLUDE_DELTA_ENGINE_RED]) ---
             mdot_fuel = P_ref / (LHV_J_per_kg * eff / 100)
             delta_fuel_cycle = (mdot_fuel - mdot_fuel_baseline) * mission_seconds
-            obj_red = delta_fuel_cycle + m_hex + delta_engine_val
+            obj_red = delta_fuel_cycle + m_hex + de_red
             if obj_red < bz_red:
                 bz_red = obj_red
                 bao_red = ao_r_ref
@@ -660,7 +669,9 @@ def get_line_data():
     delta_hex = m_hex_opt
     delta_engine = (red_r["mdot"] - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
     line1 = delta_fuel
-    line3 = delta_fuel + delta_hex + delta_engine
+    # line3 plotted / minimised for red square. Toggle INCLUDE_DELTA_ENGINE_RED above.
+    # line3 = delta_fuel + delta_hex + delta_engine  # fuel + HEx + engine
+    line3 = delta_fuel + delta_hex + (delta_engine if INCLUDE_DELTA_ENGINE_RED else 0.0)
     res_bc = _sweep_bc_only(pressure_drop_ratio, factor_fuel)
     line_bc = res_bc["obj"]
     m_hex_bc = res_bc["a"] * m_hex_ref
@@ -796,7 +807,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
         delta_fuel_ref = (mdot_fuel_ref - mdot_fuel_baseline_ref) * mission_seconds
         delta_hex_ref = m_hex_at_ref
         delta_engine_ref = (mdot_ref_coupled - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
-        line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
+        de_ref = delta_engine_ref if INCLUDE_DELTA_ENGINE_RED else 0.0
+        line3_ref = delta_fuel_ref + delta_hex_ref + de_ref
     else:
         delta_fuel_ref = delta_hex_ref = delta_engine_ref = line3_ref = np.nan
 
@@ -812,10 +824,11 @@ def run_plot(base_name="fig9_w_cycle_model"):
     delta_hex = m_hex_opt
     delta_engine = (mdot_opt - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
 
-    # Red line curves
+    # Red line curves (INCLUDE_DELTA_ENGINE_RED toggles engine on solid / line3)
     line1 = delta_fuel  # fuel savings only
     line2 = delta_fuel + delta_hex  # fuel + HEx
-    line3 = delta_fuel + delta_hex + delta_engine  # fuel + HEx + engine
+    # line3 = delta_fuel + delta_hex + delta_engine  # fuel + HEx + engine
+    line3 = delta_fuel + delta_hex + (delta_engine if INCLUDE_DELTA_ENGINE_RED else 0.0)
     id_min_red = int(np.argmin(line3))
 
     # dQ^M variant objective lines (pre-aligned to red line's A/A_ref grid via shared loop)
@@ -838,7 +851,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
         mf_bs = P_shaft_ref / (LHV_J_per_kg * eff_bs / 100)
         df_bs = (mf_bs - P_shaft_ref / (LHV_J_per_kg * eff_b / 100)) * mission_seconds
         de_bs = (mdot_bs - mdot_baseline) * kg_dry_engine_per_kg_per_s_of_air
-        line3_bs = df_bs + a_r_black_star * m_hex_ref + de_bs  # on the red model scale
+        de_bs_plot = de_bs if INCLUDE_DELTA_ENGINE_RED else 0.0
+        line3_bs = df_bs + a_r_black_star * m_hex_ref + de_bs_plot  # on the red model scale
         # Red line value at same A/A_ref (interpolated)
         line3_red_at_bs = float(np.interp(a_r_black_star, a_r_ref_opt, line3))
         delta_subopt = line3_bs - line3_red_at_bs  # positive → black star is worse than red optimum
@@ -871,16 +885,17 @@ def run_plot(base_name="fig9_w_cycle_model"):
     print(
         f"  {f'Effects 1+2:   BC+mdot/Mach {de_note}':42}  {opt_mhex_bc_mdot:>13.2f}  {line_bc_mdot[id_min_bc_mdot]:>10.2f}"
     )
-    print(f"  {'Red line (cycle efficiency, always +dEng)':42}  {opt_mhex_red:>13.2f}  {line3[id_min_red]:>10.2f}")
+    red_lbl = "Red line (cycle η, +dEng)" if INCLUDE_DELTA_ENGINE_RED else "Red line (cycle η, no dEng)"
+    print(f"  {red_lbl:42}  {opt_mhex_red:>13.2f}  {line3[id_min_red]:>10.2f}")
     print(f"  {'-' * 67}")
-    print(f"\n  Black star (BC+mdot opt) plugged into RED cycle model:")
+    print("\n  Black star (BC+mdot opt) plugged into RED cycle model:")
     print(f"    A/A_ref = {a_r_black_star:.3f},  Ao/Ao_ref = {ao_black_star:.3f},  NTU = {ntu_black_star:.3f}")
     if np.isfinite(line3_bs):
         print(f"    Red-model value at black-star design:    {line3_bs:>8.2f} kg")
         print(f"    Red-model optimum at same A/A_ref:       {line3_red_at_bs:>8.2f} kg")
         print(f"    Sub-optimality (black -> red cost delta): {delta_subopt:>+8.2f} kg")
     else:
-        print(f"    Could not evaluate black star through red model (solver failed).")
+        print("    Could not evaluate black star through red model (solver failed).")
     print(f"  {'-' * 67}\n")
 
     def _val(i, key):
@@ -1106,7 +1121,8 @@ def run_plot(base_name="fig9_w_cycle_model"):
     #         linewidths=1,
     #     )
     if np.isfinite(dq_ref):
-        line3_ref = delta_fuel_ref + delta_hex_ref + delta_engine_ref
+        de_ref_plot = delta_engine_ref if INCLUDE_DELTA_ENGINE_RED else 0.0
+        line3_ref = delta_fuel_ref + delta_hex_ref + de_ref_plot
         ax.scatter(
             m_hex_at_ref,
             line3_ref,

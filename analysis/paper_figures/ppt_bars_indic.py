@@ -8,10 +8,8 @@ Minimal PPT-style bar charts: L-shaped axes with arrows, no ticks or labels.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import matplotlib.pyplot as plt
-
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT
 
 GREEN_HEX = "#57724A"

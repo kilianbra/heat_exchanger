@@ -2,13 +2,11 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import MultipleLocator
 import xflow
-from xflow import calculate_pressure_drop_ratio, create_plot
-
-from plot_colors import MARKER_SIZE_LATEX
-
 from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from matplotlib.ticker import MultipleLocator
+from plot_colors import MARKER_SIZE_LATEX, TITLE_FONTSIZE
+from xflow import calculate_pressure_drop_ratio, create_plot
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -24,7 +22,7 @@ DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_ST_OVER_F = 0.4
 # DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
 DEFAULT_F_C_OVER_F_H = 1.0
-DEFAULT_T = 907 / 588  # 898 / 588
+DEFAULT_T = 908 / 588  # 898 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064  # 9.0 / 1.04
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064  # 1.04
@@ -73,7 +71,7 @@ def save_figures(
             "font.serif": ["Times New Roman"],
             "font.size": font_size,
             "mathtext.fontset": "stix",
-            "axes.titlesize": font_size,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": font_size,
             "xtick.labelsize": font_size,
             "ytick.labelsize": font_size,
@@ -171,7 +169,7 @@ def save_figures(
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
     ax.set_ylim(0, 0.7)
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
-    ax_twin.set_ylabel(r"Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
+    ax_twin.set_ylabel(r"Pressure Loss ($\Delta p/p_{\mathrm{in}}$ [%])")
 
     # NTU reference and optimum values (match fig8/9)
     NTU_REF = NTU_MATCH

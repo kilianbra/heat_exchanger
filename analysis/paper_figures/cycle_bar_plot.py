@@ -9,7 +9,6 @@ from typing import Literal
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import RecuperatorInputs, RecupHexGeometry, mach_ratio_first_order
 from cycle_waterfall import CycleWaterfallBreakdown
 from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, color_with_alpha
@@ -407,7 +406,6 @@ def _collect_heat_work_breakdowns():
         bootstrap_industrial,
         coupled_point_to_waterfall,
         evaluate_lengthening_fxd_mdot,
-        evaluate_lengthening_fxd_power,
         find_eta_optimum,
         sweep_lengthening_fxd_power,
     )
@@ -1027,13 +1025,14 @@ def save_heat_work_bar(
     stem_suffix: str,
     *,
     formats: tuple[str, ...] = ("png",),
+    stem: str | None = None,
 ) -> Path:
     from datetime import datetime
 
-    stem = f"{HEAT_WORK_OUT_STEM}_{stem_suffix}"
+    out_stem = stem if stem is not None else f"{HEAT_WORK_OUT_STEM}_{stem_suffix}"
     last_path: Path | None = None
     for fmt in formats:
-        path = (out_dir / f"{stem}.{fmt}").resolve()
+        path = (out_dir / f"{out_stem}.{fmt}").resolve()
         fig.savefig(path, dpi=300, facecolor="white", format=fmt)
         print(f"Wrote {path}  ({datetime.fromtimestamp(path.stat().st_mtime):%Y-%m-%d %H:%M:%S})")
         last_path = path

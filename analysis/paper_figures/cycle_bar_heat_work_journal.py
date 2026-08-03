@@ -2,7 +2,10 @@
 Journal heat/work cycle bar charts (heat input left, work breakdown right).
 
 Outputs (Figs_current/final_journal_paper/):
-  bar_heat_work_*.svg / .png
+  fig9a_baseline.*
+  fig9b_fix_mass_opt.*
+  fig9c_min_ac_mass.*
+  bar_heat_work_no_rec.*  (open-cycle companion; not renumbered)
 """
 
 from __future__ import annotations
@@ -11,7 +14,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import DEFAULT_CYCLE, RECUP_PPT_CASES, RecupPptCase
 from cycle_bar_plot import (
     fig_cycle_heat_work,
@@ -22,8 +24,17 @@ from cycle_model import solve_open_cycle, solve_recuperated_cycle
 from cycle_waterfall import print_waterfall, waterfall_from_solution
 from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
+JOURNAL_FORMATS = ("svg", "png", "tiff", "pdf", "eps")
 
-def _save_heat_work_chart(bd, out_suffix: str) -> None:
+# Recuperated journal figure stems (suffix used for formatting flags → output name)
+RECUP_JOURNAL_STEMS = {
+    "rec_baseline": "fig9a_baseline",
+    "rec_fix_mass_opt": "fig9b_fix_mass_opt",
+    "rec_min_ac_mass": "fig9c_min_ac_mass",
+}
+
+
+def _save_heat_work_chart(bd, out_suffix: str, *, stem: str | None = None) -> None:
     qin_dec = qin_one_decimal_for_suffix(out_suffix)
     if out_suffix == "rec_fix_mass_opt":
         qin_dec = False
@@ -33,7 +44,13 @@ def _save_heat_work_chart(bd, out_suffix: str) -> None:
         qin_one_decimal=qin_dec,
         label_style="journal",
     )
-    save_heat_work_bar(fig_hw, JOURNAL_PLOTS, out_suffix, formats=("svg", "png"))
+    save_heat_work_bar(
+        fig_hw,
+        JOURNAL_PLOTS,
+        out_suffix,
+        formats=JOURNAL_FORMATS,
+        stem=stem,
+    )
     plt.close(fig_hw)
 
 
@@ -51,7 +68,7 @@ def _plot_recup_case(case: RecupPptCase, out_suffix: str) -> None:
 
     bd = waterfall_from_solution(sol)
     print_waterfall(bd, title=f"{case.label} ({out_suffix})")
-    _save_heat_work_chart(bd, out_suffix)
+    _save_heat_work_chart(bd, out_suffix, stem=RECUP_JOURNAL_STEMS[out_suffix])
 
 
 def main() -> None:

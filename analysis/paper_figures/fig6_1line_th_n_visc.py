@@ -1,24 +1,22 @@
 """
 Figure 6 variants: Mach = 0.1362 only, fig6a–c axis bounds, thermal/viscous breakdown on b and c (fig7 style).
 
-Outputs (SVG, TIFF, PNG, PDF) in Figs_current/explore_ideas/:
-  fig6a_oneMach_th_n_visc
-  fig6b_oneMach_th_n_visc
-  fig6c_oneMach_th_n_visc
+Outputs in Figs_current/final_journal_paper/:
+  fig6a_NTU_w_plus
+  fig6b_NTU_w_plus
+  fig6c_NTU_w_plus
 """
 
 import os
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-from matplotlib.ticker import PercentFormatter
 import numpy as np
 import xflow
-from xflow import calculate_epsilon_ntu_curve, calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
-
-from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX
-
-from fig_paths import EXPLORE_IDEAS, JOURNAL_PLOTS, ensure_fig_dirs
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from matplotlib.ticker import PercentFormatter
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX, TITLE_FONTSIZE
+from xflow import calculate_pressure_drop_ratio, create_plot, plot_unavailable_energy_breakdown
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -36,7 +34,7 @@ DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
 DEFAULT_DP_MAX = 0.2
 DEFAULT_NTU_MAX = 5.0
 
-DEFAULT_T = 907 / 588
+DEFAULT_T = 908 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
 DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
@@ -57,7 +55,7 @@ def _setup_rcparams():
             "font.serif": ["Times New Roman"],
             "font.size": FONT_SIZE,
             "mathtext.fontset": "stix",
-            "axes.titlesize": FONT_SIZE,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": FONT_SIZE,
             "xtick.labelsize": FONT_SIZE,
             "ytick.labelsize": FONT_SIZE,
@@ -89,18 +87,18 @@ def _set_ntu_axis(ax):
     ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
 
 
-def _save_figure(fig, base_name):  # ("tiff", "tiff"),
-    for ext, fmt in [("svg", "svg"), ("png", "png"), ("pdf", "pdf")]:
+def _save_figure(fig, base_name):
+    for ext in ("svg", "png", "pdf", "tiff", "eps"):
         fig.savefig(
             os.path.join(save_dir, f"{base_name}.{ext}"),
             dpi=300,
             facecolor="white",
-            format=fmt,
+            format=ext,
             bbox_inches=None,
             pad_inches=0,
         )
     plt.close(fig)
-    print(f"Saved figures: {base_name}.svg, {base_name}.png, {base_name}.pdf")
+    print(f"Saved figures: {base_name}.svg/.png/.pdf/.tiff/.eps")
 
 
 def save_fig6a(
@@ -110,29 +108,26 @@ def save_fig6a(
     d_r=DEFAULT_D_R,
     g2_h=DEFAULT_G2_H,
     dp_max=DEFAULT_DP_MAX,
-    base_name="fig6a_oneMach_th_n_visc",
+    base_name="fig6a_NTU_w_plus",
+    t=DEFAULT_T,
+    t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+    a_r=DEFAULT_A_R,
 ):
-    """Conventional: epsilon (red) to NTU max; hot dp (black) stops at dp_max (match fig6a triple-Mach colors)."""
+    """Conventional: epsilon (red) + hot/cold pressure drop (match former fig6a_NTU_w_plus styling)."""
     _setup_rcparams()
     xflow.SHOW_CUBIC = False
+
+    pressure_drop_ratio = _pressure_drop_ratio(
+        c_cold_over_c_hot, t, d_r, p_cold_in_over_p_hot_in, a_r, f_c_over_f_h=f_c_over_f_h
+    )
 
     fig = plt.figure(figsize=(7.1 / 2.54, 7 / 2.54))
     ax = plt.subplot(111)
     ax_twin = ax.twinx()
 
-    # Epsilon: full NTU sweep (no dp cutoff on left axis)
-    ntu_eps, epsilon, _, _, _ = calculate_epsilon_ntu_curve(
-        c_cold_over_c_hot,
-        st_over_f,
-        f_c_over_f_h,
-        d_r,
-        g2_h,
-        ntu_max=DEFAULT_NTU_MAX,
-        dp_max=1.0,
-        pressure_drop_percent_ratio_cold_over_hot=0.0,
-    )
-    # Pressure drop: stop when hot side exceeds dp_max
-    ntu_dp, _, dp_hot, _, mask_dp = calculate_epsilon_ntu_curve(
+    line_eps, _, ax, ax_twin = create_plot(
         c_cold_over_c_hot,
         st_over_f,
         f_c_over_f_h,
@@ -140,31 +135,78 @@ def save_fig6a(
         g2_h,
         ntu_max=DEFAULT_NTU_MAX,
         dp_max=dp_max,
-        pressure_drop_percent_ratio_cold_over_hot=0.0,
+        ax=ax,
+        ax_twin=ax_twin,
+        plot_triple_g2=None,
+        framework="conventional",
+        t=t,
+        t_dead_over_t_cold_in=t_dead_over_t_cold_in,
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+        gamma=DEFAULT_GAMMA,
+        pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
     )
-
-    line_eps = ax.plot(ntu_eps, epsilon, "-", color="r", zorder=3)[0]
-    line_dp = ax_twin.plot(ntu_dp[mask_dp], dp_hot[mask_dp], "k-", zorder=1)[0]
-
     ax.set_title("")
+
+    legend = ax.get_legend()
+    if legend:
+        legend.remove()
+    legend_twin = ax_twin.get_legend()
+    if legend_twin:
+        legend_twin.remove()
+
+    # Left axis: epsilon in red (match fig6a_lengthening / fig7a)
+    line_eps.set_color("r")
+    ax.spines["left"].set_color("r")
+    ax.yaxis.label.set_color("r")
+    ax.tick_params(axis="y", colors="r")
+
+    # Pressure drop: both black; hot dotted, cold dashed
+    lines_dp = ax_twin.get_lines()
+    if len(lines_dp) >= 2:
+        lines_dp[0].set_color("k")
+        lines_dp[0].set_linestyle(":")
+        lines_dp[1].set_color("k")
+        lines_dp[1].set_linestyle("--")
+        ax.legend(
+            handles=lines_dp,
+            labels=["Hot side", "Cold side"],
+            loc="lower right",
+            frameon=True,
+            facecolor="white",
+            edgecolor="black",
+            fancybox=False,
+        )
+
     _set_ntu_axis(ax)
     ax.set_ylim(0, 1)
-    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
     ax.set_ylabel(r"Heat Transfer Effectiveness ($\varepsilon$ [%])")
     ax_twin.set_ylim(0, dp_max)
     ax_twin.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
-    ax_twin.set_ylabel(r"Hot Pressure Drop ($\Delta p/p_{\mathrm{in}}$ [%])")
+    ax_twin.set_ylabel(r"Pressure Loss ($\Delta p/p_{\mathrm{in}}$ [%])")
 
-    # Baseline markers at NTU_MATCH
+    # Baseline markers at NTU_MATCH (epsilon + both Δp sides)
     x_ref = NTU_MATCH
-    x_eps, y_eps = line_eps.get_xdata(), line_eps.get_ydata()
-    if np.min(x_eps) <= x_ref <= np.max(x_eps):
-        y_at_ref = np.interp(x_ref, x_eps, y_eps)
+    x_eps, y_eps = np.array(line_eps.get_xdata()), np.array(line_eps.get_ydata())
+    if len(x_eps) and np.min(x_eps) <= x_ref <= np.max(x_eps):
+        y_at_ref = float(np.interp(x_ref, x_eps, y_eps))
         ax.scatter(x_ref, y_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
-    x_dp, y_dp = line_dp.get_xdata(), line_dp.get_ydata()
-    if len(x_dp) > 0 and np.min(x_dp) <= x_ref <= np.max(x_dp):
-        y_dp_at_ref = np.interp(x_ref, x_dp, y_dp)
-        ax_twin.scatter(x_ref, y_dp_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
+        ax.annotate(
+            "baseline\n design",
+            xy=(x_ref, y_at_ref),
+            xytext=(0.08, 0.88),
+            fontsize=FONT_SIZE,
+            ha="left",
+            zorder=6,
+            arrowprops=dict(arrowstyle="->", color="black", lw=1, shrinkB=12),
+        )
+    for line in lines_dp:
+        x_dp, y_dp = np.array(line.get_xdata()), np.array(line.get_ydata())
+        if len(x_dp) and np.min(x_dp) <= x_ref <= np.max(x_dp):
+            y_dp_at_ref = float(np.interp(x_ref, x_dp, y_dp))
+            ax_twin.scatter(
+                x_ref, y_dp_at_ref, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5
+            )
 
     plt.tight_layout(pad=0.5)
     _save_figure(fig, base_name)
@@ -380,7 +422,7 @@ def _save_availability_breakdown(
     _save_figure(fig, base_name)
 
 
-def save_fig6b(base_name="fig6b_oneMach_th_n_visc"):
+def save_fig6b(base_name="fig6b_NTU_w_plus"):
     _save_availability_breakdown(
         framework="classical",
         ylim=(-0.2, 0.3),
@@ -390,7 +432,7 @@ def save_fig6b(base_name="fig6b_oneMach_th_n_visc"):
     )
 
 
-def save_fig6c(base_name="fig6c_oneMach_th_n_visc"):
+def save_fig6c(base_name="fig6c_NTU_w_plus"):
     _save_availability_breakdown(
         framework="practical",
         ylim=(-0.2, 0.3),

@@ -2,11 +2,10 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from plot_colors import MARKER_SIZE_LATEX
 import xflow
-from xflow import calculate_pressure_drop_ratio, create_plot
-
 from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from plot_colors import MARKER_SIZE_LATEX, TITLE_FONTSIZE
+from xflow import calculate_pressure_drop_ratio, create_plot
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -33,7 +32,7 @@ PLOT_TRIPLE_G2 = [0.5 * DEFAULT_GAMMA * m**2 for m in PLOT_TRIPLE_MACH]
 
 # Framework parameters (match fig8/9, T_ratios from xflow 106-109)
 # DEFAULT_T = 898 / 588
-DEFAULT_T = 907 / 588
+DEFAULT_T = 908 / 588
 # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
 DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
 # DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
@@ -81,7 +80,7 @@ def save_figures(
             "font.serif": ["Times New Roman"],
             "font.size": font_size,
             "mathtext.fontset": "stix",
-            "axes.titlesize": font_size,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": font_size,
             "xtick.labelsize": font_size,
             "ytick.labelsize": font_size,

@@ -18,7 +18,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from cycle_assumptions import DEFAULT_CYCLE, RECUP_PPT_CASES, RecupPptCase
 from cycle_bar_plot import (
     cycle_plot_title,
@@ -33,7 +32,6 @@ from cycle_hex_coupling import (
     bootstrap_industrial,
     coupled_point_to_waterfall,
     evaluate_lengthening_fxd_mdot,
-    evaluate_lengthening_fxd_power,
     find_eta_optimum,
     sweep_lengthening_fxd_power,
 )

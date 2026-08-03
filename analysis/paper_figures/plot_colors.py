@@ -2,6 +2,9 @@
 Shared color scheme for fig4 (bar charts), fig7b, fig7c.
 """
 
+# Subplot / panel titles (Classical availability, Conventional metrics, …)
+TITLE_FONTSIZE = 12
+
 # Marker size to match LaTeX document symbols $+$ $\bullet$ $\star$ (~6pt)
 MARKER_SIZE_LATEX = 36  # scatter s=36 gives ~6pt; tune if figures scale differently in document
 

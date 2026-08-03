@@ -3,12 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import xflow
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from plot_colors import MARKER_SIZE_LATEX, TITLE_FONTSIZE
 from scipy.signal import find_peaks
 from xflow import calculate_pressure_drop_ratio, create_plot
-
-from plot_colors import MARKER_SIZE_LATEX
-
-from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
 
 ensure_fig_dirs()
 save_dir = JOURNAL_PLOTS
@@ -38,7 +36,7 @@ NTU_MATCH = 1.479
 
 # Framework parameters (match fig8/9, T_ratios from xflow 106-109)
 # DEFAULT_T = 898 / 588
-DEFAULT_T = 907 / 588
+DEFAULT_T = 908 / 588
 DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
 DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
 # DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
@@ -81,7 +79,7 @@ def save_figures(
             "font.serif": ["Times New Roman"],
             "font.size": font_size,
             "mathtext.fontset": "stix",
-            "axes.titlesize": font_size,
+            "axes.titlesize": TITLE_FONTSIZE,
             "axes.labelsize": font_size,
             "xtick.labelsize": font_size,
             "ytick.labelsize": font_size,

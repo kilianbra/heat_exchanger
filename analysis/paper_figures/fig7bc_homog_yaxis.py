@@ -1,9 +1,9 @@
 """
 Re-run fig7b/c aspect-ratio (Ao/Aoref) plots with shared y-axis: -20% to 30%.
-Saves as fig7b_homog_yaxis and fig7c_homog_yaxis in Figs_current/explore_ideas/.
+
+Journal names stay fig7b_Ao_Aoref / fig7c_Ao_Aoref (homog y-limits are the content).
 """
 
-from fig_paths import EXPLORE_IDEAS, JOURNAL_PLOTS
 from fig7b_aspect_ratio import (
     DEFAULT_A_R,
     DEFAULT_C_COLD_OVER_C_HOT,
@@ -19,9 +19,12 @@ from fig7b_aspect_ratio import (
     DEFAULT_ST_OVER_F,
     DEFAULT_T,
     DEFAULT_T_DEAD_OVER_T_COLD_IN,
+)
+from fig7b_aspect_ratio import (
     save_figures as save_fig7b,
 )
 from fig7c_aspect_ratio import save_figures as save_fig7c
+from fig_paths import JOURNAL_PLOTS
 
 HOMOG_YLIM = (-0.2, 0.3)
 # Label positions for homog y-axis (data coords: Ao_ref/Ao, availability fraction)
@@ -50,14 +53,14 @@ _COMMON = dict(
 if __name__ == "__main__":
     save_fig7b(
         **_COMMON,
-        base_name="fig7b_homog_yaxis",
+        base_name="fig7b_Ao_Aoref",
         xytext_baseline=HOMOG_XYTEXT_BASELINE,
         top_axis_label="increasing velocity",
         save_dir_override=JOURNAL_PLOTS,
     )
     save_fig7c(
         **_COMMON,
-        base_name="fig7c_homog_yaxis",
+        base_name="fig7c_Ao_Aoref",
         xytext_optimal=HOMOG_XYTEXT_OPTIMAL,
         show_top_axis_label=False,
         save_dir_override=JOURNAL_PLOTS,
