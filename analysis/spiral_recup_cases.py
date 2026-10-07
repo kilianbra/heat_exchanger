@@ -233,10 +233,10 @@ def load_case(case: str, fluid_model: str = "PerfectGas") -> tuple[RadialSpiralP
             "case_name": "AHJE ToC k=1",
             "fluid_hot": h2comb_ahje,
             "fluid_cold": h2,
-            "Th_in": 571.65,
-            "Ph_out": 0.22631e5,
-            "Tc_in": 287.0,
-            "Pc_in": 27.9e5,
+            "Th_in": 571.65,  # ideally stagnation
+            "Ph_out": 0.22631e5,  # ideally static
+            "Tc_in": 287.0,  # ideally stagnation
+            "Pc_in": 27.9e5,  # ideally stagnation
             "tube_outer_diam": 1.067e-3,
             "tube_thick": 0.129e-3,
             "tube_spacing_trv": 3.0,  # Why higher than for ahje?
@@ -309,7 +309,7 @@ def main(case: str = "viper", fluid_model: str = "PerfectGas") -> None:
 
     geom, f_in, case_name = load_case(case, fluid_model)
 
-    result = spiral_hex_solver(geom, f_in, method="1d")
+    result = spiral_hex_solver(geom, f_in, method="1d", stag_inlets=False)
 
     final_diag = result["diagnostics"]
 

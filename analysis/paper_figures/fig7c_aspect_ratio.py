@@ -1,0 +1,342 @@
+import os
+
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import numpy as np
+import xflow
+from fig_paths import JOURNAL_PLOTS, ensure_fig_dirs
+from matplotlib.ticker import MultipleLocator
+from plot_colors import COLOR_THERMAL, COLOR_VISC_HOT, MARKER_SIZE_LATEX, TITLE_FONTSIZE
+from xflow import calculate_pressure_drop_ratio, plot_unavailable_energy_breakdown
+
+ensure_fig_dirs()
+save_dir = JOURNAL_PLOTS
+
+# Defaults (match fig8/9, ref: eps=0.6, dp_h/pin=0.06, dpc/pcin=0.04)
+DEFAULT_PRESSURE_DROP_ASSUMPTION = "inlet_density"
+DEFAULT_C_COLD_OVER_C_HOT = 1.0
+# DEFAULT_D_R = 0.257
+DEFAULT_D_R = 0.25
+DEFAULT_GAMMA = 1.4
+# DEFAULT_MACH_IN = 0.1
+# DEFAULT_MACH_IN = 0.11  # Mh_in (old, with f_c/f_h=0.25)
+DEFAULT_MACH_IN = 0.1362  # Mh_in from xflow Helicopte_retrofit (f_c/f_h=1)
+DEFAULT_G2_H = 0.5 * DEFAULT_GAMMA * DEFAULT_MACH_IN**2
+DEFAULT_ST_OVER_F = 0.4
+# DEFAULT_F_C_OVER_F_H = 0.25  # old: compensated missing f in inlet_density ratio
+DEFAULT_F_C_OVER_F_H = 1.0
+# DEFAULT_T = 898 / 588
+DEFAULT_T = 908 / 588  # T_ratios from xflow 106-109
+DEFAULT_T_DEAD_OVER_T_COLD_IN = 288 / 588
+# DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.04
+DEFAULT_P_COLD_IN_OVER_P_HOT_IN = 9.0 / 1.064
+# DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.04
+DEFAULT_P_HOT_IN_OVER_P_DEAD = 1.064
+DEFAULT_P_DEAD_OVER_P_HOT_IN = 1.0 / DEFAULT_P_HOT_IN_OVER_P_DEAD
+DEFAULT_MOLAR_MASS_RATIO = 1.0
+# DEFAULT_A_R = 1.0
+DEFAULT_A_R = 0.92
+# NTU_MATCH = 1.824
+NTU_MATCH = 1.479
+# Ao propto NTU^-0.704; Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+AO_REF_OVER_AO_EXP = 0.704
+DEFAULT_NTU_MAX = 8.0
+SHOW_CUBIC = True
+DEFAULT_DP_MAX = 0.2
+
+
+def save_figures(
+    c_cold_over_c_hot,
+    st_over_f,
+    f_c_over_f_h,
+    d_r,
+    g2_h,
+    dp_max=DEFAULT_DP_MAX,
+    base_name="fig7c_aspect_ratio",
+    t=DEFAULT_T,
+    t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+    p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+    p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+    gamma=DEFAULT_GAMMA,
+    pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
+    molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
+    a_r=DEFAULT_A_R,
+    plot_area_ratio_ref=False,
+    ylim=None,
+    xytext_baseline=None,
+    xytext_optimal=None,
+    show_top_axis_label=True,
+    save_dir_override=None,
+):
+    """
+    Save figures as SVG, TIFF, and HD PNG showing practical unavailable energy breakdown.
+    Matches fig6c lengthening style (labels, markers, legend box, no title).
+    """
+    out_dir = save_dir_override if save_dir_override is not None else save_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    font_size = 8
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.serif": ["Times New Roman"],
+            "font.size": font_size,
+            "mathtext.fontset": "stix",
+            "axes.titlesize": TITLE_FONTSIZE,
+            "axes.labelsize": font_size,
+            "xtick.labelsize": font_size,
+            "ytick.labelsize": font_size,
+            "legend.fontsize": font_size,
+            "figure.titlesize": font_size,
+            "hatch.linewidth": 0.5,
+        }
+    )
+
+    xflow.SHOW_CUBIC = SHOW_CUBIC
+    xflow.NTU_MATCH = NTU_MATCH
+
+    sigma_r = d_r * a_r if a_r is not None else None
+    pressure_drop_ratio = calculate_pressure_drop_ratio(
+        pressure_drop_assumption,
+        c_cold_over_c_hot,
+        t,
+        d_r,
+        molar_mass_ratio,
+        sigma_r,
+        p_cold_in_over_p_hot_in,
+        f_c_over_f_h=f_c_over_f_h,
+    )
+
+    # Match fig6c lengthening figure size (triple column 6 cm)
+    fig = plt.figure(figsize=(6 / 2.54, 7 / 2.54))
+    ax = plt.subplot(111)
+
+    line_no_dp, line_with_dp, ax = plot_unavailable_energy_breakdown(
+        c_cold_over_c_hot,
+        st_over_f,
+        f_c_over_f_h,
+        d_r,
+        g2_h,
+        ntu_max=DEFAULT_NTU_MAX,
+        dp_max=dp_max,
+        ax=ax,
+        framework="practical",
+        t=t,
+        t_dead_over_t_cold_in=t_dead_over_t_cold_in,
+        p_cold_in_over_p_hot_in=p_cold_in_over_p_hot_in,
+        p_dead_over_p_hot_in=p_dead_over_p_hot_in,
+        gamma=gamma,
+        pressure_drop_percent_ratio_cold_over_hot=pressure_drop_ratio,
+    )
+
+    ntu_no_dp = line_no_dp.get_xdata()
+    y_no_dp = -np.array(line_no_dp.get_ydata())  # Negate for change in availability
+    ntu_with_dp = line_with_dp.get_xdata()
+    y_with_dp = -np.array(line_with_dp.get_ydata())  # Negate for change in availability
+
+    ntu_min_valid = ntu_with_dp.min()
+    ntu_max_valid = ntu_with_dp.max()
+
+    mask_thermal = (ntu_no_dp >= ntu_min_valid) & (ntu_no_dp <= ntu_max_valid)
+    ntu_no_dp_masked = ntu_no_dp[mask_thermal]
+    y_no_dp_masked = y_no_dp[mask_thermal]
+
+    line_no_dp.remove()
+    line_with_dp.remove()
+
+    ntu_common = np.linspace(ntu_min_valid, ntu_max_valid, 200)
+    y_no_dp_interp = np.interp(ntu_common, ntu_no_dp_masked, y_no_dp_masked)
+    y_with_dp_interp = np.interp(ntu_common, ntu_with_dp, y_with_dp)
+
+    # Viscous alone = total - thermal = (viscous + thermal) - just_thermal
+    y_viscous_interp = y_with_dp_interp - y_no_dp_interp
+
+    ntu_with_dp_orig = np.array(ntu_with_dp)
+    if plot_area_ratio_ref:
+        base_name = base_name.replace("_aspect_ratio", "_Ao_Aoref")
+        # x = Ao_ref/Ao = (NTU/NTU_MATCH)^0.704
+        ntu_common = (ntu_common / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        ntu_with_dp = (ntu_with_dp_orig / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+
+    # Stack: viscous (baseline to viscous alone), thermal (viscous to total). Viscous on top for visibility.
+    # Thin outlines (0.5) like bar chart; main line drawn on top
+    edge_lw = 0.5
+    ax.fill_between(
+        ntu_common,
+        y_viscous_interp,
+        y_with_dp_interp,
+        facecolor=COLOR_THERMAL,
+        edgecolor="black",
+        linewidth=edge_lw,
+        hatch="///",
+        zorder=0,
+    )
+    ax.fill_between(
+        ntu_common,
+        0,
+        y_viscous_interp,
+        facecolor=COLOR_VISC_HOT,
+        edgecolor="black",
+        linewidth=edge_lw,
+        zorder=1,
+        label="_nolegend_",
+    )
+    ax.plot(ntu_with_dp, y_with_dp, "k-", label="_nolegend_", zorder=3, linewidth=1.5)
+
+    # Optimal marker: circle, black, s=50, no double edge (match fig6c)
+    idx_optimum = np.argmax(y_with_dp)  # Max availability after negation
+    x_optimum = ntu_with_dp[idx_optimum]
+    ntu_optimum_actual = ntu_with_dp_orig[idx_optimum]
+    y_optimum = y_with_dp[idx_optimum]
+    # ax.scatter(x_optimum, y_optimum, marker="o", facecolor="black", edgecolor="white", zorder=5, s=50)
+
+    print(f"Optimum NTU: {ntu_optimum_actual:.4f}")
+
+    # Baseline marker: + (baseline design)
+    idx_pressure = np.argmin(np.abs(ntu_with_dp_orig - NTU_MATCH))
+    x_pressure = (
+        (ntu_with_dp_orig[idx_pressure] / NTU_MATCH) ** AO_REF_OVER_AO_EXP
+        if plot_area_ratio_ref
+        else ntu_with_dp_orig[idx_pressure]
+    )
+    y_pressure = y_with_dp[idx_pressure]
+    ax.scatter(x_pressure, y_pressure, marker="+", s=MARKER_SIZE_LATEX, linewidths=1, color="black", zorder=5)
+
+    arrow_kw = dict(arrowstyle="->", color="black", lw=1, shrinkB=10)
+    if xytext_baseline is not None:
+        ax.annotate(
+            "baseline design",
+            xy=(x_pressure, y_pressure),
+            xytext=xytext_baseline,
+            fontsize=font_size,
+            ha="left",
+            arrowprops=arrow_kw,
+        )
+    if xytext_optimal is not None:
+        pass
+        # ax.annotate(
+        #    "optimal design",
+        #    xy=(x_optimum, y_optimum),
+        #    xytext=xytext_optimal,
+        #    fontsize=font_size,
+        #    ha="left",
+        #    arrowprops=arrow_kw,
+        # )
+
+    ax.set_title("")
+    if plot_area_ratio_ref:
+        ax.set_xlim(0.2, 1.2)
+        ax.xaxis.set_major_locator(MultipleLocator(0.2))
+        ax.set_xlabel(r"Inverse of Free-Flow Area $A_{\mathrm{o,ref}}/A_\mathrm{o}$ [-]")
+    else:
+        ax.set_xlim(0, 2.0)
+        ax.xaxis.set_major_locator(MultipleLocator(0.5))
+        ax.set_xlabel(r"Number of Heat Transfer Units ($N_\mathrm{tu}$ [-])")
+    if ylim is None:
+        ax.set_ylim(-0.1, 0.3)
+        ax.set_yticks([-0.1, 0, 0.1, 0.2, 0.3])
+    else:
+        ax.set_ylim(*ylim)
+        ax.set_yticks([-0.2, -0.1, 0, 0.1, 0.2, 0.3])
+    ax.set_ylabel(
+        r"Change in Availability ($\sum_{i} \; \Delta \dot{W}^{\mathrm{M}}_{\mathrm{A},i}/\dot{Q}_{\mathrm{max}}$ [%])"
+    )
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f"{int(round(x * 100))}%"))
+
+    # Legend: thermal creation and viscous dissipation (same colors as fig4 bar charts)
+    patch_thermal = mpatches.Patch(
+        facecolor=COLOR_THERMAL, edgecolor="black", hatch="///", linewidth=0.5, label="Thermal"
+    )
+    patch_viscous = mpatches.Patch(facecolor=COLOR_VISC_HOT, edgecolor="black", linewidth=0.5, label="Viscous")
+    ax.legend(
+        handles=[patch_thermal, patch_viscous],
+        loc="lower left",
+        labelspacing=0.05,
+        edgecolor="black",
+        frameon=True,
+        facecolor="white",
+        framealpha=1.0,
+        fancybox=False,
+    )
+
+    plt.tight_layout(pad=0.5)
+    ax.yaxis.labelpad = -4  # After tight_layout: reduce distance between ticks and ylabel
+    fig.subplots_adjust(left=0.25)  # Reduce left whitespace
+
+    if show_top_axis_label:
+        ax.text(
+            0.5,
+            0.98,
+            "increasing velocity",
+            transform=ax.transAxes,
+            va="top",
+            ha="center",
+            fontsize=font_size,
+        )
+        ax.annotate(
+            "",
+            xy=(0.7, 0.92),
+            xytext=(0.3, 0.92),
+            xycoords=ax.transAxes,
+            arrowprops=dict(arrowstyle="->", linewidth=0.75),
+        )
+
+    fig.savefig(
+        os.path.join(out_dir, f"{base_name}.svg"),
+        dpi=300,
+        facecolor="white",
+        format="svg",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(out_dir, f"{base_name}.tiff"),
+        dpi=300,
+        facecolor="white",
+        format="tiff",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(out_dir, f"{base_name}.png"),
+        dpi=300,
+        facecolor="white",
+        format="png",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+    fig.savefig(
+        os.path.join(out_dir, f"{base_name}.pdf"),
+        dpi=300,
+        facecolor="white",
+        format="pdf",
+        bbox_inches=None,
+        pad_inches=0,
+    )
+
+    plt.close(fig)
+    print(f"Saved figures: {base_name}.svg, {base_name}.tiff, {base_name}.png, {base_name}.pdf")
+
+    return ntu_optimum_actual
+
+
+if __name__ == "__main__":
+    PLOT_AREA_RATIO_REF = True  # Set False for standard NTU x-axis; True saves fig7c_Ao_Aoref.svg etc.
+    optimum_ntu = save_figures(
+        DEFAULT_C_COLD_OVER_C_HOT,
+        DEFAULT_ST_OVER_F,
+        DEFAULT_F_C_OVER_F_H,
+        DEFAULT_D_R,
+        DEFAULT_G2_H,
+        dp_max=DEFAULT_DP_MAX,
+        base_name="fig7c_aspect_ratio",
+        t=DEFAULT_T,
+        t_dead_over_t_cold_in=DEFAULT_T_DEAD_OVER_T_COLD_IN,
+        p_cold_in_over_p_hot_in=DEFAULT_P_COLD_IN_OVER_P_HOT_IN,
+        p_dead_over_p_hot_in=DEFAULT_P_DEAD_OVER_P_HOT_IN,
+        gamma=DEFAULT_GAMMA,
+        pressure_drop_assumption=DEFAULT_PRESSURE_DROP_ASSUMPTION,
+        molar_mass_ratio=DEFAULT_MOLAR_MASS_RATIO,
+        a_r=DEFAULT_A_R,
+        plot_area_ratio_ref=PLOT_AREA_RATIO_REF,
+    )
+    print(f"\nUse this NTU_OPTIMUM value in fig6a: {optimum_ntu:.4f}")

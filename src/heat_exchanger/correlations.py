@@ -899,7 +899,7 @@ def tube_bank_corrected_xi_gunter_and_shaw(
         spacing_trans: Transverse spacing between tubes, divided by tube outer diameter.
         bulk_to_wall_viscosity_ratio: Bulk to wall viscosity ratio.
         use_outside_bounds: Whether to use the outside bounds of the correlation.
-    Bounds on Reynolds number dv 0.01 to 3e5
+    Bounds on Reynolds number dv 1e-2 to 3e5
     """
 
     # For now ignore transition region from laminar to turbulent (slight curvature)

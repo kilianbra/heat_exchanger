@@ -1,212 +1,188 @@
+"""AHJE rectangular recuperator model using the new tube_bank_normal geometry and solver."""
+
+import logging
+
 import numpy as np
+from fluid_files.H2_recirc import calculate_recirc_fraction_coolprop
 
-from heat_exchanger.correlations import (
-    circular_pipe_friction_factor,
-    circular_pipe_nusselt,
-    tube_bank_nusselt_number_and_friction_factor,
-)
-from heat_exchanger.epsilon_ntu import epsilon_ntu
-from heat_exchanger.fluid_properties import (
-    CombustionProductsProperties,
-    CoolPropProperties,
-    PerfectGasProperties,
-    RefPropProperties,
-)
-from heat_exchanger.geometry_tube_bank import (
-    area_free_flow_bank,
-    area_free_flow_in_tubes,
-    area_frontal_bank,
-    area_heat_transfer_bank,
-    area_heat_transfer_in_tubes,
-    axial_involute_tube_length,
-    sigma_tube_bank,
-)
-from heat_exchanger.hex_basic import dp_tube_bank, ntu
+from heat_exchanger.fluids.protocols import CoolPropFluid, FluidInputs, PerfectGasFluid
+from heat_exchanger.geometries.tube_bank_normal import TubeBankNormalSpec, tube_bank_normal_0d_solver
+from heat_exchanger.logging_utils import configure_logging
 
-mdot_hot = 12.0  # 19.07  # kg/s
-mdot_cold = 0.76  # 0.166  # kg/s
+# Configure logging
+configure_logging(logging.INFO)
+logger = logging.getLogger(__name__)
 
-model = "RP"  # "CP" or "PG"
+# Suppress INFO messages from tube_bank_normal module
+logging.getLogger("heat_exchanger.geometries.tube_bank_normal").setLevel(logging.WARNING)
 
-match model:
-    case "RP":
-        hot_air = CombustionProductsProperties(fuel_type="H2", FAR_mass=9.95 / (1144 - 9.95), prefer_refprop=True)
-        cold_hydrogen = RefPropProperties(fluid_name="PARAHYDROGEN")
-    case "CP":
-        hot_air = CoolPropProperties(fluid_name="Air")
-        cold_hydrogen = CoolPropProperties(fluid_name="Hydrogen")
-    case "PG":
-        hot_air = PerfectGasProperties(molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4)
-        cold_hydrogen = PerfectGasProperties(
-            molecular_weight=2.016, gamma=1.4, Pr=0.7, mu_ref=8.4e-6, T_ref=273.15, S=110.4
+
+def solve_ahje_recuperator(
+    n_rows: int,
+    n_passes_cold: int = 1,
+    mdot_hot: float = 64.316,
+    mdot_cold: float = 0.427 * (1 + 0.787),
+    model: str = "PG",
+    temp_hot_in: float = 574.0,
+    temp_cold_in: float = 275.0,
+    p_hot_in: float = 0.368e5,
+    p_cold_in: float = 25e5,
+    total_diameter_outer: float = 2 * 0.871,
+    total_diameter_inner: float = 2 * 0.541,
+    spacing_trans: float = 6.0,
+    spacing_long: float = 1.5,
+    tube_diameter_outer: float = 1.0e-3 + 2 * 0.040e-3,
+    t_tubes: float = 0.040e-3,
+    tube_bank_correction_factor_hot: float = 1.0,
+    p_cold_max_takeoff: float | None = 70e5,
+    p_hot_max_takeoff: float | None = 1.26e5,
+    T_hot_max_takeoff: float | None = 718.0,
+    T_base: float | None = 290.0,
+) -> dict[str, object]:
+    """Solve the AHJE rectangular recuperator for given geometry parameters.
+
+    Parameters
+    ----------
+    n_rows : int
+        Number of rows in the tube bank.
+    n_passes_cold : int, optional
+        Number of passes for cold fluid (default: 1).
+    mdot_hot : float, optional
+        Hot fluid mass flow rate in kg/s (default: 64.316).
+    mdot_cold : float, optional
+        Cold fluid mass flow rate in kg/s (default: 0.427 * (1 + 0.787)).
+    model : str, optional
+        Fluid model type: "CP", "PG", or "RP" (default: "PG").
+    temp_hot_in : float, optional
+        Hot inlet temperature in K (default: 574.0).
+    temp_cold_in : float, optional
+        Cold inlet temperature in K (default: 275.0).
+    p_hot_in : float, optional
+        Hot inlet pressure in Pa (default: 0.368e5).
+    p_cold_in : float, optional
+        Cold inlet pressure in Pa (default: 25e5).
+    total_diameter_outer : float, optional
+        Outer diameter of the annulus in m (default: 2 * 0.871).
+    total_diameter_inner : float, optional
+        Inner diameter of the annulus in m (default: 2 * 0.541).
+    spacing_trans : float, optional
+        Transverse spacing ratio (default: 2.5).
+    spacing_long : float, optional
+        Longitudinal spacing ratio (default: 1.5).
+    tube_diameter_outer : float, optional
+        Outer diameter of tubes in m (default: 1.0e-3 + 2 * 0.040e-3).
+    t_tubes : float, optional
+        Tube wall thickness in m (default: 0.040e-3).
+    tube_bank_correction_factor_hot : float, optional
+        Correction factor for hot-side tube bank correlations (default: 1.0).
+    p_cold_max_takeoff : float | None, optional
+        Cold-side pressure at MTO conditions in Pa (default: 70e5).
+    p_hot_max_takeoff : float | None, optional
+        Hot-side pressure at MTO conditions in Pa (default: 1.26e5).
+    T_hot_max_takeoff : float | None, optional
+        Hot-side temperature at MTO conditions in K (default: 718.0).
+    T_base : float | None, optional
+        Base temperature for thermal expansion in K (default: 290.0).
+
+    Returns
+    -------
+    dict
+        Dictionary containing results from tube_bank_normal_0d_solver plus additional
+        diagnostics like recirc_fraction.
+    """
+    # Fluid model selection
+    match model:
+        case "RP":
+            # Need to implement RefProp versions
+            raise NotImplementedError("RP model not yet implemented")
+        case "CP":
+            hot_air = CoolPropFluid("air")
+            cold_hydrogen = CoolPropFluid("para_h2")
+        case "PG":
+            hot_air = PerfectGasFluid.from_name("h2comb_ahje")
+            cold_hydrogen = PerfectGasFluid.from_name("para_h2")
+
+    # Calculate number of tubes per row
+    n_tubes_per_row = round(np.pi * total_diameter_inner**2 / (spacing_trans * tube_diameter_outer))
+
+    n_rows_per_pass = int(n_rows / n_passes_cold)
+
+    # Calculate frontal area
+    area_frontal = np.pi * (total_diameter_outer**2 - total_diameter_inner**2) / 4
+
+    # Create geometry object
+    geom = TubeBankNormalSpec(
+        tube_outer_diam=tube_diameter_outer,
+        tube_thick=t_tubes,
+        tube_spacing_trv=spacing_trans,
+        tube_spacing_long=spacing_long,
+        staggered=False,  # inline
+        n_rows_per_pass=n_rows_per_pass,
+        n_passes=n_passes_cold,
+        n_tubes_per_row=n_tubes_per_row,
+        frontal_area_outer=area_frontal,
+        annular_not_box=True,
+        # total_diameter_inner=total_diameter_inner,
+        # total_diameter_outer=total_diameter_outer,
+    )
+
+    # logger.info(
+    #     "Geometry: n_rows=%d, n_passes=%d, n_tubes_per_row=%d, axial_length=%.2f m, n_tubes_total=%d",
+    #     n_rows,
+    #     n_passes_cold,
+    #     n_tubes_per_row,
+    #     geom.axial_length,
+    #     geom.n_tubes_total,
+    # )
+
+    # Create fluid inputs
+    f_in = FluidInputs(
+        hot=hot_air,
+        cold=cold_hydrogen,
+        m_dot_hot=mdot_hot,
+        m_dot_cold=mdot_cold,
+        Th_in=temp_hot_in,
+        Ph_in=p_hot_in,
+        Tc_in=temp_cold_in,
+        Pc_in=p_cold_in,
+    )
+
+    # Material properties for wall calculations
+    sigma_yield_wall = 205e6  # Pa - 304 Stainless Steel
+    thermal_expansion_coefficient_wall = 16e-6  # K^-1
+    rho_wall = 7930  # kg/m^3 - 304 Stainless Steel
+
+    # Solve using 0D solver
+    result = tube_bank_normal_0d_solver(
+        geom=geom,
+        f_in=f_in,
+        tube_bank_correction_factor_hot=tube_bank_correction_factor_hot,
+        p_cold_max=p_cold_max_takeoff,
+        T_hot_max=T_hot_max_takeoff,
+        sigma_yield_wall=sigma_yield_wall,
+        thermal_expansion_coefficient_wall=thermal_expansion_coefficient_wall,
+        rho_wall=rho_wall,
+    )
+
+    # Calculate recirculation fraction
+    recirc_fraction = calculate_recirc_fraction_coolprop(40, temp_cold_in, result["Tc_out"], p_cold_in / 1e5)
+    result["recirc_fraction"] = recirc_fraction[0]
+
+    # logger.info("Recirculation fraction: %.2f", recirc_fraction[0])
+
+    # Return result with geometry for convenience
+    return {"result": result, "geometry": geom}
+
+
+if __name__ == "__main__":
+    # Loop through different n_rows values
+    print("n_rows | Effectiveness [%] | dP_hot [%] | Axial length [cm] | A_ht_hot [m²]")
+    print("-" * 70)
+
+    for n_rows in range(1, 11):
+        output = solve_ahje_recuperator(n_rows=n_rows, n_passes_cold=1)
+        result = output["result"]
+        geom = output["geometry"]
+        print(
+            f"{n_rows:6d} | {result['epsilon'] * 100:15.2f} | {result['dP_hot_pct']:11.2f} | {geom.axial_length * 100:15.2f} | {geom.area_heat_transfer_outer_total:12.2f}"
         )
-
-
-# Brewer recuperator values
-temp_hot_in = 574  # K
-temp_cold_in = 287  # K
-
-p_hot_in = 0.368e5  # Pa
-p_cold_in = 150e5  # Pa
-
-total_diameter_outer = 0.871  # m
-total_diameter_inner = 0.541  # m
-spacing_trans = 3.0  # out of correlation, overruled correlation checks
-spacing_long = 1.5
-
-tube_diameter_outer = 1.067e-3  # m - 4.78 mm
-t_tubes = 0.129e-3  # m -  300 microns or 0.3 mm
-tube_diameter_inner = tube_diameter_outer - 2 * t_tubes
-
-n_passes_cold = 8
-
-n_tubes_per_row = round(
-    np.pi * 0.541**2 / (3.0 * 1.067e-3)
-)  # now 287 tubes per row (Axially)  old 62  # approx np.pi * D_i**2 / (Xt* * d_o)
-n_rows = 32 * 8
-
-n_tubes_per_pass = n_tubes_per_row * n_rows / n_passes_cold
-
-print(f"Axial length: {n_rows * spacing_long * tube_diameter_outer:.2f} m (N_tubes = {n_tubes_per_row * n_rows})")
-
-area_frontal = 2 * area_frontal_bank(total_diameter_outer, total_diameter_inner)
-
-sigma = sigma_tube_bank(spacing_trans)
-print(
-    f"Axial length: {n_rows * spacing_long * tube_diameter_outer:.2f} m (N_tubes = {n_tubes_per_row * n_rows}), sigma = {sigma:.2f}"
-)
-area_free_flow_hot = area_free_flow_bank(area_frontal, sigma)
-tube_length = axial_involute_tube_length(total_diameter_outer, total_diameter_inner)
-area_heat_transfer_hot = area_heat_transfer_bank(tube_diameter_outer, tube_length, n_rows, n_tubes_per_row)
-area_heat_transfer_cold = area_heat_transfer_in_tubes(tube_diameter_inner, tube_length, n_tubes_per_row * n_rows)
-
-area_free_flow_cold = area_free_flow_in_tubes(tube_diameter_inner, n_tubes_per_pass)
-
-print(f"heat transfer areas hot & cold: {area_heat_transfer_hot:.2f} & {area_heat_transfer_cold:.2f} m^2")
-
-print(f"free flow areas hot & cold: {area_free_flow_hot:.2f} & {area_free_flow_cold:.4f} m^2")
-
-print(f"Hot viscosity: {hot_air.get_viscosity(temp_hot_in, p_hot_in):.2e} Pa.s")
-
-reynolds_hot_in = mdot_hot / area_free_flow_hot / hot_air.get_viscosity(temp_hot_in, p_hot_in) * tube_diameter_outer
-reynolds_cold_in = (
-    mdot_cold / area_free_flow_cold / cold_hydrogen.get_viscosity(temp_cold_in, p_cold_in) * tube_diameter_inner
-)
-
-print(f"reynolds numbers hot & cold: {reynolds_hot_in:.2e} & {reynolds_cold_in:.2e}")
-tube_bank_correction_factor_hot = 1  # 0.05 / 0.13
-print(f"tube bank correction factor hot: {tube_bank_correction_factor_hot}")
-nusselt_hot, f_hot = tube_bank_nusselt_number_and_friction_factor(
-    reynolds_hot_in, spacing_long, spacing_trans, prandtl=0.7, inline=True, n_rows=n_rows
-)
-f_hot = f_hot * tube_bank_correction_factor_hot
-nusselt_hot = nusselt_hot * tube_bank_correction_factor_hot  # keep j/f propto Nu/f cst
-nusselt_cold = circular_pipe_nusselt(reynolds_cold_in)
-f_cold = circular_pipe_friction_factor(reynolds_cold_in)
-
-print(f"nusselt numbers hot & cold: {nusselt_hot:.2f} & {nusselt_cold:.2f}")
-print(f"friction factors hot & cold: {f_hot:.2f} & {f_cold:.2f}")
-
-stanton_hot = nusselt_hot / reynolds_hot_in / 0.7
-stanton_cold = nusselt_cold / reynolds_cold_in / 0.7
-
-heat_capacity_flux_hot = mdot_hot * hot_air.get_cp(temp_hot_in, p_hot_in)
-heat_capacity_flux_cold = mdot_cold * cold_hydrogen.get_cp(temp_cold_in, p_cold_in)
-
-area_ratio_q_over_o_hot = area_heat_transfer_hot / area_free_flow_hot
-area_ratio_q_over_o_cold = area_heat_transfer_cold / area_free_flow_cold
-
-print(
-    f"heat transfer to minimum flow area ratio (4L/d_h with K&L def): {area_ratio_q_over_o_hot:.2f} & {area_ratio_q_over_o_cold:.2f}"
-)
-
-ntu = ntu(
-    stanton_hot,
-    stanton_cold,
-    area_ratio_q_over_o_hot,
-    area_ratio_q_over_o_cold,
-    heat_capacity_flux_hot,
-    heat_capacity_flux_cold,
-)
-
-if heat_capacity_flux_hot > heat_capacity_flux_cold:
-    c_min = heat_capacity_flux_cold
-    c_ratio = heat_capacity_flux_cold / heat_capacity_flux_hot
-    # cold is minimum and hot is mixed
-    flow_type_description = "Cmax_mixed"
-else:
-    c_min = heat_capacity_flux_hot
-    c_ratio = heat_capacity_flux_hot / heat_capacity_flux_cold
-    # hot is minimum and cold is mixed
-    flow_type_description = "Cmin_mixed"
-
-epsilon = epsilon_ntu(
-    ntu,
-    c_ratio,
-    exchanger_type="cross_flow",
-    flow_type=flow_type_description,
-    n_passes=n_passes_cold,
-)
-
-heat_transfer = epsilon * c_min * (temp_hot_in - temp_cold_in)  # not caring about enthalpy yet
-print(f"heat_transfer: {heat_transfer / 1e6:.2f} MW")
-
-temp_hot_out = temp_hot_in - heat_transfer / heat_capacity_flux_hot
-temp_cold_out = temp_cold_in + heat_transfer / heat_capacity_flux_cold
-
-print(f"temp_hot_out: {temp_hot_out:.2f} K, temp_cold_out: {temp_cold_out:.2f} K")
-
-rho_hot_in = hot_air.get_density(temp_hot_in, p_hot_in)
-rho_hot_out_approx = hot_air.get_density(temp_hot_out, p_hot_in)
-
-dp_hot = dp_tube_bank(
-    area_ratio_q_over_o_hot,
-    mdot_hot / area_free_flow_hot,
-    rho_hot_in,
-    rho_hot_out_approx,
-    sigma,
-    f_hot,
-)
-
-print(f"NTU: {ntu:.2f}")
-print(f"effectiveness: {epsilon:.2%} (80.43% in Brewer)")
-print(f"dp_hot: {dp_hot / p_hot_in:.2%} of inlet pressure (3.2% in Brewer)")
-
-
-# Checks with Brewer data
-rho_wall = 7930  # kg/m^3 304 Stainless Steel (CRES -> Corrosion Resistant?)
-# https://ssmalloys.com/density-of-stainless-steel-304/
-sigma_yield_wall = 205e6  # Pa MPa
-thermal_expansion_coefficient_wall = 16e-6  # K^-1
-# (high temperature strentgh from -200 C to 870 C) i.e. from 73.15 K to 1143.15 K
-conductivity_wall = 14  # W/m.K https://www.azom.com/properties.aspx?ArticleID=965
-
-wall_volume = n_rows * n_tubes_per_row * np.pi * (tube_diameter_outer**2 - tube_diameter_inner**2) * tube_length / 4
-wall_mass = wall_volume * rho_wall
-
-print(f"calculated wall mass: {wall_mass:.2f} kg (vs 38.3 kg in Brewer) so {wall_mass / 38.3 - 1:.2%} difference")
-# Calculate the f_hot that would result in same pressure drop as Brewer
-dp_hot_brewer = 3.2 / 100 * p_hot_in  # Pa
-
-T_hot_out_brewer = 733
-T_cold_out_breter = 677
-rho_hot_out_brewer = hot_air.get_density(T_hot_out_brewer, p_hot_in)
-
-dp_momentum_hot = (
-    0.5 * (mdot_hot / area_free_flow_hot) ** 2 * (1 + sigma**2) * (1 / rho_hot_out_brewer - 1 / rho_hot_in)
-)
-
-dp_brewer_hot_friction = dp_hot_brewer - dp_momentum_hot
-one_over_rho_mean_hot = (1 / rho_hot_in + 1 / rho_hot_out_brewer) / 2
-
-f_hot_brewer = (
-    2
-    * dp_brewer_hot_friction
-    / ((mdot_hot / area_free_flow_hot) ** 2 * area_ratio_q_over_o_hot * one_over_rho_mean_hot)
-)
-
-print(
-    f"f_hot that would result in same pressure drop as Brewer: {f_hot_brewer:.2f} vs {f_hot:.2f} in model at Re_in = {reynolds_hot_in:.2e}"
-)
-
-# Calculate the nusselt number that would result in same heat transfer as Brewer

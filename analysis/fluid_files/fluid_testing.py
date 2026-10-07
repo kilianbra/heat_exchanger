@@ -9,6 +9,7 @@ from tabulate import tabulate
 from heat_exchanger.fluid_properties import (
     CombustionProductsProperties,
     CoolPropProperties,
+    MixtureProperties,
     PerfectGasProperties,
     RefPropProperties,
     configure_refprop,
@@ -156,6 +157,277 @@ def print_table(title, rows):
             disable_numparse=disable_cols,
         )
     )
+
+
+MOLAR_MASS = {"O2": 31.999, "N2": 28.013, "H2O": 18.015, "H2": 2.016, "CO2": 44.01, "Air": 28.97}
+
+
+def mass_fractions_to_mole_fractions(components: list[str], mass_fractions: list[float]) -> list[float]:
+    """Convert component mass fractions to mole fractions (normalized)."""
+    n_i = [w / MOLAR_MASS[c] for w, c in zip(mass_fractions, components, strict=True)]
+    n_sum = sum(n_i)
+    return [x / n_sum for x in n_i]
+
+
+def mole_fractions_to_mass_fractions(components: list[str], mole_fractions: list[float]) -> dict[str, float]:
+    m_i = [y * MOLAR_MASS[c] for y, c in zip(mole_fractions, components, strict=True)]
+    m_sum = sum(m_i)
+    return {c: m / m_sum for c, m in zip(components, m_i, strict=True)}
+
+
+def h2_combustion_products_mole_fractions(
+    far_mass: float,
+    y_o2_dry_vol: float = 0.21,
+) -> tuple[list[str], list[float]]:
+    """
+    H2 + 0.5 O2 -> H2O for one mole of fuel; dry oxidizer is O2/N2 only.
+
+    ``far_mass`` is fuel-to-dry-air mass ratio (mdot_H2 / mdot_dry_air), matching
+    ``CombustionProductsProperties``.
+    """
+    y_n2_dry_vol = 1.0 - y_o2_dry_vol
+    m_air = MOLAR_MASS["H2"] / far_mass
+    m_o2 = y_o2_dry_vol * m_air
+    m_n2 = y_n2_dry_vol * m_air
+    m_air_avg = y_o2_dry_vol * MOLAR_MASS["O2"] + y_n2_dry_vol * MOLAR_MASS["N2"]
+    moles_o2_air = m_o2 / m_air_avg
+    moles_n2 = m_n2 / m_air_avg
+    moles_h2o = 1.0
+    moles_o2_remaining = moles_o2_air - 0.5
+    total_moles = moles_h2o + moles_n2 + moles_o2_remaining
+    components = ["H2O", "N2", "O2"]
+    mole_fractions = [
+        moles_h2o / total_moles,
+        moles_n2 / total_moles,
+        moles_o2_remaining / total_moles,
+    ]
+    return components, mole_fractions
+
+
+def turbo_efficiencies(
+    fluid_model,
+    t_in: float,
+    p_in: float,
+    t_out: float,
+    p_out: float,
+    *,
+    is_compression: bool,
+) -> dict[str, float]:
+    """Isentropic and polytropic efficiencies from end states (adiabatic, no heat loss)."""
+    h_in = fluid_model.get_specific_enthalpy(t_in, p_in)
+    h_out = fluid_model.get_specific_enthalpy(t_out, p_out)
+    h_out_is, _t_out_is = fluid_model.get_isentropic_exit_h_and_temp_from_p_temp(p_in, t_in, p_out)
+
+    pr = p_out / p_in
+    tr = t_out / t_in
+    if is_compression:
+        eta_is = (h_out_is - h_in) / (h_out - h_in) if h_out != h_in else float("nan")
+        n_poly = np.log(pr) / (np.log(pr) - np.log(tr)) if pr > 1 and tr > 0 else float("nan")
+    else:
+        eta_is = (h_in - h_out) / (h_in - h_out_is) if h_in != h_out_is else float("nan")
+        n_poly = np.log(pr) / (np.log(pr) - np.log(tr)) if pr < 1 and tr > 0 else float("nan")
+
+    t_avg = 0.5 * (t_in + t_out)
+    p_avg = 0.5 * (p_in + p_out)
+    gamma_avg = _gamma_from_model(fluid_model, t_avg, p_avg)
+    if np.isfinite(gamma_avg) and gamma_avg > 1:
+        kappa = (gamma_avg - 1) / gamma_avg
+        if is_compression and tr > 1 and pr > 1:
+            # Constant-gamma polytropic efficiency (compressor convention)
+            eta_poly = kappa * np.log(pr) / np.log(tr)
+        elif not is_compression and tr < 1 and pr < 1:
+            # Turbine (Cumpsty): eta_p = -ln(P2/P1) / (-ln(P2/P1) + kappa * ln(T2/T1)), P2/P1 = pr
+            eta_poly = -np.log(pr) / (-np.log(pr) + kappa * np.log(tr))
+        else:
+            eta_poly = float("nan")
+    else:
+        eta_poly = float("nan")
+
+    return {
+        "eta_is [-]": eta_is,
+        "eta_poly [-]": eta_poly,
+        "n_poly [-]": n_poly,
+        "PR [-]": pr,
+        "T_ratio [-]": tr,
+        "h_in [J/kg]": h_in,
+        "h_out [J/kg]": h_out,
+        "h_out_is [J/kg]": h_out_is,
+    }
+
+
+def _gamma_from_model(fluid_model, t_k: float, p_pa: float) -> float:
+    cp = fluid_model.get_cp(t_k, p_pa)
+    if hasattr(fluid_model, "R_specific"):
+        cv = cp - fluid_model.R_specific
+        return cp / cv if cv > 0 else float("nan")
+    if hasattr(fluid_model, "CP") and hasattr(fluid_model, "fluid"):
+        cv = fluid_model.CP.PropsSI("Cvmass", "T", t_k, "P", p_pa, fluid_model.fluid)
+        return cp / cv if cv > 0 else float("nan")
+    return float("nan")
+
+
+def reynolds_circular_duct(rho: float, mu: float, q_vol_m3_s: float, d_hyd_m: float) -> float:
+    """Re = rho * u * D / mu with u = Q / A and A = pi D^2 / 4."""
+    area = np.pi * d_hyd_m**2 / 4.0
+    velocity = q_vol_m3_s / area
+    return rho * velocity * d_hyd_m / mu
+
+
+def scan_far_for_target_mass_fractions(
+    target_mass: dict[str, float],
+    y_o2_dry_vol: float,
+    far_grid: np.ndarray | None = None,
+) -> None:
+    """Compare H2 combustion model to reported Newco product mass fractions."""
+    if far_grid is None:
+        far_grid = np.linspace(0.001, 0.05, 200)
+
+    print(f"\nCombustion composition scan (inlet dry O2 vol fraction = {y_o2_dry_vol:.4f})")
+    print(f"Target product mass fractions: {target_mass}")
+
+    best = None
+    for far in far_grid:
+        comps, y_mol = h2_combustion_products_mole_fractions(far, y_o2_dry_vol=y_o2_dry_vol)
+        w = mole_fractions_to_mass_fractions(comps, y_mol)
+        err = sum((w.get(k, 0.0) - target_mass.get(k, 0.0)) ** 2 for k in target_mass)
+        if best is None or err < best[0]:
+            best = (err, far, w, y_mol)
+
+    assert best is not None
+    err, far_best, w_best, y_mol_best = best
+    print(f"Best FAR (stoichiometric balance, H2 fuel): {far_best:.6f}  (SSE={err:.3e})")
+    print(f"  Mole fractions: {dict(zip(comps, y_mol_best, strict=True))}")
+    print(f"  Mass fractions: {w_best}")
+
+    # If targets were mole fractions (not mass), convert for comparison
+    w_from_mole_target = mole_fractions_to_mass_fractions(
+        list(target_mass.keys()),
+        [target_mass[c] for c in target_mass],
+    )
+    if w_from_mole_target != target_mass:
+        print(f"  If targets were mole fractions, equivalent mass fractions: {w_from_mole_target}")
+
+    # Compare with library CombustionProductsProperties (21 % O2 dry air only)
+    far_cp = far_best
+    try:
+        cp_model = CombustionProductsProperties("H2", far_cp, prefer_refprop=True)
+        w_cp = mole_fractions_to_mass_fractions(cp_model.components, cp_model.mole_fractions)
+        print(f"CombustionProductsProperties @ FAR={far_cp:.6f} (21 % O2 dry air): {w_cp}")
+    except Exception as exc:
+        print(f"CombustionProductsProperties comparison skipped: {exc}")
+
+
+def main_newco(*, d_hyd_m: float = 0.03, print_tables: bool = True) -> None:
+    """
+    Newco cycle stations (PR = 2.5) and combustion-product checks.
+
+    Volumetric flow rates [m^3/s] at each station are from Newco data; Reynolds numbers
+    use ``d_hyd_m`` (default 50 mm) unless you pass a different hydraulic diameter.
+    """
+    pr_cycle = 2.5
+    p1_bar = 1.0
+    p2_bar = pr_cycle * p1_bar
+
+    stations = [
+        ("Air comp in", 288.15, p1_bar, 0.0802),
+        ("Air comp out", 417.46, p2_bar, 0.0365 / 0.784),  # Q as given: 0.0365/0.784 m^3/s
+        ("Gas turb in", 1000.0, p2_bar, 0.0931),
+        ("Gas turb out", 859.2, p1_bar, 0.192),
+    ]
+
+    print(f"\n{'=' * 72}\nNewco cycle (PR = {pr_cycle:.3f})\n{'=' * 72}")
+
+    try:
+        air = CoolPropProperties("Air")
+    except Exception:
+        air = PerfectGasProperties(molecular_weight=28.97, gamma=1.4, Pr=0.7, mu_ref=1.8e-5, T_ref=300.0, S=110.4)
+
+    # Compressor leg
+    t_c_in, p_c_in = stations[0][1], stations[0][2] * BAR_TO_PA
+    t_c_out, p_c_out = stations[1][1], stations[1][2] * BAR_TO_PA
+    comp_eff = turbo_efficiencies(air, t_c_in, p_c_in, t_c_out, p_c_out, is_compression=True)
+    print(f"\nAir compressor (1 bar, 288.15 K -> {p2_bar:.2f} bar, {t_c_out:.2f} K)")
+    for k, v in comp_eff.items():
+        if k.startswith("eta") or k == "PR [-]":
+            print(f"  {k}: {v:.4f}" if np.isfinite(v) else f"  {k}: nan")
+
+    # Turbine leg
+    t_t_in, p_t_in = stations[2][1], stations[2][2] * BAR_TO_PA
+    t_t_out, p_t_out = stations[3][1], stations[3][2] * BAR_TO_PA
+    turb_eff = turbo_efficiencies(air, t_t_in, p_t_in, t_t_out, p_t_out, is_compression=False)
+    print(f"\nGas turbine ({p2_bar:.2f} bar, {t_t_in:.1f} K -> 1 bar, {t_t_out:.1f} K)")
+    for k, v in turb_eff.items():
+        if k.startswith("eta") or k == "PR [-]":
+            print(f"  {k}: {v:.4f}" if np.isfinite(v) else f"  {k}: nan")
+    print("  (eta_is uses CoolProp enthalpies; eta_poly uses constant-gamma log form at T_avg)")
+
+    rows = []
+    for name, t_k, p_bar, q_vol in stations:
+        p_pa = p_bar * BAR_TO_PA
+        props = query_properties(air, t_k, p_pa)
+        rho = props.get("rho [kg/m^3]", float("nan"))
+        mu = props.get("mu [Pa·s]", float("nan"))
+        re = reynolds_circular_duct(rho, mu, q_vol, d_hyd_m) if np.isfinite(rho) and np.isfinite(mu) else float("nan")
+        mdot = rho * q_vol if np.isfinite(rho) else float("nan")
+        row = {
+            "Station": name,
+            "T [K]": t_k,
+            "P [bar]": p_bar,
+            "Q_vol [m^3/s]": q_vol,
+            "mdot [kg/s]": mdot,
+            "Re [-]": re,
+            "D_hyd [m]": d_hyd_m,
+        }
+        row.update(props)
+        rows.append(row)
+
+    if print_tables:
+        print_table(f"Newco stations (Re based on D_hyd = {d_hyd_m * 1e3:.1f} mm)", rows)
+
+    # --- Combustion product composition (Newco reported values) ---
+    # Post-combustion (wet) mass fractions from Newco:
+    #   H2O 1.1 %, N2 78 %, O2 20.9 %  (sums to 100 %)
+    target_products_mass = {"H2O": 0.011, "N2": 0.78, "O2": 0.209}
+
+    # Pre-combustion oxidizer mass fractions quoted by Newco:
+    #   O2 25.3 %, N2 78.8 %  -> sums to 104.1 % (inconsistent; likely typo or mixed basis)
+    # Dry atmospheric air (mole): ~23.1 % O2, ~76.9 % N2 (*atmospheric* N2, incl. trace Ar as N2)
+    # Standard dry air (volume): ~20.95 % O2, ~78.08 % N2, ~0.93 % Ar
+    print("\nPre-combustion oxidizer (Newco quoted vs atmosphere):")
+    w_o2_newco_pre, w_n2_newco_pre = 0.253, 0.788
+    print(
+        f"  Newco quoted (mass?): O2={w_o2_newco_pre:.1%}, N2={w_n2_newco_pre:.1%}, sum={w_o2_newco_pre + w_n2_newco_pre:.1%}"
+    )
+    y_o2_atm_vol, y_n2_atm_vol = 0.2095, 0.7808  # remainder mostly Ar
+    m_dry_atm = y_o2_atm_vol * MOLAR_MASS["O2"] + y_n2_atm_vol * MOLAR_MASS["N2"]
+    w_o2_atm = y_o2_atm_vol * MOLAR_MASS["O2"] / m_dry_atm
+    w_n2_atm = y_n2_atm_vol * MOLAR_MASS["N2"] / m_dry_atm
+    print(f"  Dry air (vol, no Ar): O2={y_o2_atm_vol:.1%}, N2={y_n2_atm_vol:.1%}")
+    print(f"  Dry air (mass, no Ar): O2={w_o2_atm:.1%}, N2={w_n2_atm:.1%}")
+
+    # If Newco pre-combustion values are mole %, normalize:
+    y_o2_newco_mol = 0.253 / (0.253 + 0.788)
+    y_n2_newco_mol = 0.788 / (0.253 + 0.788)
+    print(f"  If Newco pre values are mole % (renormalized): O2={y_o2_newco_mol:.1%}, N2={y_n2_newco_mol:.1%}")
+
+    scan_far_for_target_mass_fractions(target_products_mass, y_o2_dry_vol=0.21)
+    scan_far_for_target_mass_fractions(target_products_mass, y_o2_dry_vol=y_o2_newco_mol)
+
+    # Build mixture from reported product mass fractions and evaluate at turbine inlet T, P
+    comps_prod = ["H2O", "N2", "O2"]
+    y_mol_prod = mass_fractions_to_mole_fractions(
+        comps_prod,
+        [target_products_mass[c] for c in comps_prod],
+    )
+    try:
+        mix_prod = MixtureProperties(comps_prod, y_mol_prod, prefer_refprop=True)
+        t_h, p_h = stations[2][1], stations[2][2] * BAR_TO_PA
+        props_h = query_properties(mix_prod, t_h, p_h)
+        print_table(
+            "Newco combustion products @ gas turb inlet (reported composition)", [{"Model": "Newco mix", **props_h}]
+        )
+    except Exception as exc:
+        print(f"Could not evaluate reported product mixture: {exc}")
 
 
 def plot_cp_kerosene_products_three_FAR_as_function_of_temperature():
@@ -817,11 +1089,22 @@ def main_table(print_tables: bool = True):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Fluid property tables and Newco cycle checks.")
+    parser.add_argument("--newco-only", action="store_true", help="Only run Newco cycle section.")
+    parser.add_argument("--d-hyd-m", type=float, default=0.05, help="Hydraulic diameter for Re [m] (default 50 mm).")
+    args_cli = parser.parse_args()
+
     # logging levels  DEBUG < INFO < WARNING < ERROR < CRITICAL (Default is WARNING)
     configure_logging(logging.INFO)
     configure_refprop()  # Annoying to have this here but if I want to have logging from
     # refprop configuration and path then I need to either configure logging before I import
     # the fluid_properties module or I need to configure refprop after configuring logging
+
+    if args_cli.newco_only:
+        main_newco(d_hyd_m=args_cli.d_hyd_m)
+        raise SystemExit(0)
 
     FAR = 0.0135
     P = 1.0e5
@@ -837,6 +1120,7 @@ if __name__ == "__main__":
         # TODO: dig deeper into why returning -inf cp
 
     main_table(print_tables=False)
+    main_newco(print_tables=True, d_hyd_m=args_cli.d_hyd_m)
     # Kerosene products cp(T) plots
     # plot_cp_kerosene_products_three_FAR_as_function_of_temperature()
     # plt.show()

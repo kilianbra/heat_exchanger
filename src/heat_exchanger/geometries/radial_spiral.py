@@ -26,6 +26,12 @@ from heat_exchanger.correlations import (
     tube_bank_nusselt_number_and_friction_factor as _bank_corr,
 )
 from heat_exchanger.epsilon_ntu import epsilon_ntu as _eps_ntu
+from heat_exchanger.fluids.compressible_flow_friction_heat import (
+    find_ksi_lim_adaptive as _find_ksi_lim,
+)
+from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p as _get_mach_from_mdot_area_p
+from heat_exchanger.fluids.fluid_functions import get_mach_from_mdot_area_p0 as _get_mach_from_mdot_area_p0
+from heat_exchanger.fluids.protocols import FluidInputs as FluidInputs
 from heat_exchanger.fluids.protocols import FluidInputsProtocol as _FluidInputs
 
 logger = logging.getLogger(__name__)
@@ -94,6 +100,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
     wall_conductivity: float = WALL_CONDUCTIVITY_304_SS
     # Orientation flag: True=inboard (external flow inward), False=outboard (external flow outward)
     ext_fluid_flows_radially_inwards: bool = True
+    # Inclination angle of the HEx in x-r plane
 
     # ---------- Cached-style 0D properties (default implementations) ----------
     @cached_property
@@ -109,7 +116,7 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
                 f"Invalid geometry: too many rows in axial section for given outer radius: "
                 f"{outer_radius_span:.2f} m > {self.radius_outer_hex:.2f} m for "
                 f"{n_rows_per_axial_section} rows of tubes spaced by "
-                f"{self.tube_spacing_long * self.tube_outer_diam:.2f} m"
+                f"{(self.tube_spacing_long * self.tube_outer_diam) * 1e3:.2f} mm"
             )
         elif outer_radius_span <= 0:
             raise ValueError(
@@ -162,6 +169,10 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
 
     @cached_property
+    def frontal_area_inner(self) -> float:
+        return 2.0 * np.pi * self.radius_inner_hex * self.n_tubes_per_row * self.tube_inner_diam * self.tube_spacing_trv
+
+    @cached_property
     def area_heat_transfer_outer_total(self) -> float:
         return np.pi * self.tube_outer_diam * self.spiral_length * self.n_tubes_total
 
@@ -170,8 +181,8 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
         return np.pi * self.tube_inner_diam * self.spiral_length * self.n_tubes_total
 
     @cached_property
-    def frontal_area_outer_total(self) -> float:
-        return 2.0 * np.pi * self.radius_outer_hex * self.n_tubes_per_row * self.tube_outer_diam * self.tube_spacing_trv
+    def volume_total(self) -> float:
+        return np.pi * (self.radius_outer_hex**2 - self.radius_inner_hex**2) * self.axial_length
 
     @cached_property
     def n_rows(self) -> int:
@@ -199,6 +210,10 @@ class RadialSpiralProtocol(TubeBankCorrelationGeometry, Protocol):
             sigma_diag = 2.0 * (self.tube_spacing_diag - 1) / self.tube_spacing_trv
             return min(sigma_main, sigma_diag)
         return sigma_main
+
+    @cached_property
+    def area_free_flow_in_tubes_total(self) -> float:
+        return np.pi / 4.0 * self.tube_inner_diam**2 * self.n_tubes_total
 
     # ---------- 1D arrays (computed on demand for a single hot-sector) ----------
     def _1d_arrays_for_one_sector(self) -> dict[str, np.ndarray | float]:
@@ -294,6 +309,7 @@ def spiral_hex_solver(
     geom: RadialSpiralProtocol,
     f_in: _FluidInputs,
     method: str = "0d",
+    stag_inlets: bool = False,
 ) -> dict[str, object]:
     """Solve the radial spiral heat exchanger.
     Method can be "0d" for 0D guess assuming counterflow HEx, or "1d" for 1D marching.
@@ -301,8 +317,103 @@ def spiral_hex_solver(
 
     logger = logging.getLogger(__name__ + ".spiral_hex_solver")
 
+    # Block of code to convert stagnation/total properties at inlet to static
+    if stag_inlets:
+        # Need to determine inlet throat area to get Mach and convert stag to static
+        if geom.ext_fluid_flows_radially_inwards:
+            A_first_throat = geom.frontal_area_outer * geom.sigma_outer
+        else:
+            A_first_throat = geom.frontal_area_inner * geom.sigma_outer
+        stag_in_cold = f_in.cold.state(f_in.Tc_in, f_in.Pc_in)
+        cp_c_approx = stag_in_cold.cp
+        gamma_c_approx = stag_in_cold.gamma
+        M_c_in = _get_mach_from_mdot_area_p0(
+            f_in.m_dot_cold,
+            A_first_throat,
+            f_in.Tc_in,
+            f_in.Pc_in,
+            c_p=cp_c_approx,
+            gamma=gamma_c_approx,
+        )
+        M_func_c = 1.0 + (gamma_c_approx - 1.0) / 2.0 * M_c_in**2
+        T_c_in_calc = stag_in_cold.T / M_func_c
+        P_c_in_calc = stag_in_cold.P / M_func_c ** (gamma_c_approx / (gamma_c_approx - 1.0))
+
+        if f_in.Ph_in is not None:  # know P_h_stag_in and T_h_stag_in and mdot.
+            stag_in_hot = f_in.hot.state(f_in.Th_in, f_in.Ph_in)
+            cp_h_approx = stag_in_hot.cp
+            gamma_h_approx = stag_in_hot.gamma
+            M_h_in = _get_mach_from_mdot_area_p0(
+                f_in.m_dot_hot,
+                A_first_throat,
+                f_in.Th_in,
+                f_in.Ph_in,
+                c_p=cp_h_approx,
+                gamma=gamma_h_approx,
+            )
+            M_func_h = 1.0 + (gamma_h_approx - 1.0) / 2.0 * M_h_in**2
+            T_h_in_calc = stag_in_hot.T / M_func_h
+            P_h_in_calc = stag_in_hot.P / M_func_h ** (gamma_h_approx / (gamma_h_approx - 1.0))
+
+        else:  # know static Ph_out, Th_stag_in and mdot.
+            hot_in_approx = f_in.hot.state(f_in.Th_in, f_in.Ph_out)  # uses hot static exit pressure and inlet stag temp
+            cp_h_approx = hot_in_approx.cp
+            gamma_h_approx = hot_in_approx.gamma
+            M_h_in = _get_mach_from_mdot_area_p(
+                f_in.m_dot_hot,
+                A_first_throat,
+                f_in.Th_in,
+                f_in.Ph_out,
+                c_p=cp_h_approx,
+                gamma=gamma_h_approx,
+            )
+            M_func_h = 1.0 + (gamma_h_approx - 1.0) / 2.0 * M_h_in**2
+            T_h_in_calc = hot_in_approx.T / M_func_h
+            # keep P_h_out as is
+
+        f_stag_in = f_in  # keep original stag f_in for later use
+        if f_in.Ph_in is not None:
+            f_in = FluidInputs(
+                hot=f_in.hot,
+                cold=f_in.cold,
+                m_dot_hot=f_in.m_dot_hot,
+                m_dot_cold=f_in.m_dot_cold,
+                Tc_in=T_c_in_calc,
+                Pc_in=P_c_in_calc,
+                Th_in=T_h_in_calc,
+                Ph_in=P_h_in_calc,
+                Ph_out=None,
+            )
+        else:
+            f_in = FluidInputs(
+                hot=f_in.hot,
+                cold=f_in.cold,
+                m_dot_hot=f_in.m_dot_hot,
+                m_dot_cold=f_in.m_dot_cold,
+                Tc_in=T_c_in_calc,
+                Pc_in=P_c_in_calc,
+                Th_in=T_h_in_calc,
+                Ph_in=None,
+                Ph_out=f_in.Ph_out,
+            )
+        logger.debug("Difference in stagnation and static inlet conditions:")
+        if f_stag_in.Ph_in is not None:
+            logger.debug(
+                "Th_in_calc - Th_in = %.1e K, Ph_in_calc - Ph_in = %.1e Pa",
+                T_h_in_calc - f_stag_in.Th_in,
+                P_h_in_calc - f_stag_in.Ph_in,
+            )
+        else:
+            logger.debug("Th_in_calc - Th_in = %.1e K", T_h_in_calc - f_stag_in.Th_in)
+
+        logger.debug(
+            "Tc_in_calc - Tc_in = %.1e K, Pc_in_calc - Pc_in = %.1e Pa",
+            T_c_in_calc - f_stag_in.Tc_in,
+            P_c_in_calc - f_stag_in.Pc_in,
+        )
+
     logger.info(
-        "Hot inlet parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
+        "Hot inlet (static) parameters: \t \t \t Th_in =%.2f K, Ph_known =%.2e Pa (at %s)",
         f_in.Th_in,
         f_in.Ph_in if f_in.Ph_in is not None else f_in.Ph_out,
         "inlet" if f_in.Ph_in is not None else "outlet",
@@ -395,11 +506,13 @@ def spiral_hex_solver(
             if f_in.Ph_in is not None
             else final_diag.get("dP_hot_pct", float("nan"))
         )
+        dP_cold_pct = (1 - final_diag.get("Pc_out", float("nan")) / f_in.Pc_in) * 100.0
         logger.info(
-            "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%",
+            "Solution after %d iterations: \t \t Th_out=%.2f K, ΔPh/Ph_in=%.1f %%, ΔPc/Pc_in=%.1f %%",
             eval_state["count"],
             bound_converged[0],
             dP_P_in,
+            dP_cold_pct,
         )
 
         if final_raw.size == 2:
@@ -418,7 +531,7 @@ def spiral_hex_solver(
             final_diag.get("epsilon", float("nan")),
             final_diag.get("NTU", float("nan")),
             final_diag.get("Cr", float("nan")),
-            final_diag.get("Q_total", float("nan")) / 1e6,
+            final_diag.get("Q_total", float("nan")) / 1e6,  # Q_total is defined as Q_hot
             final_diag.get("Q_cold", float("nan")) / 1e6,
         )
         logger.info(
@@ -549,6 +662,13 @@ def xflow_guess_0d(
         Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
         f_c = _circ_fric(Re_c, 0)
 
+        logger.info(
+            "0D guess tube flow for Re_c=%5.2e: St_c=%5.2f, f_c=%5.2e",
+            Re_c,
+            Nu_c / Re_c / Pr_c,
+            f_c,
+        )
+
         h_h = Nu_h * sh.k / geom.tube_outer_diam
         h_c = Nu_c * sc.k / geom.tube_inner_diam
 
@@ -573,6 +693,36 @@ def xflow_guess_0d(
 
         dh0_h = -Q / f_in.m_dot_hot
         dh0_c = Q / f_in.m_dot_cold
+
+        ksi_h = f_h * (A_total_hot0 / Aff_hot_mid)
+        ksi_c = f_c * (A_total_cold0 / Aff_cold_total)
+        k_h = dh0_h / (sh.h * ksi_h)
+        k_c = dh0_c / (sc.h * ksi_c)
+        M_in_h = G_h0 / sh.rho / sh.a
+        M_in_c = G_c0 / sc.rho / sc.a
+
+        # Check for choking limit
+        if abs(k_h) > 1e-10:  # Avoid division by zero
+            ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
+            if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
+                logger.info(
+                    "Hot fluid choking risk: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_h,
+                    ksi_lim_h,
+                    M_in_h,
+                    k_h,
+                )
+        if abs(k_c) > 1e-10:  # Avoid division by zero
+            ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
+            if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
+                logger.info(
+                    "Cold fluid choking risk: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
+                    ksi_c,
+                    ksi_lim_c,
+                    M_in_c,
+                    k_c,
+                )
+
         Th_out, Ph_not_b = _upd_stat_prop(
             f_in.hot,
             G_h0,
@@ -600,6 +750,9 @@ def xflow_guess_0d(
             tol_T=1e-2,
             rel_tol_p=1e-2,
         )
+        if Pc_out < 0:
+            logger.warning(f"Pc_out {Pc_out:.1e} <0, for {tau_c:.1e} setting to 0.1e5 Pa")
+            Pc_out = 0.1e5
 
         return Th_out, Tc_out, Ph_not_b, Pc_out
 
@@ -935,6 +1088,8 @@ def compute_overall_performance(
     mdot_c = fluids.m_dot_cold / geometry.n_headers
 
     UA_sum = 0.0
+    fA_cold_sum = 0.0
+    fA_hot_sum = 0.0
     for j in range(geometry.n_headers - 1):
         sh = fluids.hot.state(Th[j], Ph[j])
         sc = fluids.cold.state(Tc[j], Pc[j])
@@ -965,7 +1120,7 @@ def compute_overall_performance(
         Pr_c = mu_c * sc.cp / k_c
         Re_h_od = G_h * geometry.tube_outer_diam / mu_h
         Re_c = G_c * geometry.tube_inner_diam / mu_c
-        Nu_h, _ = _bank_corr(
+        Nu_h, f_h = _bank_corr(
             Re_h_od,
             geometry.tube_spacing_long,
             geometry.tube_spacing_trv,
@@ -974,6 +1129,7 @@ def compute_overall_performance(
             n_rows=geometry.n_rows_per_header * geometry.n_headers,
         )
         Nu_c = _circ_nu(Re_c, 0, prandtl=Pr_c)
+        f_c = _circ_fric(Re_c, 0)
         h_h = Nu_h * k_h / geometry.tube_outer_diam
         h_c = Nu_c * k_c / geometry.tube_inner_diam
         wall_term = (
@@ -983,6 +1139,8 @@ def compute_overall_performance(
         )
         U_hot = 1.0 / ((1.0 / h_h) + (1.0 / h_c) * (geometry.tube_outer_diam / geometry.tube_inner_diam) + wall_term)
         UA_sum += U_hot * area_ht_hot[j] * geometry.n_headers
+        fA_hot_sum += f_h * area_ht_hot[j] * geometry.n_headers
+        fA_cold_sum += f_c * area_ht_cold[j] * geometry.n_headers
 
         Th[j + 1], Ph[j + 1] = _upd_stat_prop(
             fluids.hot,
@@ -1048,6 +1206,39 @@ def compute_overall_performance(
     h_stag_in_cold = state_c_in.h + 0.5 * (G_c_total / state_c_in.rho) ** 2
     h_stag_out_cold = state_c_out.h + 0.5 * (G_c_total / state_c_out.rho) ** 2
 
+    ksi_h = fA_hot_sum / (area_free_hot_in + area_free_hot_out) * 2
+    ksi_c = fA_cold_sum / (area_free_cold_total)
+    k_h = (h_stag_in_hot - h_stag_out_hot) / (h_stag_in_hot * ksi_h)
+    k_c = (h_stag_out_cold - h_stag_in_cold) / (h_stag_in_cold * ksi_c)
+    M_in_h = G_h_in / state_h_in.rho / state_h_in.a
+    M_in_c = G_c_total / state_c_in.rho / state_c_in.a
+    ksi_lim_h, _ = _find_ksi_lim(M_in_h, k_h, gamma=sh.gamma)
+    ksi_lim_c, _ = _find_ksi_lim(M_in_c, k_c, gamma=sc.gamma)
+    if not np.isnan(ksi_lim_h) and ksi_h > ksi_lim_h:
+        logger.warning(
+            "Hot fluid choking: ksi_h=%.1e > ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)",
+            ksi_h,
+            ksi_lim_h,
+            M_in_h,
+            k_h,
+        )
+    else:
+        logger.info(
+            "Hot fluid not choking: ksi_h=%.1e <= ksi_lim_h=%.1e (M_in=%.2f, k=%.3f)", ksi_h, ksi_lim_h, M_in_h, k_h
+        )
+    if not np.isnan(ksi_lim_c) and ksi_c > ksi_lim_c:
+        logger.warning(
+            "Cold fluid choking: ksi_c=%.1e > ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)",
+            ksi_c,
+            ksi_lim_c,
+            M_in_c,
+            k_c,
+        )
+    else:
+        logger.info(
+            "Cold fluid not choking: ksi_c=%.1e <= ksi_lim_c=%.1e (M_in=%.2f, k=%.3f)", ksi_c, ksi_lim_c, M_in_c, k_c
+        )
+
     Q_hot = fluids.m_dot_hot * (h_stag_in_hot - h_stag_out_hot)
     Q_cold = fluids.m_dot_cold * (h_stag_out_cold - h_stag_in_cold)
 
@@ -1062,7 +1253,7 @@ def compute_overall_performance(
     epsilon = Q_hot / Q_max if Q_max > 0 else 0.0
 
     dP_hot = Ph_in - Ph_out
-    dP_cold = Pc_out - float(fluids.Pc_in)
+    dP_cold = float(fluids.Pc_in) - Pc_out
     dP_hot_pct = 100.0 * dP_hot / Ph_in if Ph_in > 0 else 0.0
     dP_cold_pct = 100.0 * dP_cold / float(fluids.Pc_in) if float(fluids.Pc_in) > 0 else 0.0
 
@@ -1205,6 +1396,9 @@ def compute_overall_performance(
         "Tc_out": float(Tc_out),
         "Ph_out": float(Ph_out),
         "Pc_out": float(Pc_out),
+        "cp_h_avg": float(cp_h_avg),
+        "cp_c_avg": float(cp_c_avg),
+        "C_min": float(C_min),
     }
 
     # Store non-dimensional groups and supporting quantities

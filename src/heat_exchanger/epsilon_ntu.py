@@ -36,7 +36,7 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
     NTU (float/np array): Number of Transfer Units
     C_ratio (float): Capacity rate ratio 0 <= C_min/C_max <= 1
     exchanger_type (str, optional): Type of the heat exchanger. Can be 'aligned_flow', 'cross_flow', or 'shell_and_tube'. Default is 'aligned_flow'.
-    flow_type (str, optional): Arrangement of the flow. Can be 'parallel', 'counter', 'unmixed', 'Cmax_mixed', 'Cmin_mixed', or 'both_mixed'. Default is 'counterflow'.
+    flow_type (str, optional): Arrangement of the flow. Can be 'coflow', 'counterflow', 'unmixed', 'Cmax_mixed', 'Cmin_mixed', or 'both_mixed'. Default is 'counterflow'.
     n_passes (int, optional): Number of passes (overall counterflow for all types, except for shell in tube where this is shell passes). Default is 1.
 
     Returns:
@@ -59,7 +59,10 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
     assert flow_type in valid_flow_types, f"Invalid flow_type. Must be one of {valid_flow_types}"
 
     tol = 1e-9
-    tol_it = 1e-4
+    # Crossflow-unmixed series: the n=1 correction can be tiny (e.g. Cr=1, moderate NTU) while
+    # later terms are still material. A loose absolute tol lets the loop skip entirely and returns
+    # only the leading 1-exp(-NTU) term, which is wrong and produces sharp jumps in epsilon.
+    tol_it = 1e-10
     ntu_p = NTU / n_passes
     if C_ratio < 0 + tol:  # Close enough to zero, doesn't matter the type as C_min fluid doesn't change temperature
         epsilon = 1 - np.exp(-ntu_p)  # Kays & London (2-13a)
@@ -96,7 +99,7 @@ def epsilon_ntu(NTU, C_ratio, exchanger_type="aligned_flow", flow_type="counterf
             n = 1
             term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * poly_sum_crossflow_unmixed(n, NTU)
             # Loop until the added term is smaller than the tolerance
-            while np.any(np.abs(term) > tol_it):
+            while np.any(np.abs(term) > tol_it) and n < 400:
                 epsilon += term
                 n += 1
                 term = -np.exp(-(1 + C_ratio) * NTU) * (C_ratio**n) * poly_sum_crossflow_unmixed(n, NTU)
