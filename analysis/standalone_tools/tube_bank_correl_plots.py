@@ -230,7 +230,9 @@ Re_hydraulic_staggered = [
 ]
 X_l_knl = 1.25
 X_t_knl = 1.5
-Re_values_staggered = [rh * 4 * X_l_knl * (X_t_knl - 1) / np.pi for rh in Re_hydraulic_staggered]
+# Re_d = Re_dh / (d_h/d_o) with ideal-bank d_h/d_o = 4*Xl*(Xt-1)/pi = 0.796
+# (previously multiplied instead of dividing, placing points at 0.63x true Re_d)
+Re_values_staggered = [rh / (4 * X_l_knl * (X_t_knl - 1) / np.pi) for rh in Re_hydraulic_staggered]
 j_exp_knl_staggered = [
     0.00632,
     0.00698,

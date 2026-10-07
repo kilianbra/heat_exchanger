@@ -14,7 +14,6 @@ import argparse
 import logging
 from dataclasses import dataclass
 
-import numpy as np
 from tabulate import tabulate
 
 from heat_exchanger.fluid_properties import (
